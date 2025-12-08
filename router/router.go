@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/yeying-community/router/controller"
+	"github.com/yeying-community/router/controller/auth"
 	"github.com/yeying-community/router/middleware"
 )
 
@@ -27,12 +28,12 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 		api.POST("/user/login", controller.Login)
 		api.GET("/user/logout", controller.Logout)
 
-		api.GET("/oauth/state", controller.GenerateOAuthCode)
-		api.GET("/oauth/github", controller.GitHubOAuth)
-		api.GET("/oauth/lark", controller.LarkOAuth)
-		api.GET("/oauth/wechat", controller.WechatOAuth)
-		api.POST("/oauth/wechat/bind", controller.BindWechat)
-		api.POST("/oauth/email/bind", controller.BindEmail)
+		api.GET("/oauth/state", auth.GenerateOAuthCode)
+		api.GET("/oauth/github", auth.GitHubOAuth)
+		api.GET("/oauth/lark", auth.LarkOAuth)
+		api.GET("/oauth/wechat", auth.WechatOAuth)
+		api.POST("/oauth/wechat/bind", auth.BindWechat)
+		api.POST("/oauth/email/bind", auth.BindEmail)
 	}
 
 	user := api.Group("/user")
@@ -89,7 +90,7 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 		admin.DELETE("/redemption/:id", controller.DeleteRedemption)
 
 		admin.GET("/option/", controller.GetOptions)
-		admin.POST("/option/", controller.UpdateOptions)
+		admin.POST("/option/", controller.UpdateOption)
 
 		admin.GET("/group/", controller.GetGroups)
 		admin.GET("/models", controller.DashboardListModels)
