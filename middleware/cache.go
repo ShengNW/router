@@ -14,3 +14,9 @@ func Cache() func(c *gin.Context) {
 		c.Next()
 	}
 }
+
+// CacheResponse is a wrapper that delegates to Cache for backward compatibility
+// with existing router usage.
+func CacheResponse() func(c *gin.Context) {
+	return Cache()
+}

@@ -98,6 +98,12 @@ func GlobalAPIRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(config.GlobalApiRateLimitNum, config.GlobalApiRateLimitDuration, "GA")
 }
 
+// RateLimit is a wrapper that delegates to GlobalAPIRateLimit for backward
+// compatibility with existing router usage.
+func RateLimit() func(c *gin.Context) {
+	return GlobalAPIRateLimit()
+}
+
 func CriticalRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(config.CriticalRateLimitNum, config.CriticalRateLimitDuration, "CT")
 }
