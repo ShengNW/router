@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/yeying-community/router/controller"
-	authController "github.com/yeying-community/router/controller/auth"
 	"github.com/yeying-community/router/middleware"
 )
 
@@ -28,18 +27,17 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 		api.POST("/user/login", controller.Login)
 		api.GET("/user/logout", controller.Logout)
 
-		api.GET("/oauth/state", authController.GenerateOAuthCode)
-		api.GET("/oauth/github", authController.GitHubOAuth)
-		api.GET("/oauth/lark", authController.LarkOAuth)
-		api.GET("/oauth/wechat", authController.WeChatAuth)
+		api.GET("/oauth/state", controller.GenerateOAuthCode)
+		api.GET("/oauth/github", controller.GitHubOAuth)
+		api.GET("/oauth/lark", controller.LarkOAuth)
+		api.GET("/oauth/wechat", controller.WechatOAuth)
+		api.POST("/oauth/wechat/bind", controller.BindWechat)
+		api.POST("/oauth/email/bind", controller.BindEmail)
 	}
 
 	user := api.Group("/user")
 	user.Use(middleware.UserAuth())
 	{
-		user.POST("/oauth/wechat/bind", authController.WeChatBind)
-		user.POST("/oauth/email/bind", controller.EmailBind)
-
 		user.GET("/self", controller.GetSelf)
 		user.PUT("/self", controller.UpdateSelf)
 		user.GET("/dashboard", controller.GetUserDashboard)
