@@ -3,7 +3,8 @@ FROM --platform=$BUILDPLATFORM node:24 AS builder
 WORKDIR /web
 COPY ./VERSION .
 COPY ./web .
-
+# 新增：为前端打包结果准备目录
+RUN mkdir -p /web/build
 RUN npm config set registry https://registry.npmmirror.com
 
 RUN npm install --prefix /web/default & \
