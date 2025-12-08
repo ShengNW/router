@@ -4,12 +4,13 @@ upload
 *.exe
 *.db
 build
+!web/build
+!web/build/**
 *.db-journal
 logs
 data
 /web/node_modules
 cmd.md
 .env
-/router
 temp
 .DS_Store
