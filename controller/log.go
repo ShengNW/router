@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/yeying-community/router/common/config"
 	"github.com/yeying-community/router/common/ctxkey"
+	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/model"
 )
 
@@ -142,6 +143,35 @@ func GetLogsSelfStat(c *gin.Context) {
 		},
 	})
 	return
+}
+
+func GetUserLogsDashBoard(c *gin.Context) {
+	userId := c.GetInt(ctxkey.Id)
+	start, _ := strconv.Atoi(c.Query("start"))
+	end, _ := strconv.Atoi(c.Query("end"))
+
+	now := int(helper.GetTimestamp())
+	if end == 0 {
+		end = now
+	}
+	if start == 0 {
+		start = end - 7*24*3600
+	}
+
+	stats, err := model.SearchLogsByDayAndModel(userId, start, end)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    stats,
+	})
 }
 
 func DeleteHistoryLogs(c *gin.Context) {

@@ -34,9 +34,9 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 		api.GET("/oauth/state", auth.GenerateOAuthCode)
 		api.GET("/oauth/github", auth.GitHubOAuth)
 		api.GET("/oauth/lark", auth.LarkOAuth)
-		api.GET("/oauth/wechat", auth.WechatOAuth)
-		api.POST("/oauth/wechat/bind", auth.BindWechat)
-		api.POST("/oauth/email/bind", auth.BindEmail)
+		api.GET("/oauth/wechat", auth.WeChatAuth)
+		api.POST("/oauth/wechat/bind", middleware.UserAuth(), auth.WeChatBind)
+		api.POST("/oauth/email/bind", middleware.UserAuth(), auth.EmailBind)
 	}
 
 	user := api.Group("/user")
@@ -111,14 +111,12 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 	{
 		selfLog.GET("/self/", controller.GetUserLogs)
 		selfLog.GET("/self/search", controller.SearchUserLogs)
-		selfLog.GET("/self/stat", controller.GetUserLogsDashBoard)
+		selfLog.GET("/self/stat", controller.GetLogsSelfStat)
 	}
 
-	api.GET("/openapi", controller.GetOpenAPI)
-
 	relay := server.Group("")
-	relay.Use(middleware.CacheResponse(), middleware.Distribute())
-	relay.Use(middleware.RateLimit(), middleware.TokenAuth())
+	relay.Use(middleware.Cache(), middleware.Distribute())
+	relay.Use(middleware.GlobalAPIRateLimit(), middleware.TokenAuth())
 	relay.Use(middleware.TurnstileCheck())
 	{
 		relay.Any("/v1/chat/completions", controller.Relay)
@@ -138,30 +136,19 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 	if web, err := fs.Sub(buildFS, "web/build"); err == nil {
 		server.StaticFS("/", http.FS(web))
 		server.NoRoute(func(c *gin.Context) {
-			file, err := web.Open("index.html")
+			info, err := fs.Stat(web, "index.html")
 			if err != nil {
 				c.Status(http.StatusNotFound)
 				return
 			}
 			defer file.Close()
-			info, err := file.Stat()
+			info, _ := file.Stat()
+			content, err := io.ReadAll(file)
 			if err != nil {
 				c.Status(http.StatusInternalServerError)
 				return
 			}
-
-			data, err := io.ReadAll(file)
-			if err != nil {
-				c.Status(http.StatusInternalServerError)
-				return
-			}
-
-			modTime := time.Time{}
-			if info != nil {
-				modTime = info.ModTime()
-			}
-
-			http.ServeContent(c.Writer, c.Request, "index.html", modTime, bytes.NewReader(data))
+			http.ServeContent(c.Writer, c.Request, "index.html", info.ModTime(), bytes.NewReader(content))
 		})
 	}
 
