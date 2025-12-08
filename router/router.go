@@ -51,9 +51,9 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 	admin := api.Group("")
 	admin.Use(middleware.AdminAuth())
 	{
-		admin.GET("/log/", controller.GetLogs)
-		admin.GET("/log/stat", controller.GetLogsDashBoard)
-		admin.GET("/log/search", controller.SearchLogs)
+		admin.GET("/log/", controller.GetAllLogs)
+		admin.GET("/log/stat", controller.GetLogsStat)
+		admin.GET("/log/search", controller.SearchAllLogs)
 
 		admin.GET("/channel/", controller.GetAllChannels)
 		admin.GET("/channel/search", controller.SearchChannels)
