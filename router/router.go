@@ -1,7 +1,9 @@
 package router
 
 import (
+	"bytes"
 	"embed"
+	"io"
 	"io/fs"
 	"net/http"
 
@@ -142,7 +144,12 @@ func SetRouter(server *gin.Engine, buildFS embed.FS) {
 			}
 			defer file.Close()
 			info, _ := file.Stat()
-			http.ServeContent(c.Writer, c.Request, "index.html", info.ModTime(), file)
+			content, err := io.ReadAll(file)
+			if err != nil {
+				c.Status(http.StatusInternalServerError)
+				return
+			}
+			http.ServeContent(c.Writer, c.Request, "index.html", info.ModTime(), bytes.NewReader(content))
 		})
 	}
 
