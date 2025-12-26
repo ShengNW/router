@@ -45,6 +45,9 @@ const PersonalSetting = () => {
   const [countdown, setCountdown] = useState(30);
   const [affLink, setAffLink] = useState('');
   const [systemToken, setSystemToken] = useState('');
+  const [walletBinding, setWalletBinding] = useState(
+    userState?.user?.wallet_address
+  );
 
   useEffect(() => {
     let status = localStorage.getItem('status');
@@ -57,6 +60,12 @@ const PersonalSetting = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (userState?.user?.wallet_address) {
+      setWalletBinding(userState.user.wallet_address);
+    }
+  }, [userState?.user?.wallet_address]);
 
   useEffect(() => {
     let countdownInterval = null;
@@ -73,6 +82,63 @@ const PersonalSetting = () => {
 
   const handleInputChange = (e, { name, value }) => {
     setInputs((inputs) => ({ ...inputs, [name]: value }));
+  };
+
+  const bindWallet = async () => {
+    try {
+      if (!status.wallet_login) {
+        showError('管理员未开启钱包登录');
+        return;
+      }
+      if (!window.ethereum || !window.ethereum.request) {
+        showError('未检测到钱包，请安装 MetaMask 或开启浏览器钱包');
+        return;
+      }
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts',
+      });
+      if (!accounts || accounts.length === 0) {
+        showError('未获取到账户');
+        return;
+      }
+      const address = accounts[0];
+      const chainHex = await window.ethereum.request({
+        method: 'eth_chainId',
+      });
+      const chain_id = parseInt(chainHex, 16).toString();
+      const nonceResp = await API.get(
+        `/api/oauth/wallet/nonce?address=${address}&chain_id=${chain_id}`
+      );
+      const { success: nonceOk, message: nonceMsg, data: nonceData } =
+        nonceResp.data;
+      if (!nonceOk) {
+        showError(nonceMsg);
+        return;
+      }
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [nonceData.message, address],
+      });
+      const res = await API.post('/api/oauth/wallet/bind', {
+        address,
+        signature,
+        nonce: nonceData.nonce,
+        chain_id,
+      });
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess('钱包绑定成功');
+        setWalletBinding(address);
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      if (err?.code === 4001) {
+        showError('用户取消了签名');
+      } else {
+        showError(err.message || '绑定失败');
+      }
+    }
   };
 
   const generateAccessToken = async () => {
@@ -225,6 +291,15 @@ const PersonalSetting = () => {
       )}
       <Divider />
       <Header as='h3'>{t('setting.personal.binding.title')}</Header>
+      {status.wallet_login && (
+        <div style={{ marginBottom: '12px' }}>
+          <Button onClick={bindWallet}>
+            {walletBinding
+              ? `重新绑定钱包（当前：${walletBinding.slice(0, 6)}...${walletBinding.slice(-4)}）`
+              : '绑定钱包'}
+          </Button>
+        </div>
+      )}
       {status.wechat_login && (
         <Button onClick={() => setShowWeChatBindModal(true)}>
           {t('setting.personal.binding.buttons.bind_wechat')}

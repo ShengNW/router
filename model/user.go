@@ -43,6 +43,7 @@ type User struct {
 	WeChatId         string `json:"wechat_id" gorm:"column:wechat_id;index"`
 	LarkId           string `json:"lark_id" gorm:"column:lark_id;index"`
 	OidcId           string `json:"oidc_id" gorm:"column:oidc_id;index"`
+	WalletAddress    string `json:"wallet_address" gorm:"column:wallet_address;uniqueIndex"`
 	VerificationCode string `json:"verification_code" gorm:"-:all"`                                    // this field is only for Email verification, don't save it to database!
 	AccessToken      string `json:"access_token" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
 	Quota            int64  `json:"quota" gorm:"bigint;default:0"`
@@ -188,6 +189,7 @@ func (user *User) Delete() error {
 	blacklist.BanUser(user.Id)
 	user.Username = fmt.Sprintf("deleted_%s", random.GetUUID())
 	user.Status = UserStatusDeleted
+	user.WalletAddress = ""
 	err := DB.Model(user).Updates(user).Error
 	return err
 }
@@ -273,6 +275,14 @@ func (user *User) FillUserByUsername() error {
 	return nil
 }
 
+func (user *User) FillUserByWalletAddress() error {
+	if user.WalletAddress == "" {
+		return errors.New("wallet address 为空！")
+	}
+	DB.Where(User{WalletAddress: user.WalletAddress}).First(user)
+	return nil
+}
+
 func IsEmailAlreadyTaken(email string) bool {
 	return DB.Where("email = ?", email).Find(&User{}).RowsAffected == 1
 }
@@ -291,6 +301,13 @@ func IsLarkIdAlreadyTaken(githubId string) bool {
 
 func IsOidcIdAlreadyTaken(oidcId string) bool {
 	return DB.Where("oidc_id = ?", oidcId).Find(&User{}).RowsAffected == 1
+}
+
+func IsWalletAddressAlreadyTaken(address string) bool {
+	if address == "" {
+		return false
+	}
+	return DB.Where("wallet_address = ?", address).Find(&User{}).RowsAffected == 1
 }
 
 func IsUsernameAlreadyTaken(username string) bool {

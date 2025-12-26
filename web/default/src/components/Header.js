@@ -35,6 +35,11 @@ let headerButtons = [
     icon: 'key',
   },
   {
+    name: 'header.wallet',
+    to: '/wallet',
+    icon: 'ethereum',
+  },
+  {
     name: 'header.redemption',
     to: '/redemption',
     icon: 'dollar sign',

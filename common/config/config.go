@@ -83,6 +83,12 @@ var WeChatServerAddress = ""
 var WeChatServerToken = ""
 var WeChatAccountQRCodeImageURL = ""
 
+// Wallet login
+var WalletLoginEnabled = false
+var WalletAllowedChains = []string{"1", "11155111", "5432"} // mainnet, sepolia, yeying
+var WalletAutoRegisterEnabled = false
+var WalletRootAllowedAddresses []string
+
 var MessagePusherAddress = ""
 var MessagePusherToken = ""
 

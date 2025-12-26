@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yeying-community/router/common/config"
 	"github.com/yeying-community/router/common/logger"
@@ -43,6 +44,26 @@ func Init() {
 			logger.SysError("SESSION_SECRET is set to an example value, please change it to a random string.")
 		} else {
 			config.SessionSecret = os.Getenv("SESSION_SECRET")
+		}
+	}
+	// Wallet login configuration
+	if os.Getenv("WALLET_LOGIN_ENABLED") != "" {
+		config.WalletLoginEnabled = os.Getenv("WALLET_LOGIN_ENABLED") == "true"
+	}
+	if chains := os.Getenv("WALLET_ALLOWED_CHAINS"); chains != "" {
+		config.WalletAllowedChains = strings.Split(chains, ",")
+	}
+	if os.Getenv("WALLET_AUTO_REGISTER_ENABLED") != "" {
+		config.WalletAutoRegisterEnabled = os.Getenv("WALLET_AUTO_REGISTER_ENABLED") == "true"
+	}
+	if envRoot := os.Getenv("WALLET_ROOT_ALLOWED_ADDRESSES"); envRoot != "" {
+		parts := strings.Split(envRoot, ",")
+		config.WalletRootAllowedAddresses = make([]string, 0, len(parts))
+		for _, p := range parts {
+			if p == "" {
+				continue
+			}
+			config.WalletRootAllowedAddresses = append(config.WalletRootAllowedAddresses, strings.ToLower(strings.TrimSpace(p)))
 		}
 	}
 	if os.Getenv("SQLITE_PATH") != "" {
