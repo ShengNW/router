@@ -394,6 +394,20 @@ graph LR
 28. `INITIAL_ROOT_ACCESS_TOKEN`：如果设置了该值，则在系统首次启动时会自动创建一个值为该环境变量的 root 用户创建系统管理令牌。
 29. `ENFORCE_INCLUDE_USAGE`：是否强制在 stream 模型下返回 usage，默认不开启，可选值为 `true` 和 `false`。
 30. `TEST_PROMPT`：测试模型时的用户 prompt，默认为 `Print your model name exactly and do not output without any other text.`。
+31. `WALLET_LOGIN_ENABLED`：是否开启基于钱包的登录/绑定，默认关闭，可选值 `true` / `false`。
+32. `WALLET_ALLOWED_CHAINS`：允许登录的链 ID 列表，逗号分隔，默认 `1,11155111,5432`。
+33. `WALLET_AUTO_REGISTER_ENABLED`：未绑定用户的钱包是否自动注册为新用户，默认 `false`。
+34. `WALLET_ROOT_ALLOWED_ADDRESSES`：允许直接登录并自动绑定为 root 的钱包地址列表，逗号分隔（建议只填受信任地址）。开启后首次使用钱包登录会自动把该地址绑定到 root 并登录。
+
+### 钱包登录启用指引
+1. 在启动前设置环境变量：  
+   - `WALLET_LOGIN_ENABLED=true` 开启钱包登录。  
+   - （可选）`WALLET_ROOT_ALLOWED_ADDRESSES=0xYourRootWallet` 允许指定地址直接登录/绑定 root。  
+   - （可选）`WALLET_AUTO_REGISTER_ENABLED=true` 允许未绑定的钱包自动创建新账号。  
+2. 启动服务（示例）：`WALLET_LOGIN_ENABLED=true ./router --port 3000 --log-dir ./logs`。  
+3. 访问 `/wallet` 页面测试连接、签名，或在登录页点击“使用钱包登录”。  
+4. 绑定账户：登录后进入“个人设置”→“绑定钱包”，按提示签名即可。  
+5. 如通过 nginx 反代（例如 https://llm.yeying.pub/ ），保持 3000 端口监听即可，无需额外配置。
 
 ### 命令行参数
 1. `--port <port_number>`: 指定服务器监听的端口号，默认为 `3000`。

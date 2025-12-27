@@ -3,6 +3,7 @@
     "home": "首页",
     "channel": "渠道",
     "token": "令牌",
+    "wallet": "钱包",
     "redemption": "兑换",
     "topup": "充值",
     "user": "用户",
@@ -774,6 +775,9 @@
       "no_account": "没有账户？",
       "register": "点击注册",
       "other_methods": "使用其他方式登录",
+      "wallet_title": "钱包登录",
+      "wallet_button": "使用钱包登录",
+      "wallet_disabled": "钱包登录未开启",
       "wechat": {
         "scan_tip": "微信扫码关注公众号，输入「验证码」获取验证码（三分钟内有效）",
         "code_placeholder": "验证码"

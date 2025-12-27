@@ -44,6 +44,8 @@ func GetStatus(c *gin.Context) {
 			"oidc_authorization_endpoint": config.OidcAuthorizationEndpoint,
 			"oidc_token_endpoint":         config.OidcTokenEndpoint,
 			"oidc_userinfo_endpoint":      config.OidcUserinfoEndpoint,
+			"wallet_login":                config.WalletLoginEnabled,
+			"wallet_allowed_chains":       config.WalletAllowedChains,
 		},
 	})
 	return

@@ -50,6 +50,65 @@ const LoginForm = () => {
     setShowWeChatLoginModal(true);
   };
 
+  const onWalletLoginClicked = async () => {
+    try {
+      if (!status.wallet_login) {
+        showError(t('auth.login.wallet_disabled') || '钱包登录未开启');
+        return;
+      }
+      if (!window.ethereum || !window.ethereum.request) {
+        showError('未检测到钱包，请安装 MetaMask 或开启浏览器钱包');
+        return;
+      }
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts',
+      });
+      if (!accounts || accounts.length === 0) {
+        showError('未获取到钱包账户');
+        return;
+      }
+      const address = accounts[0];
+      const chainHex = await window.ethereum.request({
+        method: 'eth_chainId',
+      });
+      const chain_id = parseInt(chainHex, 16).toString();
+      const nonceResp = await API.get(
+        `/api/oauth/wallet/nonce?address=${address}&chain_id=${chain_id}`
+      );
+      const { success: nonceOk, message: nonceMsg, data: nonceData } =
+        nonceResp.data;
+      if (!nonceOk) {
+        showError(nonceMsg);
+        return;
+      }
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [nonceData.message, address],
+      });
+      const res = await API.post('/api/oauth/wallet/login', {
+        address,
+        signature,
+        nonce: nonceData.nonce,
+        chain_id,
+      });
+      const { success, message, data } = res.data;
+      if (success) {
+        userDispatch({ type: 'login', payload: data });
+        localStorage.setItem('user', JSON.stringify(data));
+        navigate('/token');
+        showSuccess(t('messages.success.login'));
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      if (error?.code === 4001) {
+        showError('用户拒绝了请求');
+      } else {
+        showError(error.message || '钱包登录失败');
+      }
+    }
+  };
+
   const onSubmitWeChatVerificationCode = async () => {
     const res = await API.get(
       `/api/oauth/wechat?code=${inputs.wechat_verification_code}`
@@ -244,6 +303,25 @@ const LoginForm = () => {
                     </div>
                   )}
                 </div>
+              </>
+            )}
+            {status.wallet_login && (
+              <>
+                <Divider
+                  horizontal
+                  style={{ color: '#666', fontSize: '0.9em' }}
+                >
+                  {t('auth.login.wallet_title', '钱包登录')}
+                </Divider>
+                <Button
+                  fluid
+                  size='large'
+                  color='orange'
+                  onClick={onWalletLoginClicked}
+                  style={{ marginTop: '0.5em' }}
+                >
+                  {t('auth.login.wallet_button', '使用钱包登录')}
+                </Button>
               </>
             )}
           </Card.Content>
