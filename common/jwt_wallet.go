@@ -13,6 +13,7 @@ import (
 type WalletClaims struct {
 	UserID        int    `json:"user_id"`
 	WalletAddress string `json:"wallet_address"`
+	TokenType     string `json:"token_type,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -26,6 +27,7 @@ func GenerateWalletJWT(userID int, walletAddress string) (token string, expiresA
 	claims := WalletClaims{
 		UserID:        userID,
 		WalletAddress: walletAddress,
+		TokenType:     "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -43,6 +45,44 @@ func VerifyWalletJWT(tokenString string) (*WalletClaims, error) {
 	claims, err := verifyWithSecrets(tokenString, append([]string{config.WalletJWTSecret}, config.WalletJWTFallbackSecrets...))
 	if err != nil {
 		return nil, err
+	}
+	if claims.TokenType == "refresh" {
+		return nil, errors.New("refresh token not allowed for access")
+	}
+	return claims, nil
+}
+
+// GenerateWalletRefreshJWT issues a refresh token for the given user id and wallet address.
+func GenerateWalletRefreshJWT(userID int, walletAddress string) (token string, expiresAt time.Time, err error) {
+	secret := []byte(config.WalletJWTSecret)
+	if len(secret) == 0 {
+		return "", time.Time{}, errors.New("wallet jwt secret not configured")
+	}
+	expiresAt = time.Now().Add(time.Duration(config.WalletRefreshTokenExpireHours) * time.Hour)
+	claims := WalletClaims{
+		UserID:        userID,
+		WalletAddress: walletAddress,
+		TokenType:     "refresh",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Subject:   walletAddress,
+		},
+	}
+	tokenObj := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token, err = tokenObj.SignedString(secret)
+	return
+}
+
+// VerifyWalletRefreshJWT validates refresh token and returns claims.
+func VerifyWalletRefreshJWT(tokenString string) (*WalletClaims, error) {
+	claims, err := verifyWithSecrets(tokenString, append([]string{config.WalletJWTSecret}, config.WalletJWTFallbackSecrets...))
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != "refresh" {
+		return nil, errors.New("token is not refresh")
 	}
 	return claims, nil
 }

@@ -13,7 +13,7 @@ import (
 )
 
 var SystemName = "Router"
-var ServerAddress = "http://localhost:3000"
+var ServerAddress = "http://localhost:3011"
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
@@ -84,13 +84,15 @@ var WeChatServerToken = ""
 var WeChatAccountQRCodeImageURL = ""
 
 // Wallet login
-var WalletLoginEnabled = false
-var WalletAllowedChains = []string{"1", "11155111", "5432"} // mainnet, sepolia, yeying
-var WalletAutoRegisterEnabled = false
-var WalletRootAllowedAddresses []string
+var AutoRegisterEnabled = false
 var WalletJWTSecret = ""
 var WalletJWTExpireHours = 72
+var WalletRefreshTokenExpireHours = 24 * 30
 var WalletNonceTTLMinutes = 10
+var WalletRefreshCookieDomain = ""
+var WalletRefreshCookieSecure = false
+var WalletRefreshCookieSameSite = "lax"
+
 // Optional fallback secrets (comma-separated env WALLET_JWT_FALLBACK_SECRETS) for verifying wallet JWTs issued by external services.
 var WalletJWTFallbackSecrets []string
 
@@ -126,13 +128,6 @@ var BatchUpdateInterval = env.Int("BATCH_UPDATE_INTERVAL", 5)
 var RelayTimeout = env.Int("RELAY_TIMEOUT", 0) // unit is second
 
 var GeminiSafetySetting = env.String("GEMINI_SAFETY_SETTING", "BLOCK_NONE")
-
-var Theme = env.String("THEME", "default")
-var ValidThemes = map[string]bool{
-	"default": true,
-	"berry":   true,
-	"air":     true,
-}
 
 // All duration's unit is seconds
 // Shouldn't larger then RateLimitKeyExpirationDuration

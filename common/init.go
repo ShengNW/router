@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	Port         = flag.Int("port", 3000, "the listening port")
+	Port         = flag.Int("port", 3011, "the listening port")
 	PrintVersion = flag.Bool("version", false, "print version and exit")
 	PrintHelp    = flag.Bool("help", false, "print help and exit")
 	LogDir       = flag.String("log-dir", "./logs", "specify the log directory")
@@ -48,14 +48,8 @@ func Init() {
 		}
 	}
 	// Wallet login configuration
-	if os.Getenv("WALLET_LOGIN_ENABLED") != "" {
-		config.WalletLoginEnabled = os.Getenv("WALLET_LOGIN_ENABLED") == "true"
-	}
-	if chains := os.Getenv("WALLET_ALLOWED_CHAINS"); chains != "" {
-		config.WalletAllowedChains = strings.Split(chains, ",")
-	}
-	if os.Getenv("WALLET_AUTO_REGISTER_ENABLED") != "" {
-		config.WalletAutoRegisterEnabled = os.Getenv("WALLET_AUTO_REGISTER_ENABLED") == "true"
+	if envAuto := os.Getenv("AUTO_REGISTER_ENABLED"); envAuto != "" {
+		config.AutoRegisterEnabled = envAuto == "true"
 	}
 	if envSecret := os.Getenv("WALLET_JWT_SECRET"); envSecret != "" {
 		config.WalletJWTSecret = envSecret
@@ -75,20 +69,24 @@ func Init() {
 			config.WalletJWTExpireHours = v
 		}
 	}
+	if envExpire := os.Getenv("WALLET_REFRESH_EXPIRE_HOURS"); envExpire != "" {
+		if v, err := strconv.Atoi(envExpire); err == nil && v > 0 {
+			config.WalletRefreshTokenExpireHours = v
+		}
+	}
 	if envTTL := os.Getenv("WALLET_NONCE_TTL_MINUTES"); envTTL != "" {
 		if v, err := strconv.Atoi(envTTL); err == nil && v > 0 {
 			config.WalletNonceTTLMinutes = v
 		}
 	}
-	if envRoot := os.Getenv("WALLET_ROOT_ALLOWED_ADDRESSES"); envRoot != "" {
-		parts := strings.Split(envRoot, ",")
-		config.WalletRootAllowedAddresses = make([]string, 0, len(parts))
-		for _, p := range parts {
-			if p == "" {
-				continue
-			}
-			config.WalletRootAllowedAddresses = append(config.WalletRootAllowedAddresses, strings.ToLower(strings.TrimSpace(p)))
-		}
+	if envDomain := os.Getenv("WALLET_REFRESH_COOKIE_DOMAIN"); envDomain != "" {
+		config.WalletRefreshCookieDomain = envDomain
+	}
+	if envSecure := os.Getenv("WALLET_REFRESH_COOKIE_SECURE"); envSecure != "" {
+		config.WalletRefreshCookieSecure = envSecure == "true"
+	}
+	if envSameSite := os.Getenv("WALLET_REFRESH_COOKIE_SAMESITE"); envSameSite != "" {
+		config.WalletRefreshCookieSameSite = strings.ToLower(strings.TrimSpace(envSameSite))
 	}
 	if os.Getenv("SQLITE_PATH") != "" {
 		SQLitePath = os.Getenv("SQLITE_PATH")
