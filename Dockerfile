@@ -6,15 +6,9 @@ COPY ./web .
 
 RUN npm config set registry https://registry.npmmirror.com
 
-RUN npm install --prefix /web/default & \
-    npm install --prefix /web/berry & \
-    npm install --prefix /web/air & \
-    wait
+RUN npm install --prefix /web
 
-RUN DISABLE_ESLINT_PLUGIN='true' REACT_APP_VERSION=$(cat ./VERSION) npm run build --prefix /web/default & \
-    DISABLE_ESLINT_PLUGIN='true' REACT_APP_VERSION=$(cat ./VERSION) npm run build --prefix /web/berry & \
-    DISABLE_ESLINT_PLUGIN='true' REACT_APP_VERSION=$(cat ./VERSION) npm run build --prefix /web/air & \
-    wait
+RUN DISABLE_ESLINT_PLUGIN='true' REACT_APP_VERSION=$(cat ./VERSION) npm run build --prefix /web
 
 FROM golang:alpine AS builder2
 
@@ -42,7 +36,7 @@ RUN go mod download
 COPY . .
 COPY --from=builder /web/build ./web/build
 
-RUN go build -trimpath -ldflags "-s -w -X 'github.com/yeying-community/router/common.Version=$(cat VERSION)' -linkmode external -extldflags '-static'" -o router
+RUN go build -trimpath -ldflags "-s -w -X 'github.com/yeying-community/router/common.Version=$(cat VERSION)' -linkmode external -extldflags '-static'" -o router ./cmd/router
 
 FROM alpine:latest
 
@@ -50,6 +44,6 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder2 /build/router /
 
-EXPOSE 3000
+EXPOSE 3011
 WORKDIR /data
 ENTRYPOINT ["/router"]
