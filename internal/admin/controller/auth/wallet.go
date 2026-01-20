@@ -31,6 +31,7 @@ type walletLoginRequest struct {
 	Signature string `json:"signature"`
 	Nonce     string `json:"nonce"`
 	ChainId   string `json:"chain_id"`
+	Message   string `json:"message"`
 }
 
 const walletRefreshCookieName = "refresh_token"
@@ -207,8 +208,20 @@ func verifyWalletRequest(req walletLoginRequest) error {
 		logger.Loginf(nil, "wallet verify fail addr=%s err=%v", req.Address, err)
 		return err
 	}
+
+	message := entry.Message
+	if strings.TrimSpace(req.Message) != "" {
+		message = req.Message
+		nonce := extractNonceFromMessage(message)
+		if nonce == "" || nonce != entry.Nonce {
+			err := errors.New("nonce 无效或已过期")
+			logger.Loginf(nil, "wallet verify fail addr=%s err=%v", req.Address, err)
+			return err
+		}
+	}
+
 	// verify signature
-	recovered, err := recoverAddress(entry.Message, req.Signature)
+	recovered, err := recoverAddress(message, req.Signature)
 	if err != nil {
 		logger.SysError("wallet login verify failed: " + err.Error())
 		err2 := errors.New("签名验证失败")
@@ -221,6 +234,20 @@ func verifyWalletRequest(req walletLoginRequest) error {
 		return err
 	}
 	return nil
+}
+
+func extractNonceFromMessage(message string) string {
+	for _, line := range strings.Split(message, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "nonce:") {
+			return strings.TrimSpace(trimmed[len("nonce:"):])
+		}
+	}
+	return ""
 }
 
 // walletAuthenticate verifies signature & returns an enabled user (create if allowed)
