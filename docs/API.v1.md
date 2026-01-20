@@ -45,6 +45,10 @@ Authorization: Bearer <JWT>
 - `POST /api/v1/public/auth/refresh`
 - `POST /api/v1/public/auth/logout`
 
+> 说明  
+> - `verify` 支持可选的 `message` 字段（SIWE 标准消息），后端会从消息里解析 `Nonce:` 并校验。  
+> - 若不传 `message`，仍使用 challenge 返回的 `challenge` 进行签名验证（兼容旧流程）。
+
 #### 个人 profile（JWT 或 UCAN）
 - `GET /api/v1/public/profile`
 
