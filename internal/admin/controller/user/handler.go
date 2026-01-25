@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -17,6 +19,7 @@ import (
 	"github.com/yeying-community/router/common/i18n"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/common/random"
+	"github.com/yeying-community/router/common/utils"
 	"github.com/yeying-community/router/internal/admin/model"
 	usersvc "github.com/yeying-community/router/internal/admin/service/user"
 	"gorm.io/gorm"
@@ -27,6 +30,15 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// Login godoc
+// @Summary Password login (session/cookie)
+// @Tags public
+// @Accept json
+// @Produce json
+// @Param body body LoginRequest true "Login payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 400 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/login [post]
 func Login(c *gin.Context) {
 	if !config.PasswordLoginEnabled {
 		logger.Loginf(c.Request.Context(), "password login rejected: disabled")
@@ -111,6 +123,13 @@ func SetupLogin(user *model.User, c *gin.Context) {
 	})
 }
 
+// Logout godoc
+// @Summary Logout (session/cookie)
+// @Tags public
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 400 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/logout [get]
 func Logout(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
@@ -129,6 +148,15 @@ func Logout(c *gin.Context) {
 	})
 }
 
+// Register godoc
+// @Summary Register user (password)
+// @Tags public
+// @Accept json
+// @Produce json
+// @Param body body docs.UserRegisterRequest true "Register payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 400 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/register [post]
 func Register(c *gin.Context) {
 	ctx := c.Request.Context()
 	if !config.RegisterEnabled {
@@ -185,6 +213,16 @@ func Register(c *gin.Context) {
 	return
 }
 
+// GetAllUsers godoc
+// @Summary List users (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param p query int false "Page index"
+// @Param order query string false "Order"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user [get]
 func GetAllUsers(c *gin.Context) {
 	p, _ := strconv.Atoi(c.Query("p"))
 	if p < 0 {
@@ -209,6 +247,15 @@ func GetAllUsers(c *gin.Context) {
 	})
 }
 
+// SearchUsers godoc
+// @Summary Search users (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param keyword query string false "Keyword"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/search [get]
 func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	users, err := usersvc.Search(keyword)
@@ -227,6 +274,15 @@ func SearchUsers(c *gin.Context) {
 	return
 }
 
+// GetUser godoc
+// @Summary Get user detail (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/{id} [get]
 func GetUser(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -260,13 +316,59 @@ func GetUser(c *gin.Context) {
 	return
 }
 
+// GetUserDashboard godoc
+// @Summary User dashboard stats
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param start_timestamp query int false "Start timestamp (unix)"
+// @Param end_timestamp query int false "End timestamp (unix)"
+// @Param granularity query string false "hour|day|week|month|year"
+// @Param models query string false "Comma-separated model list"
+// @Param include_meta query int false "Include meta info (1)"
+// @Success 200 {object} docs.UserDashboardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/dashboard [get]
 func GetUserDashboard(c *gin.Context) {
 	id := c.GetInt(ctxkey.Id)
-	now := time.Now()
-	startOfDay := now.Truncate(24*time.Hour).AddDate(0, 0, -6).Unix()
-	endOfDay := now.Truncate(24 * time.Hour).Add(24*time.Hour - time.Second).Unix()
+	granularity := strings.ToLower(strings.TrimSpace(c.DefaultQuery("granularity", "day")))
+	switch granularity {
+	case "hour", "day", "week", "month", "year":
+	default:
+		granularity = "day"
+	}
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	includeMeta := c.Query("include_meta") == "1"
 
-	dashboards, err := usersvc.SearchLogsByDayAndModel(id, int(startOfDay), int(endOfDay))
+	modelsParam := strings.TrimSpace(c.Query("models"))
+	var models []string
+	if modelsParam != "" {
+		parts := strings.Split(modelsParam, ",")
+		modelSet := make(map[string]struct{}, len(parts))
+		for _, part := range parts {
+			name := strings.TrimSpace(part)
+			if name == "" {
+				continue
+			}
+			if _, exists := modelSet[name]; !exists {
+				modelSet[name] = struct{}{}
+				models = append(models, name)
+			}
+		}
+	}
+
+	if startTimestamp <= 0 || endTimestamp <= 0 {
+		now := time.Now()
+		startTimestamp = now.Truncate(24*time.Hour).AddDate(0, 0, -6).Unix()
+		endTimestamp = now.Truncate(24 * time.Hour).Add(24*time.Hour - time.Second).Unix()
+		granularity = "day"
+	}
+	if startTimestamp > endTimestamp {
+		startTimestamp, endTimestamp = endTimestamp, startTimestamp
+	}
+
+	dashboards, err := usersvc.SearchLogsByPeriodAndModel(id, int(startTimestamp), int(endTimestamp), granularity, models)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -275,14 +377,60 @@ func GetUserDashboard(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"success": true,
 		"message": "",
 		"data":    dashboards,
-	})
+	}
+	if includeMeta {
+		providerSet := make(map[string]map[string]struct{})
+		modelNames, modelErr := usersvc.SearchLogModelsByPeriod(id, int(startTimestamp), int(endTimestamp))
+		if modelErr != nil {
+			for _, item := range dashboards {
+				if item.ModelName == "" {
+					continue
+				}
+				modelNames = append(modelNames, item.ModelName)
+			}
+		}
+		for _, name := range modelNames {
+			if strings.TrimSpace(name) == "" {
+				continue
+			}
+			provider := utils.ResolveModelProvider(name)
+			if providerSet[provider] == nil {
+				providerSet[provider] = make(map[string]struct{})
+			}
+			providerSet[provider][name] = struct{}{}
+		}
+		providers := make(map[string][]string)
+		for provider, models := range providerSet {
+			list := make([]string, 0, len(models))
+			for modelName := range models {
+				list = append(list, modelName)
+			}
+			sort.Strings(list)
+			providers[provider] = list
+		}
+		response["meta"] = gin.H{
+			"providers":   providers,
+			"granularity": granularity,
+			"start":       startTimestamp,
+			"end":         endTimestamp,
+		}
+	}
+	c.JSON(http.StatusOK, response)
 	return
 }
 
+// GenerateAccessToken godoc
+// @Summary Generate access token for current user
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.UserAccessTokenResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/token [get]
 func GenerateAccessToken(c *gin.Context) {
 	id := c.GetInt(ctxkey.Id)
 	logger.Loginf(c.Request.Context(), "generate access token request user=%d", id)
@@ -329,6 +477,14 @@ func GenerateAccessToken(c *gin.Context) {
 	return
 }
 
+// GetAffCode godoc
+// @Summary Get affiliate code
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.UserAffCodeResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/aff [get]
 func GetAffCode(c *gin.Context) {
 	id := c.GetInt(ctxkey.Id)
 	user, err := usersvc.GetByID(id, true)
@@ -357,6 +513,14 @@ func GetAffCode(c *gin.Context) {
 	return
 }
 
+// GetSelf godoc
+// @Summary Get current user profile
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.UserSelfResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/self [get]
 func GetSelf(c *gin.Context) {
 	id := c.GetInt(ctxkey.Id)
 	user, err := usersvc.GetByID(id, false)
@@ -375,6 +539,16 @@ func GetSelf(c *gin.Context) {
 	return
 }
 
+// UpdateUser godoc
+// @Summary Update user (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.AdminUserUpdateRequest true "User update payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user [put]
 func UpdateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	var updatedUser model.User
@@ -442,6 +616,16 @@ func UpdateUser(c *gin.Context) {
 	return
 }
 
+// UpdateSelf godoc
+// @Summary Update current user
+// @Tags public
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.UserSelfUpdateRequest true "Profile update payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/self [put]
 func UpdateSelf(c *gin.Context) {
 	var user model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
@@ -489,6 +673,15 @@ func UpdateSelf(c *gin.Context) {
 	return
 }
 
+// DeleteUser godoc
+// @Summary Delete user (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/{id} [delete]
 func DeleteUser(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -524,6 +717,14 @@ func DeleteUser(c *gin.Context) {
 	}
 }
 
+// DeleteSelf godoc
+// @Summary Delete current user
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/self [delete]
 func DeleteSelf(c *gin.Context) {
 	id := c.GetInt("id")
 	user, _ := usersvc.GetByID(id, false)
@@ -551,6 +752,16 @@ func DeleteSelf(c *gin.Context) {
 	return
 }
 
+// CreateUser godoc
+// @Summary Create user (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.AdminCreateUserRequest true "Create user payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user [post]
 func CreateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	var user model.User
@@ -606,6 +817,16 @@ type ManageRequest struct {
 	Action   string `json:"action"`
 }
 
+// ManageUser godoc
+// @Summary Manage user (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.AdminManageUserRequest true "Manage user payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/manage [post]
 // ManageUser Only admin user can do this
 func ManageUser(c *gin.Context) {
 	var req ManageRequest
@@ -778,6 +999,16 @@ type topUpRequest struct {
 	Key string `json:"key"`
 }
 
+// TopUp godoc
+// @Summary User top up
+// @Tags public
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.UserTopUpRequest true "Top up payload"
+// @Success 200 {object} docs.UserTopUpResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup [post]
 func TopUp(c *gin.Context) {
 	ctx := c.Request.Context()
 	req := topUpRequest{}

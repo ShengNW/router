@@ -13,6 +13,15 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 )
 
+// PublicProfile godoc
+// @Summary Get public profile
+// @Description Accepts wallet JWT or UCAN token in Authorization header.
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/profile [get]
 // PublicProfile implements /api/v1/public/profile
 func PublicProfile(c *gin.Context) {
 	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))

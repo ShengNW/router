@@ -12,6 +12,15 @@ import (
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
 )
 
+// GetAllChannels godoc
+// @Summary List channels (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param p query int false "Page index"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel [get]
 func GetAllChannels(c *gin.Context) {
 	p, _ := strconv.Atoi(c.Query("p"))
 	if p < 0 {
@@ -33,6 +42,15 @@ func GetAllChannels(c *gin.Context) {
 	return
 }
 
+// SearchChannels godoc
+// @Summary Search channels (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param keyword query string false "Keyword"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/search [get]
 func SearchChannels(c *gin.Context) {
 	keyword := c.Query("keyword")
 	channels, err := channelsvc.Search(keyword)
@@ -51,6 +69,15 @@ func SearchChannels(c *gin.Context) {
 	return
 }
 
+// GetChannel godoc
+// @Summary Get channel by ID (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "Channel ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/{id} [get]
 func GetChannel(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -76,6 +103,16 @@ func GetChannel(c *gin.Context) {
 	return
 }
 
+// AddChannel godoc
+// @Summary Create channel (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.ChannelCreateRequest true "Channel payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel [post]
 func AddChannel(c *gin.Context) {
 	channel := model.Channel{}
 	err := c.ShouldBindJSON(&channel)
@@ -112,6 +149,15 @@ func AddChannel(c *gin.Context) {
 	return
 }
 
+// DeleteChannel godoc
+// @Summary Delete channel (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "Channel ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/{id} [delete]
 func DeleteChannel(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	channel := model.Channel{Id: id}
@@ -130,6 +176,14 @@ func DeleteChannel(c *gin.Context) {
 	return
 }
 
+// DeleteDisabledChannel godoc
+// @Summary Delete disabled channels (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/disabled [delete]
 func DeleteDisabledChannel(c *gin.Context) {
 	rows, err := channelsvc.DeleteDisabled()
 	if err != nil {
@@ -147,6 +201,16 @@ func DeleteDisabledChannel(c *gin.Context) {
 	return
 }
 
+// UpdateChannel godoc
+// @Summary Update channel (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.ChannelUpdateRequest true "Channel update payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel [put]
 func UpdateChannel(c *gin.Context) {
 	channel := model.Channel{}
 	err := c.ShouldBindJSON(&channel)

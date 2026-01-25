@@ -15,6 +15,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetStatus godoc
+// @Summary Get service status
+// @Tags public
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 500 {object} docs.ErrorResponse
+// @Router /api/v1/public/status [get]
 func GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -38,6 +45,13 @@ func GetStatus(c *gin.Context) {
 	return
 }
 
+// GetNotice godoc
+// @Summary Get system notice
+// @Tags public
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 500 {object} docs.ErrorResponse
+// @Router /api/v1/public/notice [get]
 func GetNotice(c *gin.Context) {
 	config.OptionMapRWMutex.RLock()
 	defer config.OptionMapRWMutex.RUnlock()
@@ -49,6 +63,13 @@ func GetNotice(c *gin.Context) {
 	return
 }
 
+// GetAbout godoc
+// @Summary Get about content
+// @Tags public
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 500 {object} docs.ErrorResponse
+// @Router /api/v1/public/about [get]
 func GetAbout(c *gin.Context) {
 	config.OptionMapRWMutex.RLock()
 	defer config.OptionMapRWMutex.RUnlock()
@@ -60,6 +81,13 @@ func GetAbout(c *gin.Context) {
 	return
 }
 
+// GetHomePageContent godoc
+// @Summary Get home page content
+// @Tags public
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 500 {object} docs.ErrorResponse
+// @Router /api/v1/public/home_page_content [get]
 func GetHomePageContent(c *gin.Context) {
 	config.OptionMapRWMutex.RLock()
 	defer config.OptionMapRWMutex.RUnlock()
@@ -131,6 +159,14 @@ func SendEmailVerification(c *gin.Context) {
 	return
 }
 
+// SendPasswordResetEmail godoc
+// @Summary Send password reset email
+// @Tags public
+// @Produce json
+// @Param email query string true "Email address"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 400 {object} docs.ErrorResponse
+// @Router /api/v1/public/reset_password [get]
 func SendPasswordResetEmail(c *gin.Context) {
 	email := c.Query("email")
 	if err := common.Validate.Var(email, "required,email"); err != nil {
@@ -185,6 +221,15 @@ type PasswordResetRequest struct {
 	Token string `json:"token"`
 }
 
+// ResetPassword godoc
+// @Summary Reset password with email + token
+// @Tags public
+// @Accept json
+// @Produce json
+// @Param body body PasswordResetRequest true "Reset payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 400 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/reset [post]
 func ResetPassword(c *gin.Context) {
 	var req PasswordResetRequest
 	err := json.NewDecoder(c.Request.Body).Decode(&req)

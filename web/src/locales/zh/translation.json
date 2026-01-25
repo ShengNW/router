@@ -12,7 +12,7 @@
     "about": "关于",
     "chat": "聊天",
     "login": "登录",
-    "logout": "注销",
+    "logout": "退出",
     "register": "注册"
   },
   "topup": {
@@ -432,6 +432,22 @@
         "date": "日期",
         "value": "数值"
       }
+    },
+    "filters": {
+      "title": "筛选",
+      "granularity": "时间维度",
+      "span": "跨度",
+      "start": "开始",
+      "end": "结束",
+      "providers": "模型供应商",
+      "no_providers": "暂无模型",
+      "granularity_options": {
+        "hour": "小时",
+        "day": "天",
+        "week": "周",
+        "month": "月",
+        "year": "年"
+      }
     }
   },
   "setting": {
@@ -819,6 +835,7 @@
     "error": {
       "login_expired": "未登录或登录已过期，请重新登录！",
       "password_length": "密码长度不得小于 8 位！",
+      "password_length_range": "密码长度需在 8-20 位",
       "password_mismatch": "两次输入的密码不一致",
       "turnstile_wait": "请稍后几秒重试，Turnstile 正在检查用户环境！",
       "root_password": "请立刻修改默认密码！"

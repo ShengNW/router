@@ -81,5 +81,12 @@ systemctl restart router
 - 环境变量说明与示例：`.env.template`
 - API 文档：`docs/API.md`
 
+## 生成 OpenAPI 文档（/api/v1）
+```bash
+go install github.com/swaggo/swag/cmd/swag@latest
+./scripts/gen-openapi.sh
+# 输出：docs/openapi.json（以及 swagger.json/yaml）
+```
+
 ## 许可证
 MIT License

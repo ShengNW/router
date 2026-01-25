@@ -10,6 +10,22 @@ import (
 	logsvc "github.com/yeying-community/router/internal/admin/service/log"
 )
 
+// GetAllLogs godoc
+// @Summary List logs (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param p query int false "Page index"
+// @Param type query int false "Log type"
+// @Param start_timestamp query int false "Start timestamp (unix)"
+// @Param end_timestamp query int false "End timestamp (unix)"
+// @Param username query string false "Username"
+// @Param token_name query string false "Token name"
+// @Param model_name query string false "Model name"
+// @Param channel query int false "Channel ID"
+// @Success 200 {object} docs.UserLogListResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/log [get]
 func GetAllLogs(c *gin.Context) {
 	p, _ := strconv.Atoi(c.Query("p"))
 	if p < 0 {
@@ -38,6 +54,20 @@ func GetAllLogs(c *gin.Context) {
 	return
 }
 
+// GetUserLogs godoc
+// @Summary List user logs
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param p query int false "Page index"
+// @Param type query int false "Log type"
+// @Param start_timestamp query int false "Start timestamp (unix)"
+// @Param end_timestamp query int false "End timestamp (unix)"
+// @Param token_name query string false "Token name"
+// @Param model_name query string false "Model name"
+// @Success 200 {object} docs.UserLogListResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/log/self [get]
 func GetUserLogs(c *gin.Context) {
 	p, _ := strconv.Atoi(c.Query("p"))
 	if p < 0 {
@@ -65,6 +95,15 @@ func GetUserLogs(c *gin.Context) {
 	return
 }
 
+// SearchAllLogs godoc
+// @Summary Search logs (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param keyword query string false "Keyword"
+// @Success 200 {object} docs.UserLogListResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/log/search [get]
 func SearchAllLogs(c *gin.Context) {
 	keyword := c.Query("keyword")
 	logs, err := logsvc.SearchAll(keyword)
@@ -83,6 +122,15 @@ func SearchAllLogs(c *gin.Context) {
 	return
 }
 
+// SearchUserLogs godoc
+// @Summary Search user logs
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param keyword query string false "Keyword"
+// @Success 200 {object} docs.UserLogListResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/log/self/search [get]
 func SearchUserLogs(c *gin.Context) {
 	keyword := c.Query("keyword")
 	userId := c.GetInt(ctxkey.Id)
@@ -102,6 +150,21 @@ func SearchUserLogs(c *gin.Context) {
 	return
 }
 
+// GetLogsStat godoc
+// @Summary Log stats (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param type query int false "Log type"
+// @Param start_timestamp query int false "Start timestamp (unix)"
+// @Param end_timestamp query int false "End timestamp (unix)"
+// @Param token_name query string false "Token name"
+// @Param username query string false "Username"
+// @Param model_name query string false "Model name"
+// @Param channel query int false "Channel ID"
+// @Success 200 {object} docs.UserLogStatResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/log/stat [get]
 func GetLogsStat(c *gin.Context) {
 	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -123,6 +186,20 @@ func GetLogsStat(c *gin.Context) {
 	return
 }
 
+// GetLogsSelfStat godoc
+// @Summary Log stats for current user
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param type query int false "Log type"
+// @Param start_timestamp query int false "Start timestamp (unix)"
+// @Param end_timestamp query int false "End timestamp (unix)"
+// @Param token_name query string false "Token name"
+// @Param model_name query string false "Model name"
+// @Param channel query int false "Channel ID"
+// @Success 200 {object} docs.UserLogStatResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/log/self/stat [get]
 func GetLogsSelfStat(c *gin.Context) {
 	username := c.GetString(ctxkey.Username)
 	logType, _ := strconv.Atoi(c.Query("type"))
@@ -144,6 +221,15 @@ func GetLogsSelfStat(c *gin.Context) {
 	return
 }
 
+// DeleteHistoryLogs godoc
+// @Summary Delete history logs (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param target_timestamp query int true "Target timestamp (unix)"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/log [delete]
 func DeleteHistoryLogs(c *gin.Context) {
 	targetTimestamp, _ := strconv.ParseInt(c.Query("target_timestamp"), 10, 64)
 	if targetTimestamp == 0 {

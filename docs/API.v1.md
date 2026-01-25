@@ -3,6 +3,9 @@
 本文件只描述 **JWT** 使用方式下的 `/api/v1/*` 接口（public/admin/internal 分层）。  
 旧接口与兼容接口（如 `/api/*`、`/v1/*`）不在本文档范围。
 
+> Swagger/OpenAPI  
+> 本文档对应的 OpenAPI 文件为 `docs/openapi.json`，由 swag 注释生成：`scripts/gen-openapi.sh`。
+
 ## 认证方式（JWT）
 ### 请求头
 ```
@@ -79,6 +82,19 @@ Authorization: Bearer <JWT>
 - `GET  /api/v1/public/user/token`（JWT）
 - `GET  /api/v1/public/user/aff`（JWT）
 - `POST /api/v1/public/user/topup`（JWT）
+
+#### GET /api/v1/public/user/dashboard
+用户侧用量统计（兼容旧 `/api/user/dashboard`）。
+
+**Query 参数（可选）**
+- `start_timestamp`：起始时间（Unix 秒）
+- `end_timestamp`：结束时间（Unix 秒）
+- `granularity`：`hour | day | week | month | year`
+- `models`：逗号分隔的模型列表（仅统计所选模型）
+- `include_meta=1`：返回 `meta.providers`、`meta.granularity`、`meta.start`、`meta.end`
+
+**默认行为**
+- 不传参数 → 保持旧逻辑：近 7 天 + day 粒度
 
 ### 5) 个人 Token 管理（JWT）
 - `GET    /api/v1/public/token`

@@ -11,6 +11,14 @@ import (
 	optionsvc "github.com/yeying-community/router/internal/admin/service/option"
 )
 
+// GetOptions godoc
+// @Summary Get options (root)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/option [get]
 func GetOptions(c *gin.Context) {
 	options := optionsvc.GetOptions()
 	c.JSON(http.StatusOK, gin.H{
@@ -21,6 +29,16 @@ func GetOptions(c *gin.Context) {
 	return
 }
 
+// UpdateOption godoc
+// @Summary Update option (root)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body docs.OptionUpdateRequest true "Option payload"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/option [put]
 func UpdateOption(c *gin.Context) {
 	var option model.Option
 	err := json.NewDecoder(c.Request.Body).Decode(&option)

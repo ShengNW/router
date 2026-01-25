@@ -374,6 +374,15 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 	return balance, nil
 }
 
+// UpdateChannelBalance godoc
+// @Summary Update channel balance (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "Channel ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/update_balance/{id} [get]
 func UpdateChannelBalance(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -434,6 +443,14 @@ func updateAllChannelsBalance() error {
 	return nil
 }
 
+// UpdateAllChannelsBalance godoc
+// @Summary Update all channels balance (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/update_balance [get]
 func UpdateAllChannelsBalance(c *gin.Context) {
 	//err := updateAllChannelsBalance()
 	//if err != nil {

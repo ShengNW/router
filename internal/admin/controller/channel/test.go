@@ -167,6 +167,16 @@ func testChannel(ctx context.Context, channel *model.Channel, request *relaymode
 	return responseMessage, nil, nil
 }
 
+// TestChannel godoc
+// @Summary Test channel (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "Channel ID"
+// @Param model query string false "Model name"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/test/{id} [get]
 func TestChannel(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, err := strconv.Atoi(c.Param("id"))
@@ -274,6 +284,15 @@ func testChannels(ctx context.Context, notify bool, scope string) error {
 	return nil
 }
 
+// TestChannels godoc
+// @Summary Test all channels (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param scope query string false "Scope (all|enabled|disabled)"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/channel/test [get]
 func TestChannels(c *gin.Context) {
 	ctx := c.Request.Context()
 	scope := c.Query("scope")
