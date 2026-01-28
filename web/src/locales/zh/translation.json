@@ -448,6 +448,62 @@
         "month": "月",
         "year": "年"
       }
+    },
+    "spending": {
+      "overview": {
+        "title": "花费总览",
+        "yesterday_cost": "昨日花费（美元）",
+        "period_cost": "{{period}}花费（美元）",
+        "yesterday_revenue": "昨日收益（美元）",
+        "period_revenue": "{{period}}收益（美元）",
+        "drill_hint": "下钻查看趋势与明细"
+      },
+      "calendar": {
+        "title": "花费日历",
+        "view": {
+          "calendar": "日历",
+          "bar": "柱状图"
+        },
+        "granularity": {
+          "hour": "时",
+          "day": "日",
+          "week": "周",
+          "month": "月",
+          "year": "年"
+        },
+        "unit": {
+          "usd": "美元",
+          "token": "Token"
+        },
+        "empty": "暂无数据"
+      },
+      "details": {
+        "title": "花费明细",
+        "dimension": "维度：{{dimension}}",
+        "empty": "暂无明细"
+      },
+      "period": {
+        "last_week": "上周",
+        "last_month": "上月",
+        "this_year": "本年",
+        "last_year": "去年",
+        "last_12_months": "近一年",
+        "all_time": "使用以来"
+      },
+      "metrics": {
+        "requests": "请求次数",
+        "tokens": "Token 使用",
+        "cost": "金额花费"
+      },
+      "sort": {
+        "desc": "从高到低",
+        "asc": "从低到高"
+      },
+      "labels": {
+        "usd": "美元",
+        "token": "Token",
+        "ten_thousand": "万"
+      }
     }
   },
   "setting": {

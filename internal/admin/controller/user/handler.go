@@ -21,6 +21,7 @@ import (
 	"github.com/yeying-community/router/common/random"
 	"github.com/yeying-community/router/common/utils"
 	"github.com/yeying-community/router/internal/admin/model"
+	logsvc "github.com/yeying-community/router/internal/admin/service/log"
 	usersvc "github.com/yeying-community/router/internal/admin/service/user"
 	"gorm.io/gorm"
 )
@@ -420,6 +421,124 @@ func GetUserDashboard(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, response)
+	return
+}
+
+// GetUserSpendOverview godoc
+// @Summary User spend overview
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param period query string false "last_week|last_month|this_year|last_year|last_12_months|all_time"
+// @Success 200 {object} docs.UserSpendOverviewResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/spend/overview [get]
+func GetUserSpendOverview(c *gin.Context) {
+	userId := c.GetInt(ctxkey.Id)
+	period := strings.ToLower(strings.TrimSpace(c.DefaultQuery("period", "last_month")))
+	now := time.Now()
+	todayStart := startOfDay(now)
+	todayEnd := endOfDay(now)
+	yesterdayStart := todayStart.AddDate(0, 0, -1)
+	yesterdayEnd := todayStart.Add(-time.Second)
+
+	var periodStart time.Time
+	var periodEnd time.Time
+	switch period {
+	case "last_week":
+		weekStart := startOfWeek(now)
+		periodStart = weekStart.AddDate(0, 0, -7)
+		periodEnd = weekStart.Add(-time.Second)
+	case "last_month":
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		periodEnd = monthStart.Add(-time.Second)
+		periodStart = time.Date(periodEnd.Year(), periodEnd.Month(), 1, 0, 0, 0, 0, now.Location())
+	case "this_year":
+		periodStart = time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location())
+		periodEnd = todayEnd
+	case "last_year":
+		periodStart = time.Date(now.Year()-1, time.January, 1, 0, 0, 0, 0, now.Location())
+		periodEnd = time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location()).Add(-time.Second)
+	case "last_12_months":
+		periodStart = todayStart.AddDate(-1, 0, 0)
+		periodEnd = todayEnd
+	case "all_time":
+		minTimestamp, err := logsvc.MinLogTimestampByUserId(userId, []int{model.LogTypeConsume, model.LogTypeTopup})
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "无法获取统计信息",
+			})
+			return
+		}
+		if minTimestamp > 0 {
+			periodStart = startOfDay(time.Unix(minTimestamp, 0).In(now.Location()))
+			periodEnd = todayEnd
+		}
+	default:
+		period = "last_month"
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		periodEnd = monthStart.Add(-time.Second)
+		periodStart = time.Date(periodEnd.Year(), periodEnd.Month(), 1, 0, 0, 0, 0, now.Location())
+	}
+
+	periodStartUnix := int64(0)
+	periodEndUnix := int64(0)
+	if !periodStart.IsZero() && !periodEnd.IsZero() {
+		if periodStart.After(periodEnd) {
+			periodStart, periodEnd = periodEnd, periodStart
+		}
+		periodStartUnix = periodStart.Unix()
+		periodEndUnix = periodEnd.Unix()
+	}
+
+	yesterdayCost, err := logsvc.SumUsedQuotaByUserId(model.LogTypeConsume, userId, yesterdayStart.Unix(), yesterdayEnd.Unix())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无法获取统计信息",
+		})
+		return
+	}
+	yesterdayRevenue, err := logsvc.SumUsedQuotaByUserId(model.LogTypeTopup, userId, yesterdayStart.Unix(), yesterdayEnd.Unix())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无法获取统计信息",
+		})
+		return
+	}
+	periodCost, err := logsvc.SumUsedQuotaByUserId(model.LogTypeConsume, userId, periodStartUnix, periodEndUnix)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无法获取统计信息",
+		})
+		return
+	}
+	periodRevenue, err := logsvc.SumUsedQuotaByUserId(model.LogTypeTopup, userId, periodStartUnix, periodEndUnix)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无法获取统计信息",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"yesterday_cost":    yesterdayCost,
+			"yesterday_revenue": yesterdayRevenue,
+			"period_cost":       periodCost,
+			"period_revenue":    periodRevenue,
+			"period_start":      periodStartUnix,
+			"period_end":        periodEndUnix,
+			"yesterday_start":   yesterdayStart.Unix(),
+			"yesterday_end":     yesterdayEnd.Unix(),
+		},
+	})
 	return
 }
 
@@ -1071,4 +1190,21 @@ func AdminTopUp(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+func startOfDay(t time.Time) time.Time {
+	year, month, day := t.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
+}
+
+func endOfDay(t time.Time) time.Time {
+	return startOfDay(t).AddDate(0, 0, 1).Add(-time.Second)
+}
+
+func startOfWeek(t time.Time) time.Time {
+	weekday := int(t.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return startOfDay(t).AddDate(0, 0, -(weekday - 1))
 }

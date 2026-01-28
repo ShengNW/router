@@ -448,6 +448,62 @@
         "month": "Month",
         "year": "Year"
       }
+    },
+    "spending": {
+      "overview": {
+        "title": "Spending Overview",
+        "yesterday_cost": "Yesterday Cost (USD)",
+        "period_cost": "{{period}} Cost (USD)",
+        "yesterday_revenue": "Yesterday Revenue (USD)",
+        "period_revenue": "{{period}} Revenue (USD)",
+        "drill_hint": "Drill down for trends and details"
+      },
+      "calendar": {
+        "title": "Spending Calendar",
+        "view": {
+          "calendar": "Calendar",
+          "bar": "Bar"
+        },
+        "granularity": {
+          "hour": "Hour",
+          "day": "Day",
+          "week": "Week",
+          "month": "Month",
+          "year": "Year"
+        },
+        "unit": {
+          "usd": "USD",
+          "token": "Token"
+        },
+        "empty": "No data"
+      },
+      "details": {
+        "title": "Spending Details",
+        "dimension": "Dimension: {{dimension}}",
+        "empty": "No details"
+      },
+      "period": {
+        "last_week": "Last Week",
+        "last_month": "Last Month",
+        "this_year": "This Year",
+        "last_year": "Last Year",
+        "last_12_months": "Last 12 Months",
+        "all_time": "All Time"
+      },
+      "metrics": {
+        "requests": "Requests",
+        "tokens": "Tokens",
+        "cost": "Cost"
+      },
+      "sort": {
+        "desc": "High to Low",
+        "asc": "Low to High"
+      },
+      "labels": {
+        "usd": "USD",
+        "token": "Token",
+        "ten_thousand": "10k"
+      }
     }
   },
   "setting": {

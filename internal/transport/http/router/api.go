@@ -65,6 +65,7 @@ func SetApiRouter(engine *gin.Engine) {
 			{
 				publicSelfRoute.GET("/self", user.GetSelf)
 				publicSelfRoute.GET("/dashboard", user.GetUserDashboard)
+				publicSelfRoute.GET("/spend/overview", user.GetUserSpendOverview)
 				publicSelfRoute.GET("/available_models", admin.GetUserAvailableModels)
 				publicSelfRoute.PUT("/self", user.UpdateSelf)
 				publicSelfRoute.DELETE("/self", user.DeleteSelf)

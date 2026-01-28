@@ -1,12 +1,5 @@
 basePath: /
 definitions:
-  controller.PasswordResetRequest:
-    properties:
-      email:
-        type: string
-      token:
-        type: string
-    type: object
   docs.AdminCreateUserRequest:
     properties:
       display_name:
@@ -1482,6 +1475,44 @@ definitions:
         example: alice
         type: string
     type: object
+  docs.UserSpendOverviewData:
+    properties:
+      period_cost:
+        example: 23456
+        type: integer
+      period_end:
+        example: 1704671999
+        type: integer
+      period_revenue:
+        example: 78901
+        type: integer
+      period_start:
+        example: 1704067200
+        type: integer
+      yesterday_cost:
+        example: 12345
+        type: integer
+      yesterday_end:
+        example: 1704153599
+        type: integer
+      yesterday_revenue:
+        example: 67890
+        type: integer
+      yesterday_start:
+        example: 1704067200
+        type: integer
+    type: object
+  docs.UserSpendOverviewResponse:
+    properties:
+      data:
+        $ref: '#/definitions/docs.UserSpendOverviewData'
+      message:
+        example: ""
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
   docs.UserTopUpRequest:
     properties:
       key:
@@ -1527,7 +1558,28 @@ definitions:
         example: 0xabcdef...
         type: string
     type: object
-  user.LoginRequest:
+  github_com_yeying-community_router_Codex_Router_LvRouter_internal_admin_controller.PasswordResetRequest:
+    properties:
+      email:
+        type: string
+      token:
+        type: string
+    type: object
+  github_com_yeying-community_router_Codex_Router_LvRouter_internal_admin_controller_user.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_yeying-community_router_internal_admin_controller.PasswordResetRequest:
+    properties:
+      email:
+        type: string
+      token:
+        type: string
+    type: object
+  github_com_yeying-community_router_internal_admin_controller_user.LoginRequest:
     properties:
       password:
         type: string
@@ -3985,7 +4037,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/user.LoginRequest'
+          $ref: '#/definitions/github_com_yeying-community_router_internal_admin_controller_user.LoginRequest'
       produces:
       - application/json
       responses:
@@ -4051,7 +4103,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/controller.PasswordResetRequest'
+          $ref: '#/definitions/github_com_yeying-community_router_internal_admin_controller.PasswordResetRequest'
       produces:
       - application/json
       responses:
@@ -4125,6 +4177,29 @@ paths:
       security:
       - BearerAuth: []
       summary: Update current user
+      tags:
+      - public
+  /api/v1/public/user/spend/overview:
+    get:
+      parameters:
+      - description: last_week|last_month|this_year|last_year|last_12_months|all_time
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.UserSpendOverviewResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: User spend overview
       tags:
       - public
   /api/v1/public/user/token:
