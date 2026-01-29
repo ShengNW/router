@@ -152,6 +152,10 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		ifnull = "COALESCE"
 	}
 	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(quota),0)", ifnull))
+	// unknown log type falls back to consume to keep legacy behavior
+	if logType == model.LogTypeUnknown {
+		logType = model.LogTypeConsume
+	}
 	if username != "" {
 		tx = tx.Where("username = ?", username)
 	}
@@ -171,7 +175,7 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		tx = tx.Where("channel_id = ?", channel)
 	}
 	var quota int64
-	tx.Where("type = ?", model.LogTypeConsume).Scan(&quota)
+	tx.Where("type = ?", logType).Scan(&quota)
 	return quota
 }
 
@@ -181,6 +185,10 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		ifnull = "COALESCE"
 	}
 	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(prompt_tokens),0) + %s(sum(completion_tokens),0)", ifnull, ifnull))
+	// unknown log type falls back to consume to keep legacy behavior
+	if logType == model.LogTypeUnknown {
+		logType = model.LogTypeConsume
+	}
 	if username != "" {
 		tx = tx.Where("username = ?", username)
 	}
@@ -197,8 +205,45 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		tx = tx.Where("model_name = ?", modelName)
 	}
 	var token int
-	tx.Where("type = ?", model.LogTypeConsume).Scan(&token)
+	tx.Where("type = ?", logType).Scan(&token)
 	return token
+}
+
+func SumUsedQuotaByUserId(logType int, userId int, startTimestamp int64, endTimestamp int64) (int64, error) {
+	ifnull := "ifnull"
+	if common.UsingPostgreSQL {
+		ifnull = "COALESCE"
+	}
+	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(quota),0)", ifnull))
+	// unknown log type falls back to consume to keep legacy behavior
+	if logType == model.LogTypeUnknown {
+		logType = model.LogTypeConsume
+	}
+	tx = tx.Where("user_id = ?", userId)
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	var quota int64
+	err := tx.Where("type = ?", logType).Scan(&quota).Error
+	return quota, err
+}
+
+func MinLogTimestampByUserId(userId int, logTypes []int) (int64, error) {
+	ifnull := "ifnull"
+	if common.UsingPostgreSQL {
+		ifnull = "COALESCE"
+	}
+	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(min(created_at),0)", ifnull)).
+		Where("user_id = ?", userId)
+	if len(logTypes) > 0 {
+		tx = tx.Where("type IN ?", logTypes)
+	}
+	var timestamp int64
+	err := tx.Scan(&timestamp).Error
+	return timestamp, err
 }
 
 func DeleteOld(targetTimestamp int64) (int64, error) {

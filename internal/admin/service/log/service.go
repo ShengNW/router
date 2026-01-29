@@ -25,6 +25,14 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return logrepo.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel)
 }
 
+func SumUsedQuotaByUserId(logType int, userId int, startTimestamp int64, endTimestamp int64) (int64, error) {
+	return logrepo.SumUsedQuotaByUserId(logType, userId, startTimestamp, endTimestamp)
+}
+
+func MinLogTimestampByUserId(userId int, logTypes []int) (int64, error) {
+	return logrepo.MinLogTimestampByUserId(userId, logTypes)
+}
+
 func DeleteOld(targetTimestamp int64) (int64, error) {
 	return logrepo.DeleteOld(targetTimestamp)
 }

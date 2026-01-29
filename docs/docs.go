@@ -3998,7 +3998,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/user.LoginRequest"
+                            "$ref": "#/definitions/github_com_yeying-community_router_internal_admin_controller_user.LoginRequest"
                         }
                     }
                 ],
@@ -4101,7 +4101,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/controller.PasswordResetRequest"
+                            "$ref": "#/definitions/github_com_yeying-community_router_internal_admin_controller.PasswordResetRequest"
                         }
                     }
                 ],
@@ -4221,6 +4221,44 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/public/user/spend/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "User spend overview",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "last_week|last_month|this_year|last_year|last_12_months|all_time",
+                        "name": "period",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.UserSpendOverviewResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/public/user/token": {
             "get": {
                 "security": [
@@ -4297,17 +4335,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "controller.PasswordResetRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
         "docs.AdminCreateUserRequest": {
             "type": "object",
             "properties": {
@@ -6392,6 +6419,59 @@ const docTemplate = `{
                 }
             }
         },
+        "docs.UserSpendOverviewData": {
+            "type": "object",
+            "properties": {
+                "period_cost": {
+                    "type": "integer",
+                    "example": 23456
+                },
+                "period_end": {
+                    "type": "integer",
+                    "example": 1704671999
+                },
+                "period_revenue": {
+                    "type": "integer",
+                    "example": 78901
+                },
+                "period_start": {
+                    "type": "integer",
+                    "example": 1704067200
+                },
+                "yesterday_cost": {
+                    "type": "integer",
+                    "example": 12345
+                },
+                "yesterday_end": {
+                    "type": "integer",
+                    "example": 1704153599
+                },
+                "yesterday_revenue": {
+                    "type": "integer",
+                    "example": 67890
+                },
+                "yesterday_start": {
+                    "type": "integer",
+                    "example": 1704067200
+                }
+            }
+        },
+        "docs.UserSpendOverviewResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/docs.UserSpendOverviewData"
+                },
+                "message": {
+                    "type": "string",
+                    "example": ""
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "docs.UserTopUpRequest": {
             "type": "object",
             "properties": {
@@ -6456,7 +6536,40 @@ const docTemplate = `{
                 }
             }
         },
-        "user.LoginRequest": {
+        "github_com_yeying-community_router_Codex_Router_LvRouter_internal_admin_controller.PasswordResetRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_yeying-community_router_Codex_Router_LvRouter_internal_admin_controller_user.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_yeying-community_router_internal_admin_controller.PasswordResetRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_yeying-community_router_internal_admin_controller_user.LoginRequest": {
             "type": "object",
             "properties": {
                 "password": {

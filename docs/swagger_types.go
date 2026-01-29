@@ -147,6 +147,23 @@ type UserDashboardResponse struct {
 	Meta    *UserDashboardMeta  `json:"meta,omitempty"`
 }
 
+type UserSpendOverviewData struct {
+	YesterdayCost    int64 `json:"yesterday_cost" example:"12345"`
+	YesterdayRevenue int64 `json:"yesterday_revenue" example:"67890"`
+	PeriodCost       int64 `json:"period_cost" example:"23456"`
+	PeriodRevenue    int64 `json:"period_revenue" example:"78901"`
+	PeriodStart      int64 `json:"period_start" example:"1704067200"`
+	PeriodEnd        int64 `json:"period_end" example:"1704671999"`
+	YesterdayStart   int64 `json:"yesterday_start" example:"1704067200"`
+	YesterdayEnd     int64 `json:"yesterday_end" example:"1704153599"`
+}
+
+type UserSpendOverviewResponse struct {
+	Success bool                  `json:"success" example:"true"`
+	Message string                `json:"message" example:""`
+	Data    UserSpendOverviewData `json:"data"`
+}
+
 type UserAvailableModelsResponse struct {
 	Success  bool     `json:"success" example:"true"`
 	Message  string   `json:"message" example:""`
@@ -167,9 +184,9 @@ type UserAffCodeResponse struct {
 }
 
 type UserTopUpResponse struct {
-	Success bool  `json:"success" example:"true"`
+	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:""`
-	Data    int64 `json:"data" example:"100000"`
+	Data    int64  `json:"data" example:"100000"`
 }
 
 // --- Token responses ---
@@ -239,8 +256,8 @@ type UserLogStatData struct {
 }
 
 type UserLogStatResponse struct {
-	Success bool           `json:"success" example:"true"`
-	Message string         `json:"message" example:""`
+	Success bool            `json:"success" example:"true"`
+	Message string          `json:"message" example:""`
 	Data    UserLogStatData `json:"data"`
 }
 
@@ -260,11 +277,11 @@ type ChannelModelsResponse struct {
 }
 
 type ChannelModelsProviderResponse struct {
-	Success  bool             `json:"success" example:"true"`
-	Message  string           `json:"message" example:""`
-	Provider string           `json:"provider" example:"openai"`
-	ID       int              `json:"id" example:"1"`
-	Data     []string         `json:"data"`
+	Success  bool              `json:"success" example:"true"`
+	Message  string            `json:"message" example:""`
+	Provider string            `json:"provider" example:"openai"`
+	ID       int               `json:"id" example:"1"`
+	Data     []string          `json:"data"`
 	Meta     ChannelModelsMeta `json:"meta"`
 }
 
@@ -330,10 +347,10 @@ type RedemptionCreateRequest struct {
 }
 
 type RedemptionUpdateRequest struct {
-	ID     int   `json:"id" example:"1"`
+	ID     int    `json:"id" example:"1"`
 	Name   string `json:"name,omitempty" example:"InviteBonus"`
-	Quota  int64 `json:"quota,omitempty" example:"100000"`
-	Status int   `json:"status,omitempty" example:"1"`
+	Quota  int64  `json:"quota,omitempty" example:"100000"`
+	Status int    `json:"status,omitempty" example:"1"`
 }
 
 // --- OpenAI-compatible models ---
@@ -354,13 +371,13 @@ type OpenAIModelPermission struct {
 }
 
 type OpenAIModel struct {
-	ID         string                 `json:"id" example:"gpt-4o-mini"`
-	Object     string                 `json:"object" example:"model"`
-	Created    int                    `json:"created" example:"1626777600"`
-	OwnedBy    string                 `json:"owned_by" example:"openai"`
+	ID         string                  `json:"id" example:"gpt-4o-mini"`
+	Object     string                  `json:"object" example:"model"`
+	Created    int                     `json:"created" example:"1626777600"`
+	OwnedBy    string                  `json:"owned_by" example:"openai"`
 	Permission []OpenAIModelPermission `json:"permission,omitempty"`
-	Root       string                 `json:"root" example:"gpt-4o-mini"`
-	Parent     *string                `json:"parent,omitempty" example:""`
+	Root       string                  `json:"root" example:"gpt-4o-mini"`
+	Parent     *string                 `json:"parent,omitempty" example:""`
 }
 
 type OpenAIModelListResponse struct {
@@ -371,9 +388,9 @@ type OpenAIModelListResponse struct {
 // --- OpenAI-compatible common types ---
 
 type OpenAIUsage struct {
-	PromptTokens     int                         `json:"prompt_tokens" example:"12"`
-	CompletionTokens int                         `json:"completion_tokens" example:"34"`
-	TotalTokens      int                         `json:"total_tokens" example:"46"`
+	PromptTokens            int                            `json:"prompt_tokens" example:"12"`
+	CompletionTokens        int                            `json:"completion_tokens" example:"34"`
+	TotalTokens             int                            `json:"total_tokens" example:"46"`
 	CompletionTokensDetails *OpenAICompletionTokensDetails `json:"completion_tokens_details,omitempty"`
 }
 
@@ -401,11 +418,11 @@ type OpenAIChatContentPart struct {
 }
 
 type OpenAIChatMessage struct {
-	Role       string               `json:"role" example:"user"`
+	Role       string                  `json:"role" example:"user"`
 	Content    []OpenAIChatContentPart `json:"content"`
-	Name       string               `json:"name,omitempty" example:""`
-	ToolCalls  []OpenAIToolCall      `json:"tool_calls,omitempty"`
-	ToolCallID string               `json:"tool_call_id,omitempty" example:""`
+	Name       string                  `json:"name,omitempty" example:""`
+	ToolCalls  []OpenAIToolCall        `json:"tool_calls,omitempty"`
+	ToolCallID string                  `json:"tool_call_id,omitempty" example:""`
 }
 
 type OpenAIStreamOptions struct {
@@ -413,27 +430,27 @@ type OpenAIStreamOptions struct {
 }
 
 type OpenAIResponseFormat struct {
-	Type      string                  `json:"type" example:"json_object"`
+	Type       string                    `json:"type" example:"json_object"`
 	JSONSchema *OpenAIResponseJSONSchema `json:"json_schema,omitempty"`
 }
 
 type OpenAIResponseJSONSchema struct {
-	Name        string          `json:"name,omitempty" example:"response"`
-	Description string          `json:"description,omitempty" example:"Structured response"`
+	Name        string           `json:"name,omitempty" example:"response"`
+	Description string           `json:"description,omitempty" example:"Structured response"`
 	Schema      OpenAIJSONSchema `json:"schema,omitempty"`
-	Strict      bool            `json:"strict,omitempty" example:"true"`
+	Strict      bool             `json:"strict,omitempty" example:"true"`
 }
 
 type OpenAIJSONSchema struct {
-	Type                   string                     `json:"type,omitempty" example:"object"`
-	Properties             []OpenAIJSONSchemaProperty `json:"properties,omitempty"`
-	Required               []string                   `json:"required,omitempty" example:"[\"answer\"]"`
-	AdditionalProperties   bool                       `json:"additional_properties,omitempty" example:"false"`
+	Type                 string                     `json:"type,omitempty" example:"object"`
+	Properties           []OpenAIJSONSchemaProperty `json:"properties,omitempty"`
+	Required             []string                   `json:"required,omitempty" example:"[\"answer\"]"`
+	AdditionalProperties bool                       `json:"additional_properties,omitempty" example:"false"`
 }
 
 type OpenAIJSONSchemaProperty struct {
-	Name        string                    `json:"name" example:"answer"`
-	Schema      OpenAIJSONSchemaPropertySchema `json:"schema"`
+	Name   string                         `json:"name" example:"answer"`
+	Schema OpenAIJSONSchemaPropertySchema `json:"schema"`
 }
 
 type OpenAIJSONSchemaPropertySchema struct {
@@ -443,18 +460,18 @@ type OpenAIJSONSchemaPropertySchema struct {
 }
 
 type OpenAITool struct {
-	Type     string        `json:"type" example:"function"`
+	Type     string         `json:"type" example:"function"`
 	Function OpenAIFunction `json:"function"`
 }
 
 type OpenAIFunction struct {
-	Name        string         `json:"name" example:"get_weather"`
-	Description string         `json:"description,omitempty" example:"Get weather by city"`
+	Name        string           `json:"name" example:"get_weather"`
+	Description string           `json:"description,omitempty" example:"Get weather by city"`
 	Parameters  OpenAIJSONSchema `json:"parameters,omitempty"`
 }
 
 type OpenAIToolChoice struct {
-	Type     string               `json:"type,omitempty" example:"function"`
+	Type     string                   `json:"type,omitempty" example:"function"`
 	Function OpenAIToolChoiceFunction `json:"function,omitempty"`
 }
 
@@ -463,8 +480,8 @@ type OpenAIToolChoiceFunction struct {
 }
 
 type OpenAIToolCall struct {
-	ID       string                `json:"id,omitempty" example:"call_123"`
-	Type     string                `json:"type,omitempty" example:"function"`
+	ID       string                 `json:"id,omitempty" example:"call_123"`
+	Type     string                 `json:"type,omitempty" example:"function"`
 	Function OpenAIToolCallFunction `json:"function"`
 }
 
@@ -507,24 +524,24 @@ type OpenAIAudioOutput struct {
 }
 
 type OpenAIChatCompletionsResponse struct {
-	ID      string                     `json:"id" example:"chatcmpl-123"`
-	Object  string                     `json:"object" example:"chat.completion"`
-	Created int64                      `json:"created" example:"1700000000"`
-	Model   string                     `json:"model" example:"gpt-4o-mini"`
+	ID      string                       `json:"id" example:"chatcmpl-123"`
+	Object  string                       `json:"object" example:"chat.completion"`
+	Created int64                        `json:"created" example:"1700000000"`
+	Model   string                       `json:"model" example:"gpt-4o-mini"`
 	Choices []OpenAIChatCompletionChoice `json:"choices"`
-	Usage   OpenAIUsage                `json:"usage"`
+	Usage   OpenAIUsage                  `json:"usage"`
 }
 
 type OpenAIChatCompletionChoice struct {
-	Index        int                     `json:"index" example:"0"`
+	Index        int                         `json:"index" example:"0"`
 	Message      OpenAIChatCompletionMessage `json:"message"`
-	FinishReason string                  `json:"finish_reason" example:"stop"`
+	FinishReason string                      `json:"finish_reason" example:"stop"`
 }
 
 type OpenAIChatCompletionMessage struct {
-	Role      string                 `json:"role" example:"assistant"`
-	Content   string                 `json:"content" example:"Hello!"`
-	ToolCalls []OpenAIToolCall        `json:"tool_calls,omitempty"`
+	Role      string           `json:"role" example:"assistant"`
+	Content   string           `json:"content" example:"Hello!"`
+	ToolCalls []OpenAIToolCall `json:"tool_calls,omitempty"`
 }
 
 // --- Edits ---
@@ -539,10 +556,10 @@ type OpenAIEditRequest struct {
 }
 
 type OpenAIEditResponse struct {
-	Object  string              `json:"object" example:"edit"`
-	Created int64               `json:"created" example:"1700000000"`
-	Choices []OpenAIEditChoice  `json:"choices"`
-	Usage   OpenAIUsage         `json:"usage"`
+	Object  string             `json:"object" example:"edit"`
+	Created int64              `json:"created" example:"1700000000"`
+	Choices []OpenAIEditChoice `json:"choices"`
+	Usage   OpenAIUsage        `json:"usage"`
 }
 
 type OpenAIEditChoice struct {
@@ -568,12 +585,12 @@ type OpenAICompletionsRequest struct {
 }
 
 type OpenAICompletionsResponse struct {
-	ID      string                     `json:"id" example:"cmpl-123"`
-	Object  string                     `json:"object" example:"text_completion"`
-	Created int64                      `json:"created" example:"1700000000"`
-	Model   string                     `json:"model" example:"gpt-3.5-turbo-instruct"`
-	Choices []OpenAICompletionsChoice  `json:"choices"`
-	Usage   OpenAIUsage                `json:"usage"`
+	ID      string                    `json:"id" example:"cmpl-123"`
+	Object  string                    `json:"object" example:"text_completion"`
+	Created int64                     `json:"created" example:"1700000000"`
+	Model   string                    `json:"model" example:"gpt-3.5-turbo-instruct"`
+	Choices []OpenAICompletionsChoice `json:"choices"`
+	Usage   OpenAIUsage               `json:"usage"`
 }
 
 type OpenAICompletionsChoice struct {
@@ -593,10 +610,10 @@ type OpenAIEmbeddingsRequest struct {
 }
 
 type OpenAIEmbeddingsResponse struct {
-	Object string                 `json:"object" example:"list"`
-	Data   []OpenAIEmbeddingItem  `json:"data"`
-	Model  string                 `json:"model" example:"text-embedding-3-small"`
-	Usage  OpenAIUsage            `json:"usage"`
+	Object string                `json:"object" example:"list"`
+	Data   []OpenAIEmbeddingItem `json:"data"`
+	Model  string                `json:"model" example:"text-embedding-3-small"`
+	Usage  OpenAIUsage           `json:"usage"`
 }
 
 type OpenAIEmbeddingItem struct {
@@ -625,35 +642,35 @@ type OpenAIModerationResult struct {
 }
 
 type OpenAIModerationCategories struct {
-	Hate                   bool `json:"hate" example:"false"`
-	HateThreatening        bool `json:"hate_threatening" example:"false"`
-	Harassment             bool `json:"harassment" example:"false"`
-	HarassmentThreatening  bool `json:"harassment_threatening" example:"false"`
-	SelfHarm               bool `json:"self_harm" example:"false"`
-	SelfHarmIntent         bool `json:"self_harm_intent" example:"false"`
-	SelfHarmInstructions   bool `json:"self_harm_instructions" example:"false"`
-	Sexual                 bool `json:"sexual" example:"false"`
-	SexualMinors           bool `json:"sexual_minors" example:"false"`
-	Violence               bool `json:"violence" example:"false"`
-	ViolenceGraphic        bool `json:"violence_graphic" example:"false"`
-	Illicit                bool `json:"illicit" example:"false"`
-	IllicitViolent         bool `json:"illicit_violent" example:"false"`
+	Hate                  bool `json:"hate" example:"false"`
+	HateThreatening       bool `json:"hate_threatening" example:"false"`
+	Harassment            bool `json:"harassment" example:"false"`
+	HarassmentThreatening bool `json:"harassment_threatening" example:"false"`
+	SelfHarm              bool `json:"self_harm" example:"false"`
+	SelfHarmIntent        bool `json:"self_harm_intent" example:"false"`
+	SelfHarmInstructions  bool `json:"self_harm_instructions" example:"false"`
+	Sexual                bool `json:"sexual" example:"false"`
+	SexualMinors          bool `json:"sexual_minors" example:"false"`
+	Violence              bool `json:"violence" example:"false"`
+	ViolenceGraphic       bool `json:"violence_graphic" example:"false"`
+	Illicit               bool `json:"illicit" example:"false"`
+	IllicitViolent        bool `json:"illicit_violent" example:"false"`
 }
 
 type OpenAIModerationCategoryScores struct {
-	Hate                   float64 `json:"hate" example:"0"`
-	HateThreatening        float64 `json:"hate_threatening" example:"0"`
-	Harassment             float64 `json:"harassment" example:"0"`
-	HarassmentThreatening  float64 `json:"harassment_threatening" example:"0"`
-	SelfHarm               float64 `json:"self_harm" example:"0"`
-	SelfHarmIntent         float64 `json:"self_harm_intent" example:"0"`
-	SelfHarmInstructions   float64 `json:"self_harm_instructions" example:"0"`
-	Sexual                 float64 `json:"sexual" example:"0"`
-	SexualMinors           float64 `json:"sexual_minors" example:"0"`
-	Violence               float64 `json:"violence" example:"0"`
-	ViolenceGraphic        float64 `json:"violence_graphic" example:"0"`
-	Illicit                float64 `json:"illicit" example:"0"`
-	IllicitViolent         float64 `json:"illicit_violent" example:"0"`
+	Hate                  float64 `json:"hate" example:"0"`
+	HateThreatening       float64 `json:"hate_threatening" example:"0"`
+	Harassment            float64 `json:"harassment" example:"0"`
+	HarassmentThreatening float64 `json:"harassment_threatening" example:"0"`
+	SelfHarm              float64 `json:"self_harm" example:"0"`
+	SelfHarmIntent        float64 `json:"self_harm_intent" example:"0"`
+	SelfHarmInstructions  float64 `json:"self_harm_instructions" example:"0"`
+	Sexual                float64 `json:"sexual" example:"0"`
+	SexualMinors          float64 `json:"sexual_minors" example:"0"`
+	Violence              float64 `json:"violence" example:"0"`
+	ViolenceGraphic       float64 `json:"violence_graphic" example:"0"`
+	Illicit               float64 `json:"illicit" example:"0"`
+	IllicitViolent        float64 `json:"illicit_violent" example:"0"`
 }
 
 // --- Images ---
@@ -670,7 +687,7 @@ type OpenAIImageGenerationRequest struct {
 }
 
 type OpenAIImageResponse struct {
-	Created int64          `json:"created" example:"1700000000"`
+	Created int64             `json:"created" example:"1700000000"`
 	Data    []OpenAIImageData `json:"data"`
 }
 
@@ -691,10 +708,10 @@ type OpenAITextToSpeechRequest struct {
 }
 
 type OpenAIAudioTranscriptionResponse struct {
-	Text     string               `json:"text" example:"Hello world"`
-	Task     string               `json:"task,omitempty" example:"transcribe"`
-	Language string               `json:"language,omitempty" example:"en"`
-	Duration float64              `json:"duration,omitempty" example:"12.34"`
+	Text     string                 `json:"text" example:"Hello world"`
+	Task     string                 `json:"task,omitempty" example:"transcribe"`
+	Language string                 `json:"language,omitempty" example:"en"`
+	Duration float64                `json:"duration,omitempty" example:"12.34"`
 	Segments []OpenAIWhisperSegment `json:"segments,omitempty"`
 }
 

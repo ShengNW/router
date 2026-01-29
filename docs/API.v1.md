@@ -78,6 +78,7 @@ Authorization: Bearer <JWT>
 - `PUT  /api/v1/public/user/self`（JWT）
 - `DELETE /api/v1/public/user/self`（JWT）
 - `GET  /api/v1/public/user/dashboard`（JWT）
+- `GET  /api/v1/public/user/spend/overview`（JWT）
 - `GET  /api/v1/public/user/available_models`（JWT）
 - `GET  /api/v1/public/user/token`（JWT）
 - `GET  /api/v1/public/user/aff`（JWT）
@@ -95,6 +96,21 @@ Authorization: Bearer <JWT>
 
 **默认行为**
 - 不传参数 → 保持旧逻辑：近 7 天 + day 粒度
+
+#### GET /api/v1/public/user/spend/overview
+用户花费总览（消费/充值汇总）。
+
+**Query 参数（可选）**
+- `period`：`last_week | last_month | this_year | last_year | last_12_months | all_time`，默认 `last_month`
+
+**返回字段**
+- `yesterday_cost` / `yesterday_revenue`：昨日消费/充值（quota）
+- `period_cost` / `period_revenue`：周期消费/充值（quota）
+- `period_start` / `period_end`：周期开始/结束（Unix 秒）
+- `yesterday_start` / `yesterday_end`：昨日开始/结束（Unix 秒）
+
+**说明**
+- `last_week`/`last_month` 为上个自然周/月，`this_year` 为本年截至今日，`last_year` 为去年自然年，`last_12_months` 为近 12 个月，`all_time` 为使用以来。
 
 ### 5) 个人 Token 管理（JWT）
 - `GET    /api/v1/public/token`
