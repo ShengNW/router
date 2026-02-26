@@ -303,3 +303,28 @@ curl -s http://127.0.0.1:13011/api/status
 1. `WorkingDirectory` 对了 `.env` 才会生效
 2. Nginx 端口必须与 Router 端口一致
 3. 日志出现 `openPostgreSQL` 才算合格
+
+---
+
+**UCAN Audience 修复（本次成功经验）**
+
+```mermaid
+sequenceDiagram
+    participant Chat as chat.yeying.pub
+    participant Router as router.yeying.pub
+    Chat->>Router: UCAN token (aud=did:web:router.yeying.pub)
+    Router->>Router: 校验 expectedAud
+    Router-->>Chat: 通过 (no mismatch)
+```
+
+当 Router 不在默认端口 `3011` 时，`UCAN_AUD` 必须显式配置，否则 Router 会按本机端口推导出 `did:web:localhost:<PORT>`，导致 `UCAN audience mismatch`。
+
+**一行修复（已验证有效）**
+```bash
+# /root/code/router/.env
+UCAN_AUD=did:web:router.yeying.pub
+```
+
+规则总结（简洁但必须牢记）：
+- **默认端口 3011**：可不设置 `UCAN_AUD`，Router 会自动推导为 `did:web:localhost:3011`（且常与本地一致）
+- **改端口（如 13011）**：必须显式设置 `UCAN_AUD=did:web:router.yeying.pub`，确保和 Chat 端生成的 aud 一致
