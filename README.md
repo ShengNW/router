@@ -27,6 +27,8 @@ git clone https://github.com/yeying-community/router.git
 cd router
 
 cp .env.template .env   # 可选，按需配置
+# 如需强制走 PostgreSQL：至少写入 SQL_DSN（未设置会回落 SQLite）
+# 例：SQL_DSN=postgres://user:pass@host:5432/db?sslmode=disable
 
 go mod download
 go run ./cmd/router --log-dir ./logs
@@ -35,6 +37,9 @@ go run ./cmd/router --log-dir ./logs
 
 ### 编译后端
 ```bash
+# 如需把前端打包进后端二进制，先构建前端
+# npm run build --prefix web
+
 mkdir -p build
 go build -o build/router ./cmd/router
 ```
@@ -50,6 +55,8 @@ npm start --prefix web   # 自动代理到 http://localhost:3011
 **公网部署必须设置：**
 - `UCAN_AUD=did:web:<公网域名>`
 - `AUTO_REGISTER_ENABLED=true`（若希望钱包未绑定可自动注册）
+如需强制使用 PG：`SQL_DSN=postgres://...`（未设置会回落 SQLite）。
+若端口不是默认 3011，必须显式设置 `UCAN_AUD=did:web:<公网域名>`，否则会 `UCAN audience mismatch`。
 
 **systemd 不会自动加载 `.env`**  
 如使用 systemd，请在 service 文件或 `EnvironmentFile` 中显式设置 `UCAN_AUD` / `AUTO_REGISTER_ENABLED` / 其它 ROUTER 相关变量。
@@ -57,7 +64,7 @@ npm start --prefix web   # 自动代理到 http://localhost:3011
 ### 最小可运行示例（开发）
 ```bash
 cp .env.template .env
-# 需要自定义时直接编辑 .env
+# 需要自定义时直接编辑 .env（PG 必须设置 SQL_DSN，非 3011 端口需设置 UCAN_AUD）
 go run ./cmd/router --log-dir ./logs
 ```
 
@@ -67,6 +74,7 @@ go run ./cmd/router --log-dir ./logs
 [Service]
 WorkingDirectory=/root/code/router/router_new
 ExecStart=/root/code/router/router_new/build/router --port 3011 --log-dir ./logs
+Environment=SQL_DSN=postgres://user:pass@host:5432/db?sslmode=disable
 Environment=UCAN_AUD=did:web:router.yeying.pub
 Environment=AUTO_REGISTER_ENABLED=true
 # 其它环境变量可放在 EnvironmentFile
