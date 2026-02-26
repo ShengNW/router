@@ -387,10 +387,11 @@
       "create_success": "用户账户创建成功！",
       "operation_success": "操作成功完成！"
     },
-    "search": "搜索用户...",
+    "search": "搜索用户或钱包ID...",
     "table": {
       "id": "ID",
       "username": "用户名",
+      "wallet": "钱包",
       "group": "分组",
       "quota": "额度",
       "role_text": "角色",

@@ -1195,7 +1195,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Keyword",
+                        "description": "可按用户名/邮箱/显示名/钱包地址/ID搜索",
                         "name": "keyword",
                         "in": "query"
                     }

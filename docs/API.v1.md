@@ -170,6 +170,7 @@ Authorization: Bearer <JWT>
 ### 1) 用户管理
 - `GET    /api/v1/admin/user`
 - `GET    /api/v1/admin/user/search`
+- 用户搜索支持：用户名/邮箱/显示名/ID，以及钱包地址前缀搜索（`keyword%`）
 - `GET    /api/v1/admin/user/:id`
 - `POST   /api/v1/admin/user`
 - `POST   /api/v1/admin/user/manage`

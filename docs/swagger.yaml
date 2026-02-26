@@ -2360,7 +2360,7 @@ paths:
   /api/v1/admin/user/search:
     get:
       parameters:
-      - description: Keyword
+      - description: 可按用户名/邮箱/显示名/钱包地址/ID搜索
         in: query
         name: keyword
         type: string

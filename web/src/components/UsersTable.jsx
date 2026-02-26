@@ -34,6 +34,13 @@ function renderRole(role, t) {
   }
 }
 
+const maskWalletAddress = (walletAddress) => {
+  if (typeof walletAddress !== 'string') return '';
+  const trimmedWallet = walletAddress.trim();
+  if (trimmedWallet.length < 7) return trimmedWallet;
+  return `${trimmedWallet.slice(0, 3)}...${trimmedWallet.slice(-3)}`;
+};
+
 const UsersTable = () => {
   const { t } = useTranslation();
   const [users, setUsers] = useState([]);
@@ -242,6 +249,7 @@ const UsersTable = () => {
             >
               {t('user.table.username')}
             </Table.HeaderCell>
+            <Table.HeaderCell>{t('user.table.wallet')}</Table.HeaderCell>
             <Table.HeaderCell
               style={{ cursor: 'pointer' }}
               onClick={() => {
@@ -321,6 +329,16 @@ const UsersTable = () => {
                       trigger={<span>{renderText(user.username, 15)}</span>}
                       hoverable
                     />
+                  </Table.Cell>
+                  <Table.Cell>
+                    {user.wallet_address ? (
+                      <Popup
+                        content={user.wallet_address}
+                        trigger={<span>{maskWalletAddress(user.wallet_address)}</span>}
+                      />
+                    ) : (
+                      '-'
+                    )}
                   </Table.Cell>
                   <Table.Cell>{renderGroup(user.group)}</Table.Cell>
                   {/*<Table.Cell>*/}
@@ -408,7 +426,7 @@ const UsersTable = () => {
 
         <Table.Footer>
           <Table.Row>
-            <Table.HeaderCell colSpan='9'>
+            <Table.HeaderCell colSpan='10'>
               <Button size='small' as={Link} to='/user/add' loading={loading}>
                 {t('user.buttons.add')}
               </Button>

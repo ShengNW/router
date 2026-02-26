@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -92,12 +93,46 @@ func GetAll(startIdx int, num int, order string) ([]*model.User, error) {
 
 func Search(keyword string) ([]*model.User, error) {
 	var users []*model.User
-	var err error
-	if !common.UsingPostgreSQL {
-		err = model.DB.Omit("password").Where("id = ? or username LIKE ? or email LIKE ? or display_name LIKE ?", keyword, keyword+"%", keyword+"%", keyword+"%").Find(&users).Error
-	} else {
-		err = model.DB.Omit("password").Where("username LIKE ? or email LIKE ? or display_name LIKE ?", keyword+"%", keyword+"%", keyword+"%").Find(&users).Error
+	trimmedKeyword := strings.TrimSpace(keyword)
+	if trimmedKeyword == "" {
+		return users, nil
 	}
+
+	likeKeyword := trimmedKeyword + "%"
+	query := model.DB.Omit("password").Where("status != ?", model.UserStatusDeleted)
+
+	if !common.UsingPostgreSQL {
+		err := query.Where(
+			"(id = ? OR username LIKE ? OR email LIKE ? OR display_name LIKE ? OR wallet_address LIKE ?)",
+			trimmedKeyword,
+			likeKeyword,
+			likeKeyword,
+			likeKeyword,
+			likeKeyword,
+		).Find(&users).Error
+		return users, err
+	}
+
+	idVal, parseErr := strconv.Atoi(trimmedKeyword)
+	if parseErr == nil {
+		err := query.Where(
+			"(id = ? OR username LIKE ? OR email LIKE ? OR display_name LIKE ? OR wallet_address LIKE ?)",
+			idVal,
+			likeKeyword,
+			likeKeyword,
+			likeKeyword,
+			likeKeyword,
+		).Find(&users).Error
+		return users, err
+	}
+
+	err := query.Where(
+		"(username LIKE ? OR email LIKE ? OR display_name LIKE ? OR wallet_address LIKE ?)",
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+	).Find(&users).Error
 	return users, err
 }
 

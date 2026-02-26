@@ -253,7 +253,7 @@ func GetAllUsers(c *gin.Context) {
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
-// @Param keyword query string false "Keyword"
+// @Param keyword query string false "可按用户名/邮箱/显示名/钱包地址/ID搜索"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
 // @Router /api/v1/admin/user/search [get]

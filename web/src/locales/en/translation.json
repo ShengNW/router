@@ -387,10 +387,11 @@
       "create_success": "User account created successfully!",
       "operation_success": "Operation completed successfully!"
     },
-    "search": "Search users...",
+    "search": "Search users or wallet ID...",
     "table": {
       "id": "ID",
       "username": "Username",
+      "wallet": "Wallet",
       "group": "Group",
       "quota": "Quota",
       "role_text": "Role",
