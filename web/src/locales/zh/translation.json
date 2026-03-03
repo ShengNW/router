@@ -12,6 +12,8 @@
     "setting": "设置",
     "about": "关于",
     "chat": "聊天",
+    "admin_workspace": "管理工作区",
+    "user_workspace": "用户工作区",
     "login": "登录",
     "logout": "退出",
     "register": "注册"

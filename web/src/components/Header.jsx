@@ -1,8 +1,7 @@
-import React, { useContext, useMemo, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useContext, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { UserContext } from '../context/User';
 import { useTranslation } from 'react-i18next';
-
 import {
   Button,
   Container,
@@ -11,99 +10,126 @@ import {
   Menu,
   Segment,
 } from 'semantic-ui-react';
-import {
-  API,
-  getLogo,
-  isAdmin,
-  isMobile,
-  showSuccess,
-} from '../helpers';
+import { API, getLogo, isAdmin, isMobile, showSuccess } from '../helpers';
 import { WEB3_TOKEN_STORAGE_KEY } from '../helpers/web3';
 import { logoutWallet } from '../services/web3Auth';
 import '../index.css';
 
-// Header Buttons
-let headerButtons = [
-  {
-    name: 'header.channel',
-    to: '/channel',
-    icon: 'sitemap',
-    admin: true,
-  },
-  {
-    name: 'header.model_providers',
-    to: '/model-provider',
-    icon: 'cubes',
-    admin: true,
-  },
-  {
-    name: 'header.token',
-    to: '/token',
-    icon: 'key',
-  },
-  {
-    name: 'header.redemption',
-    to: '/redemption',
-    icon: 'dollar sign',
-    admin: true,
-  },
-  {
-    name: 'header.topup',
-    to: '/topup',
-    icon: 'cart',
-  },
-  {
-    name: 'header.user',
-    to: '/user',
-    icon: 'user',
-    admin: true,
-  },
+const ADMIN_HEADER_BUTTONS = [
   {
     name: 'header.dashboard',
-    to: '/dashboard',
+    to: '/admin/dashboard',
     icon: 'chart bar',
   },
   {
+    name: 'header.channel',
+    to: '/admin/channel',
+    icon: 'sitemap',
+  },
+  {
+    name: 'header.model_providers',
+    to: '/admin/model-provider',
+    icon: 'cubes',
+  },
+  {
+    name: 'header.user',
+    to: '/admin/user',
+    icon: 'user',
+  },
+  {
+    name: 'header.redemption',
+    to: '/admin/redemption',
+    icon: 'dollar sign',
+  },
+  {
     name: 'header.log',
-    to: '/log',
+    to: '/admin/log',
     icon: 'book',
   },
   {
     name: 'header.setting',
-    to: '/setting',
+    to: '/admin/setting',
+    icon: 'setting',
+  },
+];
+
+const USER_HEADER_BUTTONS = [
+  {
+    name: 'header.dashboard',
+    to: '/workspace/dashboard',
+    icon: 'chart bar',
+  },
+  {
+    name: 'header.token',
+    to: '/workspace/token',
+    icon: 'key',
+  },
+  {
+    name: 'header.topup',
+    to: '/workspace/topup',
+    icon: 'cart',
+  },
+  {
+    name: 'header.log',
+    to: '/workspace/log',
+    icon: 'book',
+  },
+  {
+    name: 'header.setting',
+    to: '/workspace/setting',
     icon: 'setting',
   },
   {
     name: 'header.about',
-    to: '/about',
+    to: '/workspace/about',
     icon: 'info circle',
   },
 ];
 
-function useHeaderButtons() {
-  // 需要在渲染期间读取最新的 chat_link
-  return useMemo(() => {
-    const buttons = [...headerButtons];
-    if (localStorage.getItem('chat_link')) {
-      buttons.splice(1, 0, {
-        name: 'header.chat',
-        to: '/chat',
-        icon: 'comments',
-      });
-    }
-    return buttons;
-  }, []);
-}
-
-const Header = () => {
+const Header = ({ workspace = 'user' }) => {
   const { t, i18n } = useTranslation();
   const [userState, userDispatch] = useContext(UserContext);
-  let navigate = useNavigate();
+  const navigate = useNavigate();
   const location = useLocation();
-  const buttons = useHeaderButtons();
 
   const [showSidebar, setShowSidebar] = useState(false);
   const logo = getLogo();
+
+  const currentWorkspace = workspace === 'admin' ? 'admin' : 'user';
+  const hasAdminAccess = isAdmin();
+  const buttons = (() => {
+    const baseButtons =
+      currentWorkspace === 'admin' ? ADMIN_HEADER_BUTTONS : USER_HEADER_BUTTONS;
+    const next = [...baseButtons];
+    if (currentWorkspace === 'user' && localStorage.getItem('chat_link')) {
+      next.splice(2, 0, {
+        name: 'header.chat',
+        to: '/workspace/chat',
+        icon: 'comments',
+      });
+    }
+    return next;
+  })();
+
+  const isActive = (path) => {
+    if (location.pathname === path) {
+      return true;
+    }
+    return location.pathname.startsWith(`${path}/`);
+  };
+
+  const toggleSidebar = () => {
+    setShowSidebar(!showSidebar);
+  };
+
+  const goToWorkspace = (targetWorkspace) => {
+    if (targetWorkspace === 'admin') {
+      navigate('/admin/dashboard');
+    } else {
+      navigate('/workspace/token');
+    }
+    setShowSidebar(false);
+  };
 
   async function logout() {
     setShowSidebar(false);
@@ -121,21 +147,9 @@ const Header = () => {
     navigate('/login');
   }
 
-  const toggleSidebar = () => {
-    setShowSidebar(!showSidebar);
-  };
-
-  const isActive = (path) => {
-    if (path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(path);
-  };
-
-  const renderButtons = (isMobile) => {
+  const renderButtons = (mobileView) => {
     return buttons.map((button) => {
-      if (button.admin && !isAdmin()) return null;
-      if (isMobile) {
+      if (mobileView) {
         return (
           <Menu.Item
             key={button.name}
@@ -151,25 +165,27 @@ const Header = () => {
         );
       }
       return (
-          <Menu.Item
-            key={button.name}
-            as={Link}
-            to={button.to}
-            style={{
-              fontSize: '15px',
-              fontWeight: '400',
-              color: '#666',
-            }}
-            active={isActive(button.to)}
-          >
-            <Icon name={button.icon} style={{ marginRight: '4px' }} />
-            {t(button.name)}
-          </Menu.Item>
+        <Menu.Item
+          key={button.name}
+          as={Link}
+          to={button.to}
+          style={{
+            fontSize: '15px',
+            fontWeight: '400',
+            color: '#666',
+          }}
+          active={isActive(button.to)}
+        >
+          <Icon
+            name={button.icon}
+            style={{ marginRight: '4px' }}
+          />
+          {t(button.name)}
+        </Menu.Item>
       );
     });
   };
 
-  // Add language switcher dropdown
   const languageOptions = [
     { key: 'zh', text: '中文', value: 'zh' },
     { key: 'en', text: 'English', value: 'en' },
@@ -209,7 +225,10 @@ const Header = () => {
               target='_blank'
               rel='noopener noreferrer'
             >
-              <img src={logo} alt='logo' />
+              <img
+                src={logo}
+                alt='logo'
+              />
             </Menu.Item>
             <Menu.Menu position='right'>
               <Menu.Item onClick={toggleSidebar}>
@@ -220,8 +239,35 @@ const Header = () => {
         </Menu>
         {showSidebar ? (
           <Segment style={{ marginTop: 0, borderTop: '0' }}>
-            <Menu secondary vertical style={{ width: '100%', margin: 0 }}>
+            <Menu
+              secondary
+              vertical
+              style={{ width: '100%', margin: 0 }}
+            >
               {renderButtons(true)}
+              {hasAdminAccess && (
+                <Menu.Item>
+                  <Button.Group
+                    fluid
+                    size='small'
+                  >
+                    <Button
+                      basic={currentWorkspace !== 'admin'}
+                      primary={currentWorkspace === 'admin'}
+                      onClick={() => goToWorkspace('admin')}
+                    >
+                      {t('header.admin_workspace')}
+                    </Button>
+                    <Button
+                      basic={currentWorkspace !== 'user'}
+                      primary={currentWorkspace === 'user'}
+                      onClick={() => goToWorkspace('user')}
+                    >
+                      {t('header.user_workspace')}
+                    </Button>
+                  </Button.Group>
+                </Menu.Item>
+              )}
               <Menu.Item>
                 <Dropdown
                   selection
@@ -238,7 +284,10 @@ const Header = () => {
               </Menu.Item>
               <Menu.Item>
                 {userState.user ? (
-                  <Button onClick={logout} style={{ color: '#666666' }}>
+                  <Button
+                    onClick={logout}
+                    style={{ color: '#666666' }}
+                  >
                     {t('header.logout')}
                   </Button>
                 ) : (
@@ -295,14 +344,62 @@ const Header = () => {
             rel='noopener noreferrer'
             className={'hide-on-mobile'}
           >
-            <img src={logo} alt='logo' />
+            <img
+              src={logo}
+              alt='logo'
+            />
           </Menu.Item>
           {renderButtons(false)}
           <Menu.Menu position='right'>
+            {hasAdminAccess && (
+              <Dropdown
+                item
+                text={
+                  currentWorkspace === 'admin'
+                    ? t('header.admin_workspace')
+                    : t('header.user_workspace')
+                }
+                pointing
+                className='link item'
+                style={{
+                  fontSize: '15px',
+                  fontWeight: '400',
+                  color: '#666',
+                }}
+              >
+                <Dropdown.Menu>
+                  <Dropdown.Item
+                    active={currentWorkspace === 'admin'}
+                    onClick={() => goToWorkspace('admin')}
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: '400',
+                      color: '#666',
+                    }}
+                  >
+                    {t('header.admin_workspace')}
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    active={currentWorkspace === 'user'}
+                    onClick={() => goToWorkspace('user')}
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: '400',
+                      color: '#666',
+                    }}
+                  >
+                    {t('header.user_workspace')}
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+            )}
             <Dropdown
               item
               trigger={
-                <Icon name='language' style={{ margin: 0, fontSize: '18px' }} />
+                <Icon
+                  name='language'
+                  style={{ margin: 0, fontSize: '18px' }}
+                />
               }
               options={languageOptions}
               value={i18n.language}

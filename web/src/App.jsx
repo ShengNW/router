@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Loading from './components/Loading';
 import User from './pages/User';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -9,7 +9,14 @@ import NotFound from './pages/NotFound';
 import Setting from './pages/Setting';
 import EditUser from './pages/User/EditUser';
 import AddUser from './pages/User/AddUser';
-import { API, getLogo, getSystemName, showError, showNotice } from './helpers';
+import {
+  API,
+  getLogo,
+  getSystemName,
+  isAdmin,
+  showError,
+  showNotice,
+} from './helpers';
 import PasswordResetForm from './components/PasswordResetForm';
 import PasswordResetConfirm from './components/PasswordResetConfirm';
 import { UserContext } from './context/User';
@@ -25,9 +32,64 @@ import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Dashboard from './pages/Dashboard';
 import ModelProviders from './pages/ModelProviders';
+import AdminLayout from './layouts/AdminLayout';
+import UserLayout from './layouts/UserLayout';
 
 const Home = lazy(() => import('./pages/Home'));
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '';
+
+function AdminOnlyRoute({ children }) {
+  if (!isAdmin()) {
+    return (
+      <Navigate
+        to='/workspace/token'
+        replace
+      />
+    );
+  }
+  return children;
+}
+
+function RootRedirect() {
+  return (
+    <Navigate
+      to={isAdmin() ? '/admin/dashboard' : '/workspace/token'}
+      replace
+    />
+  );
+}
+
+function DashboardRedirect() {
+  return (
+    <Navigate
+      to={isAdmin() ? '/admin/dashboard' : '/workspace/dashboard'}
+      replace
+    />
+  );
+}
+
+function SettingRedirect() {
+  return (
+    <Navigate
+      to={isAdmin() ? '/admin/setting' : '/workspace/setting'}
+      replace
+    />
+  );
+}
+
+function PrefixRedirect({ from, to }) {
+  const location = useLocation();
+  const suffix = location.pathname.startsWith(from)
+    ? location.pathname.slice(from.length)
+    : '';
+  const targetPath = `${to}${suffix}`;
+  return (
+    <Navigate
+      to={`${targetPath}${location.search}${location.hash}`}
+      replace
+    />
+  );
+}
 
 function App() {
   const [, userDispatch] = useContext(UserContext);
@@ -40,12 +102,12 @@ function App() {
       userDispatch({ type: 'login', payload: data });
     }
   }, [userDispatch]);
+
   const loadStatus = useCallback(async () => {
     try {
       const res = await API.get('/api/v1/public/status');
-      const { success, message, data } = res.data || {}; // Add default empty object
+      const { success, message, data } = res.data || {};
       if (success && data) {
-        // Check data exists
         localStorage.setItem('status', JSON.stringify(data));
         statusDispatch({ type: 'set', payload: data });
         localStorage.setItem('system_name', data.system_name);
@@ -95,205 +157,326 @@ function App() {
     <Routes>
       <Route
         path='/'
-        element={<Navigate to='/token' replace />}
+        element={<RootRedirect />}
       />
       <Route
-        path='/channel'
+        path='/workspace'
         element={
-          <PrivateRoute>
-            <Channel />
-          </PrivateRoute>
+          <Navigate
+            to='/workspace/token'
+            replace
+          />
         }
       />
       <Route
-        path='/model-provider'
+        path='/admin'
         element={
-          <PrivateRoute>
-            <ModelProviders />
-          </PrivateRoute>
+          <Navigate
+            to='/admin/dashboard'
+            replace
+          />
         }
       />
-      <Route
-        path='/channel/edit/:id'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditChannel />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/channel/add'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditChannel />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/token'
-        element={
-          <PrivateRoute>
-            <Token />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path='/token/edit/:id'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditToken />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/token/add'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditToken />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/redemption'
-        element={
-          <PrivateRoute>
-            <Redemption />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path='/redemption/edit/:id'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditRedemption />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/redemption/add'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditRedemption />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/user'
-        element={
-          <PrivateRoute>
-            <User />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path='/user/edit/:id'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditUser />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/user/edit'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <EditUser />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/user/add'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <AddUser />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/user/reset'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <PasswordResetConfirm />
-          </Suspense>
-        }
-      />
+
       <Route
         path='/login'
         element={
-          <Suspense fallback={<Loading></Loading>}>
+          <Suspense fallback={<Loading />}>
             <LoginForm />
           </Suspense>
         }
       />
+
+      <Route element={<UserLayout />}>
+        <Route
+          path='/register'
+          element={
+            <Suspense fallback={<Loading />}>
+              <RegisterForm />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/reset'
+          element={
+            <Suspense fallback={<Loading />}>
+              <PasswordResetForm />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/user/reset'
+          element={
+            <Suspense fallback={<Loading />}>
+              <PasswordResetConfirm />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/workspace/about'
+          element={
+            <Suspense fallback={<Loading />}>
+              <Home />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/workspace/chat'
+          element={
+            <Suspense fallback={<Loading />}>
+              <Chat />
+            </Suspense>
+          }
+        />
+      </Route>
+
       <Route
-        path='/register'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <RegisterForm />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/reset'
-        element={
-          <Suspense fallback={<Loading></Loading>}>
-            <PasswordResetForm />
-          </Suspense>
-        }
-      />
-      <Route
-        path='/setting'
         element={
           <PrivateRoute>
-            <Suspense fallback={<Loading></Loading>}>
-              <Setting />
-            </Suspense>
+            <UserLayout />
           </PrivateRoute>
         }
-      />
-      <Route
-        path='/topup'
-        element={
-          <PrivateRoute>
-            <Suspense fallback={<Loading></Loading>}>
+      >
+        <Route
+          path='/workspace/token'
+          element={<Token />}
+        />
+        <Route
+          path='/workspace/token/edit/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditToken />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/workspace/token/add'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditToken />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/workspace/topup'
+          element={
+            <Suspense fallback={<Loading />}>
               <TopUp />
             </Suspense>
-          </PrivateRoute>
-        }
-      />
+          }
+        />
+        <Route
+          path='/workspace/log'
+          element={<Log />}
+        />
+        <Route
+          path='/workspace/dashboard'
+          element={<Dashboard />}
+        />
+        <Route
+          path='/workspace/setting'
+          element={
+            <Suspense fallback={<Loading />}>
+              <Setting />
+            </Suspense>
+          }
+        />
+      </Route>
+
       <Route
-        path='/log'
         element={
           <PrivateRoute>
-            <Log />
+            <AdminOnlyRoute>
+              <AdminLayout />
+            </AdminOnlyRoute>
           </PrivateRoute>
         }
-      />
+      >
+        <Route
+          path='/admin/channel'
+          element={<Channel />}
+        />
+        <Route
+          path='/admin/channel/edit/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditChannel />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/channel/add'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditChannel />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/model-provider'
+          element={<ModelProviders />}
+        />
+        <Route
+          path='/admin/redemption'
+          element={<Redemption />}
+        />
+        <Route
+          path='/admin/redemption/edit/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditRedemption />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/redemption/add'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditRedemption />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/user'
+          element={<User />}
+        />
+        <Route
+          path='/admin/user/edit/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditUser />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/user/edit'
+          element={
+            <Suspense fallback={<Loading />}>
+              <EditUser />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/user/add'
+          element={
+            <Suspense fallback={<Loading />}>
+              <AddUser />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/dashboard'
+          element={<Dashboard />}
+        />
+        <Route
+          path='/admin/log'
+          element={<Log />}
+        />
+        <Route
+          path='/admin/setting'
+          element={
+            <Suspense fallback={<Loading />}>
+              <Setting />
+            </Suspense>
+          }
+        />
+      </Route>
+
       <Route
         path='/about'
         element={
-          <Suspense fallback={<Loading></Loading>}>
-            <Home />
-          </Suspense>
+          <Navigate
+            to='/workspace/about'
+            replace
+          />
         }
       />
       <Route
         path='/chat'
         element={
-          <Suspense fallback={<Loading></Loading>}>
-            <Chat />
-          </Suspense>
+          <Navigate
+            to='/workspace/chat'
+            replace
+          />
         }
       />
       <Route
         path='/dashboard'
+        element={<DashboardRedirect />}
+      />
+      <Route
+        path='/setting'
+        element={<SettingRedirect />}
+      />
+
+      <Route
+        path='/channel/*'
         element={
-          <PrivateRoute>
-            <Dashboard />
-          </PrivateRoute>
+          <PrefixRedirect
+            from='/channel'
+            to='/admin/channel'
+          />
         }
       />
-      <Route path='*' element={<NotFound />} />
+      <Route
+        path='/model-provider/*'
+        element={
+          <PrefixRedirect
+            from='/model-provider'
+            to='/admin/model-provider'
+          />
+        }
+      />
+      <Route
+        path='/redemption/*'
+        element={
+          <PrefixRedirect
+            from='/redemption'
+            to='/admin/redemption'
+          />
+        }
+      />
+      <Route
+        path='/user/*'
+        element={
+          <PrefixRedirect
+            from='/user'
+            to='/admin/user'
+          />
+        }
+      />
+      <Route
+        path='/token/*'
+        element={
+          <PrefixRedirect
+            from='/token'
+            to='/workspace/token'
+          />
+        }
+      />
+      <Route
+        path='/topup/*'
+        element={
+          <PrefixRedirect
+            from='/topup'
+            to='/workspace/topup'
+          />
+        }
+      />
+      <Route
+        path='/log/*'
+        element={
+          <PrefixRedirect
+            from='/log'
+            to='/workspace/log'
+          />
+        }
+      />
+
+      <Route
+        path='*'
+        element={<NotFound />}
+      />
     </Routes>
   );
 }

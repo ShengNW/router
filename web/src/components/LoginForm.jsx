@@ -37,6 +37,8 @@ const LoginForm = () => {
   const walletLoginDisabled = status?.wallet_login === false;
   const walletLoginEnabled = !walletLoginDisabled;
   const [showPasswordLogin, setShowPasswordLogin] = useState(walletLoginDisabled);
+  const resolveLandingPath = (role) =>
+    Number(role) >= 10 ? '/admin/dashboard' : '/workspace/token';
 
   useEffect(() => {
     if (searchParams.get('expired')) {
@@ -67,7 +69,7 @@ const LoginForm = () => {
       const userData = { ...data, token: loginResult.token };
       userDispatch({ type: 'login', payload: userData });
       localStorage.setItem('user', JSON.stringify(userData));
-      navigate('/token');
+      navigate(resolveLandingPath(userData.role));
       showSuccess(t('messages.success.login'));
     } catch (error) {
       if (error?.code === 4001) {
@@ -93,7 +95,7 @@ const LoginForm = () => {
       if (success) {
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
-        navigate('/token');
+        navigate(resolveLandingPath(data.role));
         showSuccess(t('messages.success.login'));
         if (username === 'root' && password === '123456') {
           showWarning(t('messages.error.root_password'));

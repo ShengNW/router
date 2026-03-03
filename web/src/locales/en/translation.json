@@ -12,6 +12,8 @@
     "setting": "Settings",
     "about": "About",
     "chat": "Chat",
+    "admin_workspace": "Admin Workspace",
+    "user_workspace": "User Workspace",
     "login": "Login",
     "logout": "Logout",
     "register": "Register"
