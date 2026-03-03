@@ -1,6 +1,8 @@
 package channel
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +14,35 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
 )
+
+func shouldRequireModelProviderOnUpdate(fields map[string]json.RawMessage) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	if _, ok := fields["model_provider"]; ok {
+		return true
+	}
+	coreFields := []string{
+		"name",
+		"type",
+		"key",
+		"base_url",
+		"other",
+		"models",
+		"group",
+		"model_mapping",
+		"config",
+		"system_prompt",
+		"model_ratio",
+		"completion_ratio",
+	}
+	for _, field := range coreFields {
+		if _, ok := fields[field]; ok {
+			return true
+		}
+	}
+	return false
+}
 
 // GetAllChannels godoc
 // @Summary List channels (admin)
@@ -126,6 +157,13 @@ func AddChannel(c *gin.Context) {
 	}
 	channel.CreatedTime = helper.GetTimestamp()
 	channel.ModelProvider = commonutils.NormalizeModelProvider(channel.ModelProvider)
+	if channel.ModelProvider == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "模型供应商不能为空",
+		})
+		return
+	}
 	keys := strings.Split(channel.Key, "\n")
 	channels := make([]model.Channel, 0, len(keys))
 	for _, key := range keys {
@@ -214,8 +252,23 @@ func DeleteDisabledChannel(c *gin.Context) {
 // @Failure 401 {object} docs.ErrorResponse
 // @Router /api/v1/admin/channel [put]
 func UpdateChannel(c *gin.Context) {
+	rawBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "读取请求体失败",
+		})
+		return
+	}
+	if len(rawBody) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "请求体不能为空",
+		})
+		return
+	}
 	channel := model.Channel{}
-	err := c.ShouldBindJSON(&channel)
+	err = json.Unmarshal(rawBody, &channel)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -223,7 +276,16 @@ func UpdateChannel(c *gin.Context) {
 		})
 		return
 	}
+	fields := make(map[string]json.RawMessage)
+	_ = json.Unmarshal(rawBody, &fields)
 	channel.ModelProvider = commonutils.NormalizeModelProvider(channel.ModelProvider)
+	if shouldRequireModelProviderOnUpdate(fields) && channel.ModelProvider == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "模型供应商不能为空",
+		})
+		return
+	}
 	err = channelsvc.Update(&channel)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

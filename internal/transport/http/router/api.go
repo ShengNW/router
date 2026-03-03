@@ -316,6 +316,7 @@ func SetApiRouter(engine *gin.Engine) {
 		{
 			adminChannelRoute.GET("/", channel.GetAllChannels)
 			adminChannelRoute.GET("/search", channel.SearchChannels)
+			adminChannelRoute.GET("/types", channel.GetChannelTypes)
 			adminChannelRoute.GET("/:id", channel.GetChannel)
 			adminChannelRoute.GET("/test", channel.TestChannels)
 			adminChannelRoute.GET("/test/:id", channel.TestChannel)

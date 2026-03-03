@@ -3,7 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {Button, Card, Form, Input, Message} from 'semantic-ui-react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {API, copy, getChannelModels, showError, showInfo, showSuccess, verifyJSON,} from '../../helpers';
-import {CHANNEL_OPTIONS} from '../../constants';
+import {getChannelOptions, loadChannelOptions} from '../../helpers/helper';
 import {renderChannelTip} from '../../helpers/render';
 
 const MODEL_MAPPING_EXAMPLE = {
@@ -261,6 +261,9 @@ const EditChannel = () => {
   const [originModelOptions, setOriginModelOptions] = useState([]);
   const [modelOptions, setModelOptions] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
+  const [channelTypeOptions, setChannelTypeOptions] = useState(() =>
+    getChannelOptions()
+  );
   const [basicModels, setBasicModels] = useState([]);
   const [fullModels, setFullModels] = useState([]);
   const [catalogModelProviderOptions, setCatalogModelProviderOptions] = useState([]);
@@ -457,6 +460,13 @@ const EditChannel = () => {
     }
   }, [t]);
 
+  const fetchChannelTypes = useCallback(async () => {
+    const options = await loadChannelOptions();
+    if (Array.isArray(options) && options.length > 0) {
+      setChannelTypeOptions(options);
+    }
+  }, []);
+
   useEffect(() => {
     let localModelOptions = [...originModelOptions];
     inputs.models.forEach((model) => {
@@ -484,7 +494,8 @@ const EditChannel = () => {
     fetchModels().then();
     fetchGroups().then();
     fetchModelProviders().then();
-  }, [fetchModels, fetchGroups, fetchModelProviders]);
+    fetchChannelTypes().then();
+  }, [fetchModels, fetchGroups, fetchModelProviders, fetchChannelTypes]);
 
   const submit = async () => {
     if (inputs.key === '') {
@@ -500,6 +511,10 @@ const EditChannel = () => {
     }
     if (!isEdit && (inputs.name === '' || inputs.key === '')) {
       showInfo(t('channel.edit.messages.name_required'));
+      return;
+    }
+    if (normalizeModelProviderSelection(inputs.model_provider) === '') {
+      showInfo(t('channel.edit.messages.model_provider_required'));
       return;
     }
     if (inputs.type !== 43 && inputs.models.length === 0) {
@@ -592,7 +607,7 @@ const EditChannel = () => {
               <Form.Select
                 label={t('channel.edit.model_provider')}
                 name='model_provider'
-                clearable
+                required
                 options={modelProviderOptions}
                 value={inputs.model_provider}
                 onChange={(e, { name, value }) =>
@@ -606,7 +621,7 @@ const EditChannel = () => {
                 name='type'
                 required
                 search
-                options={CHANNEL_OPTIONS}
+                options={channelTypeOptions}
                 value={inputs.type}
                 onChange={handleInputChange}
               />

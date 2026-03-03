@@ -13,30 +13,35 @@ import {
   timestamp2string,
 } from '../helpers';
 
-import {CHANNEL_OPTIONS, ITEMS_PER_PAGE} from '../constants';
+import {ITEMS_PER_PAGE} from '../constants';
+import {getChannelOptions, loadChannelOptions} from '../helpers/helper';
 import {renderGroup, renderNumber} from '../helpers/render';
 
 function renderTimestamp(timestamp) {
   return <>{timestamp2string(timestamp)}</>;
 }
 
-let type2label = undefined;
-
-function renderType(type, t) {
-  if (!type2label) {
-    type2label = new Map();
-    for (let i = 0; i < CHANNEL_OPTIONS.length; i++) {
-      type2label[CHANNEL_OPTIONS[i].value] = CHANNEL_OPTIONS[i];
-    }
-    type2label[0] = {
-      value: 0,
-      text: t('channel.table.status_unknown'),
-      color: 'grey',
-    };
+function buildTypeMap(options, t) {
+  const typeMap = {};
+  if (Array.isArray(options)) {
+    options.forEach((option) => {
+      if (option && Number.isInteger(option.value)) {
+        typeMap[option.value] = option;
+      }
+    });
   }
+  typeMap[0] = {
+    value: 0,
+    text: t('channel.table.status_unknown'),
+    color: 'grey',
+  };
+  return typeMap;
+}
+
+function renderType(type, typeMap) {
   return (
-    <Label basic color={type2label[type]?.color}>
-      {type2label[type] ? type2label[type].text : type}
+    <Label basic color={typeMap[type]?.color}>
+      {typeMap[type] ? typeMap[type].text : type}
     </Label>
   );
 }
@@ -86,6 +91,9 @@ const ChannelsTable = () => {
   const [searching, setSearching] = useState(false);
   const [showPrompt, setShowPrompt] = useState(shouldShowPrompt(promptID));
   const [showDetail, setShowDetail] = useState(isShowDetail());
+  const [typeMap, setTypeMap] = useState(() =>
+    buildTypeMap(getChannelOptions(), t)
+  );
 
   const processChannelData = useCallback((channel) => {
     if (channel.models === '') {
@@ -160,6 +168,20 @@ const ChannelsTable = () => {
       });
     loadChannelModels().then();
   }, [loadChannels]);
+
+  useEffect(() => {
+    let disposed = false;
+    setTypeMap(buildTypeMap(getChannelOptions(), t));
+    loadChannelOptions().then((options) => {
+      if (disposed) {
+        return;
+      }
+      setTypeMap(buildTypeMap(options, t));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [t]);
 
   const manageChannel = async (id, action, idx, value) => {
     let data = { id };
@@ -523,7 +545,7 @@ const ChannelsTable = () => {
                     {channel.name ? channel.name : t('channel.table.no_name')}
                   </Table.Cell>
                   <Table.Cell>{renderGroup(channel.group)}</Table.Cell>
-                  <Table.Cell>{renderType(channel.type, t)}</Table.Cell>
+                  <Table.Cell>{renderType(channel.type, typeMap)}</Table.Cell>
                   <Table.Cell>{renderStatus(channel.status, t)}</Table.Cell>
                   <Table.Cell>
                     <Popup

@@ -47,6 +47,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			Description: "ensure redemptions id sequence for PostgreSQL",
 			Up:          ensureRedemptionsPostgresSequence,
 		},
+		{
+			Version:     "202603030003_channel_type_catalog",
+			Description: "initialize channel interface type catalog",
+			Up: func(tx *gorm.DB) error {
+				return runChannelTypeCatalogMigrationsWithDB(tx)
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

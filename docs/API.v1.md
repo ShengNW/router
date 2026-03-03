@@ -180,6 +180,7 @@ Authorization: Bearer <JWT>
 ### 2) 渠道管理
 - `GET    /api/v1/admin/channel`
 - `GET    /api/v1/admin/channel/search`
+- `GET    /api/v1/admin/channel/types`（读取“接口类型”下拉目录，来源 `channel_types` 表）
 - `GET    /api/v1/admin/channel/:id`
 - `GET    /api/v1/admin/channel/test`
 - `GET    /api/v1/admin/channel/test/:id`
@@ -190,6 +191,8 @@ Authorization: Bearer <JWT>
 - `PUT    /api/v1/admin/channel`
 - `DELETE /api/v1/admin/channel/disabled`
 - `DELETE /api/v1/admin/channel/:id`
+
+说明：服务启动时 migration 会自动初始化 `channel_types` 表（接口类型目录），前端新增/编辑渠道页面统一从该表读取接口类型，而非内置静态枚举。
 
 #### /api/v1/admin/channel/preview/models
 用于创建/编辑渠道时预览模型列表（仅 OpenAI 兼容类）。

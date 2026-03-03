@@ -218,6 +218,7 @@
       },
       "messages": {
         "name_required": "Please enter channel name and key!",
+        "model_provider_required": "Please choose a model provider first!",
         "models_required": "Please select at least one model!",
         "model_mapping_invalid": "Model mapping must be valid JSON format!",
         "update_success": "Channel updated successfully!",
