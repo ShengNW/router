@@ -137,6 +137,7 @@
         "models": "Models (one per line, or comma-separated)",
         "models_placeholder": "e.g. gpt-4o-mini",
         "cancel": "Back",
+        "cancel_create": "Cancel",
         "confirm": "Confirm"
       },
       "messages": {

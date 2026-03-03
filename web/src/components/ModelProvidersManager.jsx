@@ -588,7 +588,7 @@ const ModelProvidersManager = () => {
         </Button>
         <Button type='button' onClick={closeCreateModal}>
           <Icon name='undo' />
-          {t('channel.providers.dialog.cancel')}
+          {t('channel.providers.dialog.cancel_create')}
         </Button>
         <Button type='button' color='blue' onClick={applyCreateToRows}>
           <Icon name='check' />

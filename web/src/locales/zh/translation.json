@@ -137,6 +137,7 @@
         "models": "模型列表（每行一个，或逗号分隔）",
         "models_placeholder": "例如：gpt-4o-mini",
         "cancel": "回退",
+        "cancel_create": "取消",
         "confirm": "确认"
       },
       "messages": {
