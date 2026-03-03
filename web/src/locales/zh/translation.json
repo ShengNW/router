@@ -457,7 +457,9 @@
     "messages": {
       "update_success": "用户信息更新成功！",
       "create_success": "用户账户创建成功！",
-      "operation_success": "操作成功完成！"
+      "operation_success": "操作成功完成！",
+      "wallet_copy_success": "钱包地址已复制",
+      "wallet_copy_failed": "复制失败，请手动复制"
     },
     "search": "搜索用户或钱包ID...",
     "table": {

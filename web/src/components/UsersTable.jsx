@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Button,
+  Icon,
   Form,
   Label,
   Pagination,
@@ -9,7 +10,7 @@ import {
   Dropdown,
 } from 'semantic-ui-react';
 import { Link } from 'react-router-dom';
-import { API, showError, showSuccess } from '../helpers';
+import { API, copy, showError, showSuccess } from '../helpers';
 import { useTranslation } from 'react-i18next';
 
 import { ITEMS_PER_PAGE } from '../constants';
@@ -125,6 +126,15 @@ const UsersTable = () => {
           </Label>
         );
     }
+  };
+
+  const copyWalletAddress = async (walletAddress) => {
+    if (!walletAddress) return;
+    if (await copy(walletAddress)) {
+      showSuccess(t('user.messages.wallet_copy_success'));
+      return;
+    }
+    showError(t('user.messages.wallet_copy_failed'));
   };
 
   const searchUsers = async () => {
@@ -332,10 +342,23 @@ const UsersTable = () => {
                   </Table.Cell>
                   <Table.Cell>
                     {user.wallet_address ? (
-                      <Popup
-                        content={user.wallet_address}
-                        trigger={<span>{maskWalletAddress(user.wallet_address)}</span>}
-                      />
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Popup
+                          content={user.wallet_address}
+                          trigger={<span>{maskWalletAddress(user.wallet_address)}</span>}
+                        />
+                        <Icon
+                          name='copy outline'
+                          link
+                          onClick={() => copyWalletAddress(user.wallet_address)}
+                        />
+                      </span>
                     ) : (
                       '-'
                     )}

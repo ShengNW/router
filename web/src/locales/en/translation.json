@@ -457,7 +457,9 @@
     "messages": {
       "update_success": "User information updated successfully!",
       "create_success": "User account created successfully!",
-      "operation_success": "Operation completed successfully!"
+      "operation_success": "Operation completed successfully!",
+      "wallet_copy_success": "Wallet address copied",
+      "wallet_copy_failed": "Copy failed, please copy manually"
     },
     "search": "Search users or wallet ID...",
     "table": {
