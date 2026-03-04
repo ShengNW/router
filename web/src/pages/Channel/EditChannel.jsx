@@ -604,6 +604,16 @@ const EditChannel = () => {
           </Card.Header>
           <Form loading={loading} autoComplete='new-password'>
             <Form.Field>
+              <Form.Input
+                label={t('channel.edit.name')}
+                name='name'
+                placeholder={t('channel.edit.name_placeholder')}
+                onChange={handleInputChange}
+                value={inputs.name}
+                required
+              />
+            </Form.Field>
+            <Form.Field>
               <Form.Select
                 label={t('channel.edit.model_provider')}
                 name='model_provider'
@@ -787,16 +797,6 @@ const EditChannel = () => {
               />
             )}
 
-            <Form.Field>
-              <Form.Input
-                label={t('channel.edit.name')}
-                name='name'
-                placeholder={t('channel.edit.name_placeholder')}
-                onChange={handleInputChange}
-                value={inputs.name}
-                required
-              />
-            </Form.Field>
             <Form.Field>
               <Form.Dropdown
                 label={t('channel.edit.group')}

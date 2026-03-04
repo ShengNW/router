@@ -79,7 +79,7 @@
       "enable": "启用",
       "disable": "禁用",
       "edit": "编辑",
-      "add": "添加新的渠道",
+      "add": "新增渠道",
       "test_all": "测试所有渠道",
       "test_disabled": "测试禁用渠道",
       "delete_disabled": "删除禁用渠道",
