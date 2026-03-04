@@ -7,7 +7,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/yeying-community/router/common"
 	"github.com/yeying-community/router/common/utils"
 	"github.com/yeying-community/router/internal/admin/model"
 )
@@ -26,12 +25,8 @@ func init() {
 
 func GetRandomSatisfiedChannel(group string, modelName string, ignoreFirstPriority bool) (*model.Channel, error) {
 	ability := model.Ability{}
-	groupCol := "`group`"
-	trueVal := "1"
-	if common.UsingPostgreSQL {
-		groupCol = `"group"`
-		trueVal = "true"
-	}
+	groupCol := `"group"`
+	trueVal := "true"
 
 	var channelQuery *gorm.DB
 	if ignoreFirstPriority {
@@ -40,14 +35,8 @@ func GetRandomSatisfiedChannel(group string, modelName string, ignoreFirstPriori
 		maxPrioritySubQuery := model.DB.Model(&model.Ability{}).Select("MAX(priority)").Where(groupCol+" = ? and model = ? and enabled = "+trueVal, group, modelName)
 		channelQuery = model.DB.Where(groupCol+" = ? and model = ? and enabled = "+trueVal+" and priority = (?)", group, modelName, maxPrioritySubQuery)
 	}
-	if common.UsingSQLite || common.UsingPostgreSQL {
-		if err := channelQuery.Order("RANDOM()").First(&ability).Error; err != nil {
-			return nil, err
-		}
-	} else {
-		if err := channelQuery.Order("RAND()").First(&ability).Error; err != nil {
-			return nil, err
-		}
+	if err := channelQuery.Order("RANDOM()").First(&ability).Error; err != nil {
+		return nil, err
 	}
 	channel := model.Channel{Id: ability.ChannelId}
 	err := model.DB.First(&channel, "id = ?", ability.ChannelId).Error
@@ -91,12 +80,8 @@ func UpdateAbilityStatus(channelId string, status bool) error {
 }
 
 func GetTopChannelByModel(group string, modelName string) (*model.Channel, error) {
-	groupCol := "`group`"
-	trueVal := "1"
-	if common.UsingPostgreSQL {
-		groupCol = `"group"`
-		trueVal = "true"
-	}
+	groupCol := `"group"`
+	trueVal := "true"
 
 	ability := model.Ability{}
 	err := model.DB.Where(groupCol+" = ? and model = ? and enabled = "+trueVal, group, modelName).
@@ -114,12 +99,8 @@ func GetTopChannelByModel(group string, modelName string) (*model.Channel, error
 }
 
 func GetGroupModels(ctx context.Context, group string) ([]string, error) {
-	groupCol := "`group`"
-	trueVal := "1"
-	if common.UsingPostgreSQL {
-		groupCol = `"group"`
-		trueVal = "true"
-	}
+	groupCol := `"group"`
+	trueVal := "true"
 	var models []string
 	err := model.DB.Model(&model.Ability{}).Distinct("model").Where(groupCol+" = ? and enabled = "+trueVal, group).Pluck("model", &models).Error
 	if err != nil {

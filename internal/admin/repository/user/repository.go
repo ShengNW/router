@@ -439,11 +439,7 @@ func GetEmail(id string) (string, error) {
 }
 
 func GetGroup(id string) (string, error) {
-	groupCol := "`group`"
-	if common.UsingPostgreSQL {
-		groupCol = `"group"`
-	}
-
+	groupCol := `"group"`
 	var group string
 	err := model.DB.Model(&model.User{}).Where("id = ?", id).Select(groupCol).Find(&group).Error
 	return group, err

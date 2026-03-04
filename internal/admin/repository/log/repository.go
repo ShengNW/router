@@ -2,10 +2,8 @@ package log
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/yeying-community/router/common"
 	"github.com/yeying-community/router/common/config"
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
@@ -152,11 +150,7 @@ func SearchUser(userId string, keyword string) ([]*model.Log, error) {
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel string) int64 {
-	ifnull := "ifnull"
-	if common.UsingPostgreSQL {
-		ifnull = "COALESCE"
-	}
-	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(quota),0)", ifnull))
+	tx := model.LOG_DB.Table("logs").Select("COALESCE(sum(quota),0)")
 	// unknown log type falls back to consume to keep legacy behavior
 	if logType == model.LogTypeUnknown {
 		logType = model.LogTypeConsume
@@ -185,11 +179,7 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) int {
-	ifnull := "ifnull"
-	if common.UsingPostgreSQL {
-		ifnull = "COALESCE"
-	}
-	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(prompt_tokens),0) + %s(sum(completion_tokens),0)", ifnull, ifnull))
+	tx := model.LOG_DB.Table("logs").Select("COALESCE(sum(prompt_tokens),0) + COALESCE(sum(completion_tokens),0)")
 	// unknown log type falls back to consume to keep legacy behavior
 	if logType == model.LogTypeUnknown {
 		logType = model.LogTypeConsume
@@ -215,11 +205,7 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 }
 
 func SumUsedQuotaByUserId(logType int, userId string, startTimestamp int64, endTimestamp int64) (int64, error) {
-	ifnull := "ifnull"
-	if common.UsingPostgreSQL {
-		ifnull = "COALESCE"
-	}
-	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(quota),0)", ifnull))
+	tx := model.LOG_DB.Table("logs").Select("COALESCE(sum(quota),0)")
 	// unknown log type falls back to consume to keep legacy behavior
 	if logType == model.LogTypeUnknown {
 		logType = model.LogTypeConsume
@@ -237,11 +223,7 @@ func SumUsedQuotaByUserId(logType int, userId string, startTimestamp int64, endT
 }
 
 func MinLogTimestampByUserId(userId string, logTypes []int) (int64, error) {
-	ifnull := "ifnull"
-	if common.UsingPostgreSQL {
-		ifnull = "COALESCE"
-	}
-	tx := model.LOG_DB.Table("logs").Select(fmt.Sprintf("%s(min(created_at),0)", ifnull)).
+	tx := model.LOG_DB.Table("logs").Select("COALESCE(min(created_at),0)").
 		Where("user_id = ?", userId)
 	if len(logTypes) > 0 {
 		tx = tx.Where("type IN ?", logTypes)
@@ -259,45 +241,15 @@ func DeleteOld(targetTimestamp int64) (int64, error) {
 func selectGroupByGranularity(granularity string) string {
 	switch granularity {
 	case "hour":
-		if common.UsingPostgreSQL {
-			return "TO_CHAR(date_trunc('hour', to_timestamp(created_at)), 'YYYY-MM-DD HH24') as day"
-		}
-		if common.UsingSQLite {
-			return "strftime('%Y-%m-%d %H', datetime(created_at, 'unixepoch')) as day"
-		}
-		return "DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y-%m-%d %H') as day"
+		return "TO_CHAR(date_trunc('hour', to_timestamp(created_at)), 'YYYY-MM-DD HH24') as day"
 	case "week":
-		if common.UsingPostgreSQL {
-			return "TO_CHAR(date_trunc('week', to_timestamp(created_at)), 'IYYY-\"W\"IW') as day"
-		}
-		if common.UsingSQLite {
-			return "strftime('%Y', datetime(created_at, 'unixepoch')) || '-W' || strftime('%W', datetime(created_at, 'unixepoch')) as day"
-		}
-		return "DATE_FORMAT(FROM_UNIXTIME(created_at), '%x-W%v') as day"
+		return "TO_CHAR(date_trunc('week', to_timestamp(created_at)), 'IYYY-\"W\"IW') as day"
 	case "month":
-		if common.UsingPostgreSQL {
-			return "TO_CHAR(date_trunc('month', to_timestamp(created_at)), 'YYYY-MM') as day"
-		}
-		if common.UsingSQLite {
-			return "strftime('%Y-%m', datetime(created_at, 'unixepoch')) as day"
-		}
-		return "DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y-%m') as day"
+		return "TO_CHAR(date_trunc('month', to_timestamp(created_at)), 'YYYY-MM') as day"
 	case "year":
-		if common.UsingPostgreSQL {
-			return "TO_CHAR(date_trunc('year', to_timestamp(created_at)), 'YYYY') as day"
-		}
-		if common.UsingSQLite {
-			return "strftime('%Y', datetime(created_at, 'unixepoch')) as day"
-		}
-		return "DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y') as day"
+		return "TO_CHAR(date_trunc('year', to_timestamp(created_at)), 'YYYY') as day"
 	default:
-		if common.UsingPostgreSQL {
-			return "TO_CHAR(date_trunc('day', to_timestamp(created_at)), 'YYYY-MM-DD') as day"
-		}
-		if common.UsingSQLite {
-			return "strftime('%Y-%m-%d', datetime(created_at, 'unixepoch')) as day"
-		}
-		return "DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y-%m-%d') as day"
+		return "TO_CHAR(date_trunc('day', to_timestamp(created_at)), 'YYYY-MM-DD') as day"
 	}
 }
 

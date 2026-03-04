@@ -27,10 +27,7 @@ var (
 )
 
 func CacheGetTokenByKey(key string) (*Token, error) {
-	keyCol := "`key`"
-	if common.UsingPostgreSQL {
-		keyCol = `"key"`
-	}
+	keyCol := `"key"`
 	var token Token
 	if !common.RedisEnabled {
 		err := DB.Where(keyCol+" = ?", key).First(&token).Error

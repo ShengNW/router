@@ -28,8 +28,8 @@ cd router
 
 cp config.yaml.template config.yaml
 # 按需编辑 config.yaml：
-# - database.sql_dsn 设为 postgres://... 可强制使用 PostgreSQL
-# - 留空则回落 SQLite
+# - 仅支持 PostgreSQL，默认已填本地开发 DSN
+# - 如数据库不在本机，请修改 database.sql_dsn
 
 go mod download
 go run ./cmd/router --config ./config.yaml --log-dir ./logs
@@ -56,7 +56,7 @@ npm start --prefix web   # 自动代理到 http://localhost:3011
 Router 默认读取当前目录 `config.yaml`，也可通过 `--config` 指定路径。
 
 **生产环境建议至少配置：**
-- `database.sql_dsn: postgres://...`（留空会回落 SQLite）
+- `database.sql_dsn: postgres://...`（必须为 PostgreSQL）
 - `ucan.aud: did:web:<公网域名>`
 - `auth.auto_register_enabled: true`（按需开启钱包自动注册）
 
@@ -112,14 +112,14 @@ server {
 
 ### 6) 验证
 ```bash
-journalctl -u router --since 'today' --no-pager | rg "openPostgreSQL|openSQLite" -S
+journalctl -u router --since 'today' --no-pager | rg "using PostgreSQL as database" -S
 curl -s http://127.0.0.1:13011/api/v1/public/status
 curl -I https://router.yeying.pub
 ```
-出现 `openPostgreSQL` 才算数据库配置正确；若出现 `openSQLite` 说明仍在使用 SQLite。
+出现 `using PostgreSQL as database` 才算数据库配置正确。
 
 ### 7) 常见问题
-- 出现 `openSQLite`：检查 `database.sql_dsn`、`--config` 路径与 `WorkingDirectory`。
+- 启动报数据库连接错误：检查 `database.sql_dsn`、`--config` 路径与 `WorkingDirectory`。
 - 构建报 `web/dist/*` 不存在：先执行 `npm run build --prefix web`。
 - `502 Bad Gateway`：检查 Nginx `proxy_pass` 端口和 Router `--port` 是否一致。
 - `UCAN audience mismatch`：设置 `ucan.aud: did:web:<公网域名>`。

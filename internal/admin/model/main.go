@@ -2,7 +2,7 @@ package model
 
 import (
 	"database/sql"
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
@@ -11,9 +11,7 @@ import (
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/common/random"
-	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -65,20 +63,17 @@ func CreateRootAccountIfNeed() error {
 }
 
 func chooseDB(dsn string) (*gorm.DB, error) {
-	switch {
-	case strings.HasPrefix(dsn, "postgres://"):
-		// Use PostgreSQL
-		return openPostgreSQL(dsn)
-	case dsn != "":
-		// Use MySQL
-		return openMySQL(dsn)
-	default:
-		// Use SQLite
-		return openSQLite()
+	trimmed := strings.TrimSpace(dsn)
+	if trimmed == "" {
+		return nil, errors.New("database.sql_dsn is required and only PostgreSQL is supported")
 	}
+	return openPostgreSQL(trimmed)
 }
 
 func openPostgreSQL(dsn string) (*gorm.DB, error) {
+	if !isPostgreSQLDSN(dsn) {
+		return nil, errors.New("unsupported database.sql_dsn: only PostgreSQL DSN is supported")
+	}
 	logger.SysLog("using PostgreSQL as database")
 	common.UsingPostgreSQL = true
 	return gorm.Open(postgres.New(postgres.Config{
@@ -89,21 +84,14 @@ func openPostgreSQL(dsn string) (*gorm.DB, error) {
 	})
 }
 
-func openMySQL(dsn string) (*gorm.DB, error) {
-	logger.SysLog("using MySQL as database")
-	common.UsingMySQL = true
-	return gorm.Open(mysql.Open(dsn), &gorm.Config{
-		PrepareStmt: true, // precompile SQL
-	})
-}
-
-func openSQLite() (*gorm.DB, error) {
-	logger.SysLog("SQL_DSN not set, using SQLite as database")
-	common.UsingSQLite = true
-	dsn := fmt.Sprintf("%s?_busy_timeout=%d", common.SQLitePath, common.SQLiteBusyTimeout)
-	return gorm.Open(sqlite.Open(dsn), &gorm.Config{
-		PrepareStmt: true, // precompile SQL
-	})
+func isPostgreSQLDSN(dsn string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(dsn))
+	if normalized == "" {
+		return false
+	}
+	return strings.HasPrefix(normalized, "postgres://") ||
+		strings.HasPrefix(normalized, "postgresql://") ||
+		strings.Contains(normalized, "host=")
 }
 
 func InitDB() {
@@ -114,14 +102,10 @@ func InitDB() {
 		return
 	}
 
-	sqlDB := setDBConns(DB)
+	setDBConns(DB)
 
 	if !config.IsMasterNode {
 		return
-	}
-
-	if common.UsingMySQL {
-		_, _ = sqlDB.Exec("DROP INDEX idx_channels_key ON channels;") // TODO: delete this line when most users have upgraded
 	}
 
 	logger.SysLog("database migration started")

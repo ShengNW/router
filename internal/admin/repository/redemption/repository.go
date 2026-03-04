@@ -57,11 +57,7 @@ func Redeem(ctx context.Context, key string, userId string) (int64, error) {
 		return 0, errors.New("无效的 user id")
 	}
 	redemption := &model.Redemption{}
-
-	keyCol := "`key`"
-	if common.UsingPostgreSQL {
-		keyCol = `"key"`
-	}
+	keyCol := `"key"`
 
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(keyCol+" = ?", key).First(redemption).Error
