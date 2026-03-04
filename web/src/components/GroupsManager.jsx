@@ -231,7 +231,6 @@ const GroupsManager = forwardRef((_, ref) => {
             <Table.HeaderCell>{t('group_manage.table.name')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.display_name')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.description')}</Table.HeaderCell>
-            <Table.HeaderCell>{t('group_manage.table.source')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.status')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.sort_order')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.updated_at')}</Table.HeaderCell>
@@ -246,7 +245,6 @@ const GroupsManager = forwardRef((_, ref) => {
               <Table.Cell>{row.name}</Table.Cell>
               <Table.Cell>{row.display_name || '-'}</Table.Cell>
               <Table.Cell>{row.description || '-'}</Table.Cell>
-              <Table.Cell>{row.source || '-'}</Table.Cell>
               <Table.Cell>
                 {row.enabled ? (
                   <Label basic color='green'>
@@ -300,7 +298,7 @@ const GroupsManager = forwardRef((_, ref) => {
           ))}
           {rows.length === 0 && (
             <Table.Row>
-              <Table.Cell colSpan={8} textAlign='center'>
+              <Table.Cell colSpan={7} textAlign='center'>
                 {loading
                   ? t('group_manage.messages.loading')
                   : t('group_manage.messages.empty')}

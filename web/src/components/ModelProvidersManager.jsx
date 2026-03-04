@@ -397,7 +397,7 @@ const ModelProvidersManager = forwardRef((_, ref) => {
   };
 
   const renderRows = () => (
-    <Table celled stackable>
+    <Table basic='very' compact size='small' stackable>
       <Table.Header>
         <Table.Row>
           <Table.HeaderCell width={2}>
