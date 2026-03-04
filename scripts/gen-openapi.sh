@@ -12,5 +12,5 @@ fi
 "$SWAG_BIN" init --generalInfo docs/swagger.go --output docs --parseDependency --parseInternal
 
 if [ -f docs/swagger.json ]; then
-  cp docs/swagger.json docs/openapi.json
+  mv docs/swagger.json docs/openapi.json
 fi

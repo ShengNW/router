@@ -90,7 +90,7 @@ systemctl restart router
 ```bash
 go install github.com/swaggo/swag/cmd/swag@latest
 ./scripts/gen-openapi.sh
-# 输出：docs/openapi.json（以及 swagger.json/yaml）
+# 输出：docs/openapi.json 与 docs/swagger.yaml
 ```
 
 ## 许可证
