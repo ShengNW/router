@@ -73,6 +73,48 @@ const normalizeBaseURL = (baseURL) =>
 const buildChannelConnectionSignature = ({ type, key, baseURL }) =>
   `${type}|${normalizeBaseURL(baseURL)}|${(key || '').trim()}`;
 
+const CHANNEL_CREATE_DRAFT_KEY = 'router.channel.create.draft.v1';
+const CREATE_CHANNEL_STEP_MIN = 1;
+const CREATE_CHANNEL_STEP_MAX = 3;
+
+const parseCreateStep = (rawStep) => {
+  const step = Number(rawStep);
+  if (!Number.isInteger(step)) {
+    return CREATE_CHANNEL_STEP_MIN;
+  }
+  if (step < CREATE_CHANNEL_STEP_MIN) {
+    return CREATE_CHANNEL_STEP_MIN;
+  }
+  if (step > CREATE_CHANNEL_STEP_MAX) {
+    return CREATE_CHANNEL_STEP_MAX;
+  }
+  return step;
+};
+
+const CHANNEL_ORIGIN_INPUTS = {
+  name: '',
+  type: 1,
+  key: '',
+  base_url: '',
+  other: '',
+  model_mapping: '',
+  model_ratio: '',
+  completion_ratio: '',
+  system_prompt: '',
+  models: [],
+  groups: [],
+};
+
+const CHANNEL_DEFAULT_CONFIG = {
+  region: '',
+  sk: '',
+  ak: '',
+  user_id: '',
+  vertex_ai_project_id: '',
+  vertex_ai_adc: '',
+  user_agent: '',
+};
+
 function type2secretPrompt(type, t) {
   switch (type) {
     case 15:
@@ -102,24 +144,16 @@ const EditChannel = () => {
     return Number.isInteger(id) && id > 0 ? id : 0;
   }, [isEdit, location.search]);
   const [loading, setLoading] = useState(isEdit || copyFromId > 0);
+  const [createStep, setCreateStep] = useState(() => {
+    const query = new URLSearchParams(location.search);
+    return parseCreateStep(query.get('step'));
+  });
+  const [draftRestored, setDraftRestored] = useState(false);
   const handleCancel = () => {
     navigate('/channel');
   };
 
-  const originInputs = {
-    name: '',
-    type: 1,
-    key: '',
-    base_url: '',
-    other: '',
-    model_mapping: '',
-    model_ratio: '',
-    completion_ratio: '',
-    system_prompt: '',
-    models: [],
-    groups: [],
-  };
-  const [inputs, setInputs] = useState(originInputs);
+  const [inputs, setInputs] = useState(CHANNEL_ORIGIN_INPUTS);
   const [originModelOptions, setOriginModelOptions] = useState([]);
   const [modelOptions, setModelOptions] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
@@ -130,15 +164,7 @@ const EditChannel = () => {
   const [modelsSyncError, setModelsSyncError] = useState('');
   const [modelsLastSyncedAt, setModelsLastSyncedAt] = useState(0);
   const [verifiedModelSignature, setVerifiedModelSignature] = useState('');
-  const [config, setConfig] = useState({
-    region: '',
-    sk: '',
-    ak: '',
-    user_id: '',
-    vertex_ai_project_id: '',
-    vertex_ai_adc: '',
-    user_agent: '',
-  });
+  const [config, setConfig] = useState(CHANNEL_DEFAULT_CONFIG);
   const fetchingModelsRef = useRef(false);
   const isOpenAICompatibleCreate = !isEdit && isOpenAICompatibleType(inputs.type);
   const hasModelPreviewCredentials =
@@ -155,6 +181,10 @@ const EditChannel = () => {
   );
   const requiresConnectionVerification = isOpenAICompatibleCreate && inputs.type !== 43;
   const showCreateModelFlowGuide = !isEdit && inputs.type !== 43;
+  const isCreateMode = !isEdit;
+  const showStepOne = isEdit || createStep === 1;
+  const showStepTwo = isEdit || createStep === 2;
+  const showStepThree = isEdit || createStep === 3;
   const isCurrentSignatureVerified =
     requiresConnectionVerification &&
     verifiedModelSignature !== '' &&
@@ -216,6 +246,22 @@ const EditChannel = () => {
     ? modelSyncStatusColor
     : 'rgba(0, 0, 0, 0.6)';
 
+  const buildEffectiveKey = useCallback(() => {
+    let effectiveKey = inputs.key || '';
+    if (effectiveKey === '') {
+      if (config.ak !== '' && config.sk !== '' && config.region !== '') {
+        effectiveKey = `${config.ak}|${config.sk}|${config.region}`;
+      } else if (
+        config.region !== '' &&
+        config.vertex_ai_project_id !== '' &&
+        config.vertex_ai_adc !== ''
+      ) {
+        effectiveKey = `${config.region}|${config.vertex_ai_project_id}|${config.vertex_ai_adc}`;
+      }
+    }
+    return effectiveKey;
+  }, [config.ak, config.region, config.sk, config.vertex_ai_adc, config.vertex_ai_project_id, inputs.key]);
+
   const handleInputChange = (e, { name, value }) => {
     setInputs((inputs) => ({ ...inputs, [name]: value }));
   };
@@ -223,6 +269,115 @@ const EditChannel = () => {
   const handleConfigChange = (e, { name, value }) => {
     setConfig((inputs) => ({ ...inputs, [name]: value }));
   };
+
+  const clearCreateDraft = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    localStorage.removeItem(CHANNEL_CREATE_DRAFT_KEY);
+  }, []);
+
+  const restoreCreateDraft = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    const raw = localStorage.getItem(CHANNEL_CREATE_DRAFT_KEY);
+    if (!raw) {
+      return false;
+    }
+    try {
+      const draft = JSON.parse(raw);
+      if (!draft || typeof draft !== 'object') {
+        return false;
+      }
+      if (!draft.inputs || typeof draft.inputs !== 'object') {
+        return false;
+      }
+
+      setInputs({ ...CHANNEL_ORIGIN_INPUTS, ...draft.inputs });
+      if (draft.config && typeof draft.config === 'object') {
+        setConfig({ ...CHANNEL_DEFAULT_CONFIG, ...draft.config });
+      }
+      if (Array.isArray(draft.originModelOptions)) {
+        setOriginModelOptions(
+          draft.originModelOptions.filter(
+            (option) =>
+              option &&
+              typeof option === 'object' &&
+              typeof option.key === 'string' &&
+              typeof option.value === 'string'
+          )
+        );
+      }
+      if (typeof draft.modelsSyncError === 'string') {
+        setModelsSyncError(draft.modelsSyncError);
+      }
+      if (Number.isFinite(draft.modelsLastSyncedAt)) {
+        setModelsLastSyncedAt(draft.modelsLastSyncedAt);
+      }
+      if (typeof draft.verifiedModelSignature === 'string') {
+        setVerifiedModelSignature(draft.verifiedModelSignature);
+      }
+      setCreateStep(parseCreateStep(draft.step));
+      setDraftRestored(true);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const goToCreateStep = useCallback(
+    (targetStep) => {
+      if (isEdit) {
+        return;
+      }
+      setCreateStep(parseCreateStep(targetStep));
+    },
+    [isEdit]
+  );
+
+  const moveToPreviousCreateStep = useCallback(() => {
+    goToCreateStep(createStep - 1);
+  }, [createStep, goToCreateStep]);
+
+  const moveToStepTwo = useCallback(() => {
+    const effectiveKey = buildEffectiveKey();
+    if (inputs.name.trim() === '' || effectiveKey.trim() === '') {
+      showInfo(t('channel.edit.messages.name_required'));
+      return;
+    }
+    if (inputs.groups.length === 0) {
+      showInfo(t('channel.edit.messages.groups_required'));
+      return;
+    }
+    goToCreateStep(2);
+  }, [buildEffectiveKey, goToCreateStep, inputs.groups.length, inputs.name, t]);
+
+  const moveToStepThree = useCallback(() => {
+    if (requiresConnectionVerification) {
+      if (!hasModelPreviewCredentials) {
+        showInfo(t('channel.edit.model_selector.verify_prerequisite'));
+        return;
+      }
+      if (!isCurrentSignatureVerified) {
+        showInfo(t('channel.edit.model_selector.verify_required'));
+        return;
+      }
+    }
+    if (inputs.type !== 43 && inputs.models.length === 0) {
+      showInfo(t('channel.edit.messages.models_required'));
+      return;
+    }
+    goToCreateStep(3);
+  }, [
+    goToCreateStep,
+    hasModelPreviewCredentials,
+    inputs.models.length,
+    inputs.type,
+    isCurrentSignatureVerified,
+    requiresConnectionVerification,
+    t,
+  ]);
 
   const loadChannelById = useCallback(async (targetId, forCopy = false) => {
     let res = await API.get(`/api/v1/admin/channel/${targetId}`);
@@ -467,17 +622,92 @@ const EditChannel = () => {
 
   useEffect(() => {
     if (isEdit) {
+      setDraftRestored(false);
       setLoading(true);
       loadChannelById(channelId).then();
       return;
     }
     if (copyFromId > 0) {
+      setDraftRestored(false);
       setLoading(true);
       loadChannelById(copyFromId, true).then();
       return;
     }
+    if (!restoreCreateDraft()) {
+      setDraftRestored(false);
+    }
     setLoading(false);
-  }, [channelId, copyFromId, isEdit, loadChannelById]);
+  }, [channelId, copyFromId, isEdit, loadChannelById, restoreCreateDraft]);
+
+  useEffect(() => {
+    if (isEdit) {
+      return;
+    }
+    const query = new URLSearchParams(location.search);
+    const stepParam = query.get('step');
+    if (stepParam === null) {
+      return;
+    }
+    const queryStep = parseCreateStep(stepParam);
+    if (queryStep !== createStep) {
+      setCreateStep(queryStep);
+    }
+  }, [createStep, isEdit, location.search]);
+
+  useEffect(() => {
+    if (isEdit) {
+      return;
+    }
+    const query = new URLSearchParams(location.search);
+    const stepParam = query.get('step');
+    if (createStep <= CREATE_CHANNEL_STEP_MIN) {
+      if (stepParam === null) {
+        return;
+      }
+      query.delete('step');
+    } else {
+      const nextStep = String(createStep);
+      if (stepParam === nextStep) {
+        return;
+      }
+      query.set('step', nextStep);
+    }
+    const nextSearch = query.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true }
+    );
+  }, [createStep, isEdit, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (isEdit || loading || typeof window === 'undefined') {
+      return;
+    }
+    const payload = {
+      step: createStep,
+      inputs,
+      config,
+      originModelOptions,
+      modelsSyncError,
+      modelsLastSyncedAt,
+      verifiedModelSignature,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(CHANNEL_CREATE_DRAFT_KEY, JSON.stringify(payload));
+  }, [
+    config,
+    createStep,
+    inputs,
+    isEdit,
+    loading,
+    modelsLastSyncedAt,
+    modelsSyncError,
+    originModelOptions,
+    verifiedModelSignature,
+  ]);
 
   useEffect(() => {
     if (!requiresConnectionVerification) {
@@ -517,6 +747,9 @@ const EditChannel = () => {
     if (isEdit) {
       return;
     }
+    if (createStep !== 2) {
+      return;
+    }
     if (inputs.type === 43) {
       return;
     }
@@ -543,6 +776,7 @@ const EditChannel = () => {
     isEdit,
     isOpenAICompatibleCreate,
     loading,
+    createStep,
   ]);
 
   useEffect(() => {
@@ -554,18 +788,7 @@ const EditChannel = () => {
   }, [copyFromId, fetchModels, fetchGroups, fetchChannelTypes, isEdit]);
 
   const submit = async () => {
-    let effectiveKey = inputs.key || '';
-    if (effectiveKey === '') {
-      if (config.ak !== '' && config.sk !== '' && config.region !== '') {
-        effectiveKey = `${config.ak}|${config.sk}|${config.region}`;
-      } else if (
-        config.region !== '' &&
-        config.vertex_ai_project_id !== '' &&
-        config.vertex_ai_adc !== ''
-      ) {
-        effectiveKey = `${config.region}|${config.vertex_ai_project_id}|${config.vertex_ai_adc}`;
-      }
-    }
+    const effectiveKey = buildEffectiveKey();
     if (!isEdit && (inputs.name.trim() === '' || effectiveKey.trim() === '')) {
       showInfo(t('channel.edit.messages.name_required'));
       return;
@@ -633,7 +856,15 @@ const EditChannel = () => {
         showSuccess(t('channel.edit.messages.update_success'));
       } else {
         showSuccess(t('channel.edit.messages.create_success'));
-        setInputs(originInputs);
+        setInputs(CHANNEL_ORIGIN_INPUTS);
+        setConfig(CHANNEL_DEFAULT_CONFIG);
+        setOriginModelOptions([]);
+        setModelsSyncError('');
+        setModelsLastSyncedAt(0);
+        setVerifiedModelSignature('');
+        setDraftRestored(false);
+        setCreateStep(1);
+        clearCreateDraft();
       }
       navigate('/channel');
     } else {
@@ -654,236 +885,283 @@ const EditChannel = () => {
               : t('channel.edit.title_create')}
           </Card.Header>
           <Form loading={loading} autoComplete='new-password'>
-            <Form.Field>
-              <Form.Input
-                label={t('channel.edit.name')}
-                name='name'
-                placeholder={t('channel.edit.name_placeholder')}
-                onChange={handleInputChange}
-                value={inputs.name}
-                required
-              />
-            </Form.Field>
-            <Form.Field>
-              <Form.Select
-                label={t('channel.edit.type')}
-                name='type'
-                required
-                search
-                options={channelTypeOptions}
-                value={inputs.type}
-                onChange={handleInputChange}
-              />
-              {!isEdit && (
-                <div style={{ color: 'rgba(0, 0, 0, 0.6)', marginTop: '4px' }}>
-                  {protocolVerifySupportText}
-                </div>
-              )}
-            </Form.Field>
-            {inputs.type === 3 && (
-              <Form.Field>
-                <Form.Input
-                  label='AZURE_OPENAI_ENDPOINT'
-                  name='base_url'
-                  placeholder='请输入 AZURE_OPENAI_ENDPOINT，例如：https://docs-test-001.openai.azure.com'
-                  onChange={handleInputChange}
-                  value={inputs.base_url}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type === 8 && (
-              <Form.Field>
-                <Form.Input
-                  required
-                  label={t('channel.edit.proxy_url')}
-                  name='base_url'
-                  placeholder={t('channel.edit.proxy_url_placeholder')}
-                  onChange={handleInputChange}
-                  value={inputs.base_url}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type === 50 && (
-              <Form.Field>
-                <Form.Input
-                  required
-                  label={t('channel.edit.base_url')}
-                  name='base_url'
-                  placeholder={t('channel.edit.base_url_placeholder')}
-                  onChange={handleInputChange}
-                  value={inputs.base_url}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type === 22 && (
-              <Form.Field>
-                <Form.Input
-                  label='私有部署地址'
-                  name='base_url'
-                  placeholder={
-                    '请输入私有部署地址，格式为：https://fastgpt.run' +
-                    '/api' +
-                    '/openapi'
-                  }
-                  onChange={handleInputChange}
-                  value={inputs.base_url}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type !== 3 &&
-              inputs.type !== 33 &&
-              inputs.type !== 8 &&
-              inputs.type !== 50 &&
-              inputs.type !== 22 && (
-                <Form.Field>
-                  <Form.Input
-                    label={t('channel.edit.proxy_url')}
-                    name='base_url'
-                    placeholder={t('channel.edit.proxy_url_placeholder')}
-                    onChange={handleInputChange}
-                    value={inputs.base_url}
-                    autoComplete='new-password'
-                  />
-                </Form.Field>
-              )}
-
-            {inputs.type !== 33 &&
-              inputs.type !== 42 && (
-                <Form.Field>
-                  <Form.Input
-                    label={t('channel.edit.key')}
-                    name='key'
-                    required
-                    placeholder={type2secretPrompt(inputs.type, t)}
-                    onChange={handleInputChange}
-                    value={inputs.key}
-                    autoComplete='new-password'
-                  />
-                </Form.Field>
-              )}
-            {isOpenAICompatibleType(inputs.type) && (
-              <>
-                <Form.Field>
-                  <Form.Input
-                    label={t('channel.edit.user_agent.label')}
-                    name='user_agent'
-                    placeholder={t('channel.edit.user_agent.placeholder')}
-                    onChange={handleConfigChange}
-                    value={config.user_agent || ''}
-                    autoComplete='new-password'
-                  />
-                  <div
-                    style={{ color: 'rgba(0, 0, 0, 0.6)', marginTop: '4px' }}
-                  >
-                    {t('channel.edit.user_agent.help')}
-                  </div>
-                </Form.Field>
-              </>
-            )}
-            <Form.Field>
-              <Form.Dropdown
-                label={t('channel.edit.group')}
-                placeholder={t('channel.edit.group_placeholder')}
-                name='groups'
-                required
-                fluid
-                multiple
-                selection
-                allowAdditions
-                additionLabel={t('channel.edit.group_addition')}
-                onChange={handleInputChange}
-                value={inputs.groups}
-                autoComplete='new-password'
-                options={groupOptions}
-              />
-            </Form.Field>
-
-            {/* Azure OpenAI specific fields */}
-            {inputs.type === 3 && (
-              <>
-                <Message>
-                  注意，<strong>模型部署名称必须和模型名称保持一致</strong>
-                  ，因为 Router 会把请求体中的 model
-                  参数替换为你的部署名称（模型名称中的点会被剔除），
-                  <a
-                    target='_blank'
-                    rel='noreferrer'
-                    href='https://github.com/yeying-community/router/issues/133?notification_referrer_id=NT_kwDOAmJSYrM2NjIwMzI3NDgyOjM5OTk4MDUw#issuecomment-1571602271'
-                  >
-                    图片演示
-                  </a>
-                  。
-                </Message>
-                <Form.Field>
-                  <Form.Input
-                    label='默认 API 版本'
-                    name='other'
-                    placeholder='请输入默认 API 版本，例如：2024-03-01-preview，该配置可以被实际的请求查询参数所覆盖'
-                    onChange={handleInputChange}
-                    value={inputs.other}
-                    autoComplete='new-password'
-                  />
-                </Form.Field>
-              </>
-            )}
-
-            {inputs.type === 18 && (
-              <Form.Field>
-                <Form.Input
-                  label={t('channel.edit.spark_version')}
-                  name='other'
-                  placeholder={t('channel.edit.spark_version_placeholder')}
-                  onChange={handleInputChange}
-                  value={inputs.other}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type === 21 && (
-              <Form.Field>
-                <Form.Input
-                  label={t('channel.edit.knowledge_id')}
-                  name='other'
-                  placeholder={t('channel.edit.knowledge_id_placeholder')}
-                  onChange={handleInputChange}
-                  value={inputs.other}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type === 17 && (
-              <Form.Field>
-                <Form.Input
-                  label={t('channel.edit.plugin_param')}
-                  name='other'
-                  placeholder={t('channel.edit.plugin_param_placeholder')}
-                  onChange={handleInputChange}
-                  value={inputs.other}
-                  autoComplete='new-password'
-                />
-              </Form.Field>
-            )}
-            {inputs.type === 34 && (
-              <Message>{t('channel.edit.coze_notice')}</Message>
-            )}
-            {inputs.type === 40 && (
-              <Message>
-                {t('channel.edit.douban_notice')}
-                <a
-                  target='_blank'
-                  rel='noreferrer'
-                  href='https://console.volcengine.com/ark/region:ark+cn-beijing/endpoint'
+            {isCreateMode && (
+              <div style={{ marginBottom: '12px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                  }}
                 >
-                  {t('channel.edit.douban_notice_link')}
-                </a>
-                {t('channel.edit.douban_notice_2')}
-              </Message>
+                  <Button
+                    type='button'
+                    size='tiny'
+                    basic={createStep !== 1}
+                    color={createStep === 1 ? 'blue' : undefined}
+                    onClick={() => goToCreateStep(1)}
+                  >
+                    {t('channel.edit.wizard.step_basic')}
+                  </Button>
+                  <Button
+                    type='button'
+                    size='tiny'
+                    basic={createStep !== 2}
+                    color={createStep === 2 ? 'blue' : undefined}
+                    onClick={moveToStepTwo}
+                  >
+                    {t('channel.edit.wizard.step_models')}
+                  </Button>
+                  <Button
+                    type='button'
+                    size='tiny'
+                    basic={createStep !== 3}
+                    color={createStep === 3 ? 'blue' : undefined}
+                    onClick={moveToStepThree}
+                  >
+                    {t('channel.edit.wizard.step_advanced')}
+                  </Button>
+                </div>
+                {draftRestored && (
+                  <div style={{ color: 'rgba(0, 0, 0, 0.6)', marginTop: '8px' }}>
+                    {t('channel.edit.wizard.draft_restored')}
+                  </div>
+                )}
+              </div>
             )}
-            {inputs.type !== 43 && (
+            {showStepOne && (
+              <>
+                <Form.Field>
+                  <Form.Input
+                    label={t('channel.edit.name')}
+                    name='name'
+                    placeholder={t('channel.edit.name_placeholder')}
+                    onChange={handleInputChange}
+                    value={inputs.name}
+                    required
+                  />
+                </Form.Field>
+                <Form.Field>
+                  <Form.Select
+                    label={t('channel.edit.type')}
+                    name='type'
+                    required
+                    search
+                    options={channelTypeOptions}
+                    value={inputs.type}
+                    onChange={handleInputChange}
+                  />
+                  {!isEdit && (
+                    <div style={{ color: 'rgba(0, 0, 0, 0.6)', marginTop: '4px' }}>
+                      {protocolVerifySupportText}
+                    </div>
+                  )}
+                </Form.Field>
+                {inputs.type === 3 && (
+                  <Form.Field>
+                    <Form.Input
+                      label='AZURE_OPENAI_ENDPOINT'
+                      name='base_url'
+                      placeholder='请输入 AZURE_OPENAI_ENDPOINT，例如：https://docs-test-001.openai.azure.com'
+                      onChange={handleInputChange}
+                      value={inputs.base_url}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type === 8 && (
+                  <Form.Field>
+                    <Form.Input
+                      required
+                      label={t('channel.edit.proxy_url')}
+                      name='base_url'
+                      placeholder={t('channel.edit.proxy_url_placeholder')}
+                      onChange={handleInputChange}
+                      value={inputs.base_url}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type === 50 && (
+                  <Form.Field>
+                    <Form.Input
+                      required
+                      label={t('channel.edit.base_url')}
+                      name='base_url'
+                      placeholder={t('channel.edit.base_url_placeholder')}
+                      onChange={handleInputChange}
+                      value={inputs.base_url}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type === 22 && (
+                  <Form.Field>
+                    <Form.Input
+                      label='私有部署地址'
+                      name='base_url'
+                      placeholder={
+                        '请输入私有部署地址，格式为：https://fastgpt.run' +
+                        '/api' +
+                        '/openapi'
+                      }
+                      onChange={handleInputChange}
+                      value={inputs.base_url}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type !== 3 &&
+                  inputs.type !== 33 &&
+                  inputs.type !== 8 &&
+                  inputs.type !== 50 &&
+                  inputs.type !== 22 && (
+                    <Form.Field>
+                      <Form.Input
+                        label={t('channel.edit.proxy_url')}
+                        name='base_url'
+                        placeholder={t('channel.edit.proxy_url_placeholder')}
+                        onChange={handleInputChange}
+                        value={inputs.base_url}
+                        autoComplete='new-password'
+                      />
+                    </Form.Field>
+                  )}
+
+                {inputs.type !== 33 &&
+                  inputs.type !== 42 && (
+                    <Form.Field>
+                      <Form.Input
+                        label={t('channel.edit.key')}
+                        name='key'
+                        required
+                        placeholder={type2secretPrompt(inputs.type, t)}
+                        onChange={handleInputChange}
+                        value={inputs.key}
+                        autoComplete='new-password'
+                      />
+                    </Form.Field>
+                  )}
+                {isOpenAICompatibleType(inputs.type) && (
+                  <Form.Field>
+                    <Form.Input
+                      label={t('channel.edit.user_agent.label')}
+                      name='user_agent'
+                      placeholder={t('channel.edit.user_agent.placeholder')}
+                      onChange={handleConfigChange}
+                      value={config.user_agent || ''}
+                      autoComplete='new-password'
+                    />
+                    <div
+                      style={{ color: 'rgba(0, 0, 0, 0.6)', marginTop: '4px' }}
+                    >
+                      {t('channel.edit.user_agent.help')}
+                    </div>
+                  </Form.Field>
+                )}
+                <Form.Field>
+                  <Form.Dropdown
+                    label={t('channel.edit.group')}
+                    placeholder={t('channel.edit.group_placeholder')}
+                    name='groups'
+                    required
+                    fluid
+                    multiple
+                    selection
+                    allowAdditions
+                    additionLabel={t('channel.edit.group_addition')}
+                    onChange={handleInputChange}
+                    value={inputs.groups}
+                    autoComplete='new-password'
+                    options={groupOptions}
+                  />
+                </Form.Field>
+
+                {/* Azure OpenAI specific fields */}
+                {inputs.type === 3 && (
+                  <>
+                    <Message>
+                      注意，<strong>模型部署名称必须和模型名称保持一致</strong>
+                      ，因为 Router 会把请求体中的 model
+                      参数替换为你的部署名称（模型名称中的点会被剔除），
+                      <a
+                        target='_blank'
+                        rel='noreferrer'
+                        href='https://github.com/yeying-community/router/issues/133?notification_referrer_id=NT_kwDOAmJSYrM2NjIwMzI3NDgyOjM5OTk4MDUw#issuecomment-1571602271'
+                      >
+                        图片演示
+                      </a>
+                      。
+                    </Message>
+                    <Form.Field>
+                      <Form.Input
+                        label='默认 API 版本'
+                        name='other'
+                        placeholder='请输入默认 API 版本，例如：2024-03-01-preview，该配置可以被实际的请求查询参数所覆盖'
+                        onChange={handleInputChange}
+                        value={inputs.other}
+                        autoComplete='new-password'
+                      />
+                    </Form.Field>
+                  </>
+                )}
+
+                {inputs.type === 18 && (
+                  <Form.Field>
+                    <Form.Input
+                      label={t('channel.edit.spark_version')}
+                      name='other'
+                      placeholder={t('channel.edit.spark_version_placeholder')}
+                      onChange={handleInputChange}
+                      value={inputs.other}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type === 21 && (
+                  <Form.Field>
+                    <Form.Input
+                      label={t('channel.edit.knowledge_id')}
+                      name='other'
+                      placeholder={t('channel.edit.knowledge_id_placeholder')}
+                      onChange={handleInputChange}
+                      value={inputs.other}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type === 17 && (
+                  <Form.Field>
+                    <Form.Input
+                      label={t('channel.edit.plugin_param')}
+                      name='other'
+                      placeholder={t('channel.edit.plugin_param_placeholder')}
+                      onChange={handleInputChange}
+                      value={inputs.other}
+                      autoComplete='new-password'
+                    />
+                  </Form.Field>
+                )}
+                {inputs.type === 34 && (
+                  <Message>{t('channel.edit.coze_notice')}</Message>
+                )}
+                {inputs.type === 40 && (
+                  <Message>
+                    {t('channel.edit.douban_notice')}
+                    <a
+                      target='_blank'
+                      rel='noreferrer'
+                      href='https://console.volcengine.com/ark/region:ark+cn-beijing/endpoint'
+                    >
+                      {t('channel.edit.douban_notice_link')}
+                    </a>
+                    {t('channel.edit.douban_notice_2')}
+                  </Message>
+                )}
+              </>
+            )}
+            {showStepTwo && inputs.type !== 43 && (
               <Form.Field>
                 <label>{t('channel.edit.models')}</label>
                 {showCreateModelFlowGuide && (
@@ -1002,7 +1280,7 @@ const EditChannel = () => {
                 )}
               </Form.Field>
             )}
-            {inputs.type !== 43 && (
+            {showStepThree && inputs.type !== 43 && (
               <>
                 <Form.Field>
                   <Form.TextArea
@@ -1070,7 +1348,7 @@ const EditChannel = () => {
                 </Form.Field>
               </>
             )}
-            {inputs.type === 33 && (
+            {showStepOne && inputs.type === 33 && (
               <Form.Field>
                 <Form.Input
                   label='Region'
@@ -1101,7 +1379,7 @@ const EditChannel = () => {
                 />
               </Form.Field>
             )}
-            {inputs.type === 42 && (
+            {showStepOne && inputs.type === 42 && (
               <Form.Field>
                 <Form.Input
                   label='Region'
@@ -1132,7 +1410,7 @@ const EditChannel = () => {
                 />
               </Form.Field>
             )}
-            {inputs.type === 34 && (
+            {showStepOne && inputs.type === 34 && (
               <Form.Input
                 label={t('channel.edit.user_id')}
                 name='user_id'
@@ -1143,7 +1421,7 @@ const EditChannel = () => {
                 autoComplete=''
               />
             )}
-            {inputs.type === 37 && (
+            {showStepOne && inputs.type === 37 && (
               <Form.Field>
                 <Form.Input
                   label='Account ID'
@@ -1158,17 +1436,50 @@ const EditChannel = () => {
                 />
               </Form.Field>
             )}
-            <Button onClick={handleCancel}>
-              {t('channel.edit.buttons.cancel')}
-            </Button>
-            <Button
-              type={isEdit ? 'button' : 'submit'}
-              positive
-              onClick={submit}
-              disabled={requiresConnectionVerification && !isCurrentSignatureVerified}
-            >
-              {t('channel.edit.buttons.submit')}
-            </Button>
+            {isEdit ? (
+              <>
+                <Button onClick={handleCancel}>
+                  {t('channel.edit.buttons.cancel')}
+                </Button>
+                <Button
+                  type='button'
+                  positive
+                  onClick={submit}
+                  disabled={requiresConnectionVerification && !isCurrentSignatureVerified}
+                >
+                  {t('channel.edit.buttons.submit')}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button type='button' onClick={handleCancel}>
+                  {t('channel.edit.buttons.cancel')}
+                </Button>
+                {createStep > CREATE_CHANNEL_STEP_MIN && (
+                  <Button type='button' onClick={moveToPreviousCreateStep}>
+                    {t('channel.edit.buttons.previous_step')}
+                  </Button>
+                )}
+                {createStep < CREATE_CHANNEL_STEP_MAX ? (
+                  <Button
+                    type='button'
+                    positive
+                    onClick={createStep === 1 ? moveToStepTwo : moveToStepThree}
+                  >
+                    {t('channel.edit.buttons.next_step')}
+                  </Button>
+                ) : (
+                  <Button
+                    type='button'
+                    positive
+                    onClick={submit}
+                    disabled={requiresConnectionVerification && !isCurrentSignatureVerified}
+                  >
+                    {t('channel.edit.buttons.submit')}
+                  </Button>
+                )}
+              </>
+            )}
           </Form>
         </Card.Content>
       </Card>

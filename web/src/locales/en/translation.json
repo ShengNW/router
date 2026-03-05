@@ -213,6 +213,8 @@
     "buttons": {
       "cancel": "Cancel",
       "submit": "Submit",
+      "previous_step": "Previous",
+      "next_step": "Next",
       "fetch_models": "Fetch Models",
       "verify_and_fetch_models": "Verify & Fetch Models",
       "select_all": "Select All",
@@ -260,6 +262,12 @@
       "douban_notice": "For Douban, you need to go to",
       "douban_notice_link": "Model Inference Page",
       "douban_notice_2": "to create an inference endpoint, and use the endpoint name as model name, e.g.: `ep-20240608051426-tkxvl`.",
+      "wizard": {
+        "step_basic": "Step 1: Basic & Connection",
+        "step_models": "Step 2: Model Selection",
+        "step_advanced": "Step 3: Advanced Settings",
+        "draft_restored": "Recovered your unfinished channel creation draft automatically."
+      },
       "aws_region_placeholder": "region, e.g.: us-west-2",
       "aws_ak_placeholder": "AWS IAM Access Key",
       "aws_sk_placeholder": "AWS IAM Secret Key",
