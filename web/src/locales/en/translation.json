@@ -187,7 +187,7 @@
     "edit": {
       "title_edit": "Update Channel Information",
       "title_create": "Create New Channel",
-      "type": "Interface Type",
+      "type": "Protocol Type",
       "model_provider": "Model Provider",
       "model_provider_options": {
         "gpt": "GPT",

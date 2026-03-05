@@ -19,7 +19,7 @@ type channelTypeOptionItem struct {
 }
 
 // GetChannelTypes godoc
-// @Summary Get channel interface type catalog (admin)
+// @Summary Get channel protocol type catalog (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
@@ -34,7 +34,7 @@ func GetChannelTypes(c *gin.Context) {
 		Find(&rows).Error; err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "读取接口类型配置失败: " + err.Error(),
+			"message": "读取协议类型配置失败: " + err.Error(),
 		})
 		return
 	}

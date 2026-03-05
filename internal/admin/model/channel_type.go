@@ -1,6 +1,10 @@
 package model
 
-// ChannelTypeCatalog stores channel interface type options for admin UI.
+const (
+	channelProtocolTableName = "channel_protocol"
+)
+
+// ChannelTypeCatalog stores channel protocol type options for admin UI.
 type ChannelTypeCatalog struct {
 	ID          int    `json:"id" gorm:"primaryKey;autoIncrement:false"`
 	Name        string `json:"name" gorm:"type:varchar(64);default:''"`
@@ -15,5 +19,5 @@ type ChannelTypeCatalog struct {
 }
 
 func (ChannelTypeCatalog) TableName() string {
-	return "channel_types"
+	return channelProtocolTableName
 }
