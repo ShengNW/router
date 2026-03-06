@@ -2376,7 +2376,7 @@ paths:
       summary: Log stats (admin)
       tags:
       - admin
-  /api/v1/admin/model-provider:
+  /api/v1/admin/provider:
     get:
       produces:
       - application/json
@@ -2420,7 +2420,7 @@ paths:
       summary: Update model provider catalog (admin)
       tags:
       - admin
-  /api/v1/admin/model-provider/defaults:
+  /api/v1/admin/provider/defaults:
     get:
       produces:
       - application/json
@@ -2438,7 +2438,7 @@ paths:
       summary: Get default code model provider catalog (admin)
       tags:
       - admin
-  /api/v1/admin/model-provider/fetch:
+  /api/v1/admin/provider/fetch:
     post:
       consumes:
       - application/json

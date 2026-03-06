@@ -241,13 +241,13 @@ func SetApiRouter(engine *gin.Engine) {
 			adminGroupRoute.PUT("/:name/channels", group.UpdateGroupChannels)
 		}
 
-		adminModelProviderRoute := adminRouter.Group("/model-provider")
-		adminModelProviderRoute.Use(middleware.AdminAuth())
+		adminProviderRoute := adminRouter.Group("/provider")
+		adminProviderRoute.Use(middleware.AdminAuth())
 		{
-			adminModelProviderRoute.GET("/", channel.GetModelProviders)
-			adminModelProviderRoute.PUT("/", channel.UpdateModelProviders)
-			adminModelProviderRoute.GET("/defaults", channel.GetDefaultModelProviders)
-			adminModelProviderRoute.POST("/fetch", channel.FetchModelProviderModels)
+			adminProviderRoute.GET("/", channel.GetModelProviders)
+			adminProviderRoute.PUT("/", channel.UpdateModelProviders)
+			adminProviderRoute.GET("/defaults", channel.GetDefaultModelProviders)
+			adminProviderRoute.POST("/fetch", channel.FetchModelProviderModels)
 		}
 	}
 

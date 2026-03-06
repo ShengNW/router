@@ -1069,7 +1069,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/admin/model-provider": {
+        "/api/v1/admin/provider": {
             "get": {
                 "security": [
                     {
@@ -1141,7 +1141,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/admin/model-provider/defaults": {
+        "/api/v1/admin/provider/defaults": {
             "get": {
                 "security": [
                     {
@@ -1171,7 +1171,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/admin/model-provider/fetch": {
+        "/api/v1/admin/provider/fetch": {
             "post": {
                 "security": [
                     {

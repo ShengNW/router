@@ -12,5 +12,5 @@ type ModelProvider struct {
 }
 
 func (ModelProvider) TableName() string {
-	return "model_providers"
+	return "providers"
 }

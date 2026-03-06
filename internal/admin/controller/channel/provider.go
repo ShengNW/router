@@ -311,7 +311,7 @@ func buildDefaultModelProviderCatalog() []modelProviderCatalogItem {
 // @Produce json
 // @Success 200 {object} docs.ModelProviderCatalogResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/model-provider [get]
+// @Router /api/v1/admin/provider [get]
 func GetModelProviders(c *gin.Context) {
 	items, err := loadModelProviderCatalog()
 	if err != nil {
@@ -337,7 +337,7 @@ func GetModelProviders(c *gin.Context) {
 // @Param body body docs.ModelProviderCatalogUpdateRequest true "Model provider catalog payload"
 // @Success 200 {object} docs.ModelProviderCatalogResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/model-provider [put]
+// @Router /api/v1/admin/provider [put]
 func UpdateModelProviders(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -398,7 +398,7 @@ func UpdateModelProviders(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} docs.ModelProviderCatalogResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/model-provider/defaults [get]
+// @Router /api/v1/admin/provider/defaults [get]
 func GetDefaultModelProviders(c *gin.Context) {
 	defaults := buildDefaultModelProviderCatalog()
 	c.JSON(http.StatusOK, gin.H{
@@ -417,7 +417,7 @@ func GetDefaultModelProviders(c *gin.Context) {
 // @Param body body docs.ModelProviderFetchRequest true "Provider fetch payload"
 // @Success 200 {object} docs.ModelProviderFetchResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/model-provider/fetch [post]
+// @Router /api/v1/admin/provider/fetch [post]
 func FetchModelProviderModels(c *gin.Context) {
 	req := modelProviderFetchRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {

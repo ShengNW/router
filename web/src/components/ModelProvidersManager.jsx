@@ -245,7 +245,7 @@ const ModelProvidersManager = () => {
   const loadCatalog = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await API.get('/api/v1/admin/model-provider');
+      const res = await API.get('/api/v1/admin/provider');
       const { success, message, data } = res.data || {};
       if (!success) {
         showError(message || t('channel.providers.messages.load_failed'));
@@ -447,7 +447,7 @@ const ModelProvidersManager = () => {
 
     setSaving(true);
     try {
-      const res = await API.put('/api/v1/admin/model-provider', { providers });
+      const res = await API.put('/api/v1/admin/provider', { providers });
       const { success, message, data } = res.data || {};
       if (!success) {
         showError(message || t('channel.providers.messages.save_failed'));

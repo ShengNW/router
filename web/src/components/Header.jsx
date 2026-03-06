@@ -23,7 +23,7 @@ const ADMIN_HEADER_BUTTONS = [
   },
   {
     name: 'header.model_providers',
-    to: '/admin/model-provider',
+    to: '/admin/provider',
     icon: 'cubes',
   },
   {
