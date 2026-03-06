@@ -22,6 +22,10 @@ func GetRandomSatisfiedChannel(group string, model string, ignoreFirstPriority b
 	return mustAbilityRepo().GetRandomSatisfiedChannel(group, model, ignoreFirstPriority)
 }
 
+func ListSatisfiedChannels(group string, model string) ([]*Channel, error) {
+	return mustAbilityRepo().ListSatisfiedChannels(group, model)
+}
+
 func (channel *Channel) AddAbilities() error {
 	return mustAbilityRepo().AddAbilities(channel)
 }

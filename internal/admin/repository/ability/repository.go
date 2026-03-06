@@ -2,6 +2,7 @@ package ability
 
 import (
 	"context"
+	"math/rand"
 	"sort"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 func init() {
 	model.BindAbilityRepository(model.AbilityRepository{
 		GetRandomSatisfiedChannel: GetRandomSatisfiedChannel,
+		ListSatisfiedChannels:     ListSatisfiedChannels,
 		AddAbilities:              AddAbilities,
 		DeleteAbilities:           DeleteAbilities,
 		UpdateAbilities:           UpdateAbilities,
@@ -23,23 +25,79 @@ func init() {
 }
 
 func GetRandomSatisfiedChannel(group string, modelName string, ignoreFirstPriority bool) (*model.Channel, error) {
-	ability := model.Ability{}
-	groupCol := `"group"`
-	trueVal := "true"
-
-	var channelQuery *gorm.DB
-	if ignoreFirstPriority {
-		channelQuery = model.DB.Where(groupCol+" = ? and model = ? and enabled = "+trueVal, group, modelName)
-	} else {
-		maxPrioritySubQuery := model.DB.Model(&model.Ability{}).Select("MAX(priority)").Where(groupCol+" = ? and model = ? and enabled = "+trueVal, group, modelName)
-		channelQuery = model.DB.Where(groupCol+" = ? and model = ? and enabled = "+trueVal+" and priority = (?)", group, modelName, maxPrioritySubQuery)
-	}
-	if err := channelQuery.Order("RANDOM()").First(&ability).Error; err != nil {
+	channels, err := ListSatisfiedChannels(group, modelName)
+	if err != nil {
 		return nil, err
 	}
-	channel := model.Channel{Id: ability.ChannelId}
-	err := model.DB.First(&channel, "id = ?", ability.ChannelId).Error
-	return &channel, err
+	if len(channels) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	endIdx := len(channels)
+	firstPriority := channels[0].GetPriority()
+	if firstPriority > 0 {
+		for i := range channels {
+			if channels[i].GetPriority() != firstPriority {
+				endIdx = i
+				break
+			}
+		}
+	}
+	targets := channels[:endIdx]
+	if ignoreFirstPriority && endIdx < len(channels) {
+		targets = channels[endIdx:]
+	}
+	if len(targets) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return targets[rand.Intn(len(targets))], nil
+}
+
+func ListSatisfiedChannels(group string, modelName string) ([]*model.Channel, error) {
+	groupCol := `"group"`
+	trueVal := "true"
+	abilityRows := make([]model.Ability, 0)
+	if err := model.DB.Where(groupCol+" = ? and model = ? and enabled = "+trueVal, group, modelName).
+		Order("priority desc, channel_id asc").
+		Find(&abilityRows).Error; err != nil {
+		return nil, err
+	}
+	channelIDs := make([]string, 0, len(abilityRows))
+	seen := make(map[string]struct{}, len(abilityRows))
+	for _, row := range abilityRows {
+		channelID := strings.TrimSpace(row.ChannelId)
+		if channelID == "" {
+			continue
+		}
+		if _, ok := seen[channelID]; ok {
+			continue
+		}
+		seen[channelID] = struct{}{}
+		channelIDs = append(channelIDs, channelID)
+	}
+	if len(channelIDs) == 0 {
+		return []*model.Channel{}, nil
+	}
+	channels := make([]*model.Channel, 0, len(channelIDs))
+	if err := model.DB.Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	if err := model.HydrateChannelsWithCapabilityProfiles(model.DB, channels); err != nil {
+		return nil, err
+	}
+	channelByID := make(map[string]*model.Channel, len(channels))
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		channelByID[strings.TrimSpace(channel.Id)] = channel
+	}
+	result := make([]*model.Channel, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		if channel := channelByID[channelID]; channel != nil {
+			result = append(result, channel)
+		}
+	}
+	return result, nil
 }
 
 func AddAbilities(channel *model.Channel) error {

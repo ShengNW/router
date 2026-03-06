@@ -186,6 +186,9 @@ func InitChannelCache() {
 		newGroup2model2channels[group] = make(map[string][]*Channel)
 	}
 	channelByID := make(map[string]*Channel, len(channels))
+	if err := HydrateChannelsWithCapabilityProfiles(DB, channels); err != nil {
+		logger.SysError("failed to hydrate channel capability profiles: " + err.Error())
+	}
 	for _, channel := range channels {
 		if channel == nil {
 			continue
@@ -226,6 +229,21 @@ func InitChannelCache() {
 	group2model2channels = newGroup2model2channels
 	channelSyncLock.Unlock()
 	logger.SysLog("channels synced from database")
+}
+
+func CacheListSatisfiedChannels(group string, model string) ([]*Channel, error) {
+	if !config.MemoryCacheEnabled {
+		return ListSatisfiedChannels(group, model)
+	}
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+	channels := group2model2channels[group][model]
+	if len(channels) == 0 {
+		return nil, errors.New("channel not found")
+	}
+	result := make([]*Channel, 0, len(channels))
+	result = append(result, channels...)
+	return result, nil
 }
 
 func SyncChannelCache(frequency int) {

@@ -4,6 +4,7 @@ import "context"
 
 type AbilityRepository struct {
 	GetRandomSatisfiedChannel func(group string, model string, ignoreFirstPriority bool) (*Channel, error)
+	ListSatisfiedChannels     func(group string, model string) ([]*Channel, error)
 	AddAbilities              func(channel *Channel) error
 	DeleteAbilities           func(channel *Channel) error
 	UpdateAbilities           func(channel *Channel) error
@@ -20,6 +21,9 @@ func BindAbilityRepository(repo AbilityRepository) {
 
 func mustAbilityRepo() AbilityRepository {
 	if abilityRepo.GetRandomSatisfiedChannel == nil {
+		panic("ability repository not initialized")
+	}
+	if abilityRepo.ListSatisfiedChannels == nil {
 		panic("ability repository not initialized")
 	}
 	return abilityRepo

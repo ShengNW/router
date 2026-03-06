@@ -45,7 +45,10 @@ func GetAll(startIdx int, num int, status string) ([]*model.Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-	return channels, model.HydrateChannelsWithModels(model.DB, channels)
+	if err := model.HydrateChannelsWithModels(model.DB, channels); err != nil {
+		return nil, err
+	}
+	return channels, model.HydrateChannelsWithCapabilityProfiles(model.DB, channels)
 }
 
 func Search(keyword string) ([]*model.Channel, error) {
@@ -58,7 +61,10 @@ func Search(keyword string) ([]*model.Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-	return channels, model.HydrateChannelsWithModels(model.DB, channels)
+	if err := model.HydrateChannelsWithModels(model.DB, channels); err != nil {
+		return nil, err
+	}
+	return channels, model.HydrateChannelsWithCapabilityProfiles(model.DB, channels)
 }
 
 func GetByID(id string, selectAll bool) (*model.Channel, error) {
@@ -73,7 +79,10 @@ func GetByID(id string, selectAll bool) (*model.Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &channel, model.HydrateChannelWithModels(model.DB, &channel)
+	if err := model.HydrateChannelWithModels(model.DB, &channel); err != nil {
+		return nil, err
+	}
+	return &channel, model.HydrateChannelWithCapabilityProfiles(model.DB, &channel)
 }
 
 func BatchInsert(channels []model.Channel) error {
@@ -95,6 +104,9 @@ func BatchInsert(channels []model.Channel) error {
 			if err := model.ReplaceChannelSelectedModelsWithDB(tx, channels[i].Id, channels[i].SelectedModelIDs()); err != nil {
 				return err
 			}
+			if err := model.ReplaceChannelCapabilityProfilesWithDB(tx, channels[i].Id, channels[i].CapabilityProfiles); err != nil {
+				return err
+			}
 			if err := model.EnsureChannelTestModelWithDB(tx, channels[i].Id); err != nil {
 				return err
 			}
@@ -106,6 +118,9 @@ func BatchInsert(channels []model.Channel) error {
 	}
 	for i := range channels {
 		if err := model.HydrateChannelWithModels(model.DB, &channels[i]); err != nil {
+			return err
+		}
+		if err := model.HydrateChannelWithCapabilityProfiles(model.DB, &channels[i]); err != nil {
 			return err
 		}
 		if err := channels[i].AddAbilities(); err != nil {
@@ -130,12 +145,18 @@ func Insert(channel *model.Channel) error {
 		if err := model.ReplaceChannelSelectedModelsWithDB(tx, channel.Id, channel.SelectedModelIDs()); err != nil {
 			return err
 		}
+		if err := model.ReplaceChannelCapabilityProfilesWithDB(tx, channel.Id, channel.CapabilityProfiles); err != nil {
+			return err
+		}
 		return model.EnsureChannelTestModelWithDB(tx, channel.Id)
 	})
 	if err != nil {
 		return err
 	}
 	if err := model.HydrateChannelWithModels(model.DB, channel); err != nil {
+		return err
+	}
+	if err := model.HydrateChannelWithCapabilityProfiles(model.DB, channel); err != nil {
 		return err
 	}
 	return channel.AddAbilities()
@@ -157,6 +178,11 @@ func Update(channel *model.Channel) error {
 				return err
 			}
 		}
+		if channel.CapabilityProfilesProvided {
+			if err := model.ReplaceChannelCapabilityProfilesWithDB(tx, channel.Id, channel.CapabilityProfiles); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -166,6 +192,9 @@ func Update(channel *model.Channel) error {
 		return err
 	}
 	if err := model.HydrateChannelWithModels(model.DB, channel); err != nil {
+		return err
+	}
+	if err := model.HydrateChannelWithCapabilityProfiles(model.DB, channel); err != nil {
 		return err
 	}
 	return channel.UpdateAbilities()
@@ -194,6 +223,9 @@ func UpdateBalance(channel *model.Channel, balance float64) {
 func Delete(channel *model.Channel) error {
 	return model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := model.DeleteChannelModelsByChannelIDWithDB(tx, channel.Id); err != nil {
+			return err
+		}
+		if err := tx.Where("channel_id = ?", strings.TrimSpace(channel.Id)).Delete(&model.ChannelCapabilityProfile{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("channel_id = ?", strings.TrimSpace(channel.Id)).Delete(&model.Ability{}).Error; err != nil {

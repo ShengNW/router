@@ -18,31 +18,33 @@ const (
 )
 
 type Channel struct {
-	Id                 string   `json:"id" gorm:"type:char(36);primaryKey"`
-	Protocol           string   `json:"protocol" gorm:"type:varchar(64);default:'openai';index"`
-	Key                string   `json:"key" gorm:"type:text"`
-	Status             int      `json:"status" gorm:"default:1"`
-	Name               string   `json:"name" gorm:"index"`
-	Weight             *uint    `json:"weight" gorm:"default:0"`
-	CreatedTime        int64    `json:"created_time" gorm:"bigint"`
-	TestTime           int64    `json:"test_time" gorm:"bigint"`
-	ResponseTime       int      `json:"response_time"`
-	BaseURL            *string  `json:"base_url" gorm:"column:base_url;default:''"`
-	Other              *string  `json:"other"`
-	Balance            float64  `json:"balance"`
-	BalanceUpdatedTime int64    `json:"balance_updated_time" gorm:"bigint"`
-	Models             string   `json:"models" gorm:"-"`
-	AvailableModels    []string `json:"available_models,omitempty" gorm:"-"`
-	UsedQuota          int64    `json:"used_quota" gorm:"bigint;default:0"`
-	ModelMapping       *string  `json:"model_mapping" gorm:"type:varchar(1024);default:''"`
-	Priority           *int64   `json:"priority" gorm:"bigint;default:0"`
-	Config             string   `json:"config"`
-	SystemPrompt       *string  `json:"system_prompt" gorm:"type:text"`
-	ModelRatio         *string  `json:"model_ratio" gorm:"type:text;default:''"`
-	CompletionRatio    *string  `json:"completion_ratio" gorm:"type:text;default:''"`
-	TestModel          string   `json:"test_model" gorm:"type:varchar(255);default:''"`
-	KeySet             bool     `json:"key_set" gorm:"-"`
-	ModelsProvided     bool     `json:"-" gorm:"-"`
+	Id                         string                         `json:"id" gorm:"type:char(36);primaryKey"`
+	Protocol                   string                         `json:"protocol" gorm:"type:varchar(64);default:'openai';index"`
+	Key                        string                         `json:"key" gorm:"type:text"`
+	Status                     int                            `json:"status" gorm:"default:1"`
+	Name                       string                         `json:"name" gorm:"index"`
+	Weight                     *uint                          `json:"weight" gorm:"default:0"`
+	CreatedTime                int64                          `json:"created_time" gorm:"bigint"`
+	TestTime                   int64                          `json:"test_time" gorm:"bigint"`
+	ResponseTime               int                            `json:"response_time"`
+	BaseURL                    *string                        `json:"base_url" gorm:"column:base_url;default:''"`
+	Other                      *string                        `json:"other"`
+	Balance                    float64                        `json:"balance"`
+	BalanceUpdatedTime         int64                          `json:"balance_updated_time" gorm:"bigint"`
+	Models                     string                         `json:"models" gorm:"-"`
+	AvailableModels            []string                       `json:"available_models,omitempty" gorm:"-"`
+	UsedQuota                  int64                          `json:"used_quota" gorm:"bigint;default:0"`
+	ModelMapping               *string                        `json:"model_mapping" gorm:"type:varchar(1024);default:''"`
+	Priority                   *int64                         `json:"priority" gorm:"bigint;default:0"`
+	Config                     string                         `json:"config"`
+	SystemPrompt               *string                        `json:"system_prompt" gorm:"type:text"`
+	ModelRatio                 *string                        `json:"model_ratio" gorm:"type:text;default:''"`
+	CompletionRatio            *string                        `json:"completion_ratio" gorm:"type:text;default:''"`
+	TestModel                  string                         `json:"test_model" gorm:"type:varchar(255);default:''"`
+	CapabilityProfiles         []ChannelCapabilityProfileRule `json:"capability_profiles,omitempty" gorm:"-"`
+	KeySet                     bool                           `json:"key_set" gorm:"-"`
+	ModelsProvided             bool                           `json:"-" gorm:"-"`
+	CapabilityProfilesProvided bool                           `json:"-" gorm:"-"`
 }
 
 type ChannelConfig struct {
@@ -148,6 +150,86 @@ func (channel *Channel) SetAvailableModelIDs(modelIDs []string) {
 		return
 	}
 	channel.AvailableModels = NormalizeChannelModelIDsPreserveOrder(modelIDs)
+}
+
+func (channel *Channel) SetCapabilityProfiles(rules []ChannelCapabilityProfileRule) {
+	if channel == nil {
+		return
+	}
+	channel.CapabilityProfiles = NormalizeChannelCapabilityProfileRules(rules)
+}
+
+func (channel *Channel) CapabilityProfilesByCapability(capability string) []ChannelCapabilityProfileRule {
+	if channel == nil {
+		return nil
+	}
+	normalizedCapability := NormalizeChannelCapabilityName(capability)
+	if normalizedCapability == "" {
+		return nil
+	}
+	result := make([]ChannelCapabilityProfileRule, 0)
+	for _, rule := range channel.CapabilityProfiles {
+		if NormalizeChannelCapabilityName(rule.Capability) != normalizedCapability {
+			continue
+		}
+		result = append(result, rule)
+	}
+	return NormalizeChannelCapabilityProfileRules(result)
+}
+
+func (channel *Channel) ResolveCapabilityUpstreamUserAgent(capability string, clientProfile string, profiles []ClientProfile, inboundUserAgent string) string {
+	if channel == nil {
+		return strings.TrimSpace(inboundUserAgent)
+	}
+	normalizedCapability := NormalizeChannelCapabilityName(capability)
+	normalizedClientProfile := NormalizeClientProfileName(clientProfile)
+	for _, rule := range channel.CapabilityProfilesByCapability(normalizedCapability) {
+		if NormalizeClientProfileName(rule.ClientProfile) != normalizedClientProfile {
+			continue
+		}
+		if strings.TrimSpace(rule.UpstreamUserAgent) != "" {
+			return strings.TrimSpace(rule.UpstreamUserAgent)
+		}
+		if defaultUA := ResolveClientProfileDefaultUserAgent(normalizedClientProfile, profiles); defaultUA != "" {
+			return defaultUA
+		}
+		return strings.TrimSpace(inboundUserAgent)
+	}
+	for _, rule := range channel.CapabilityProfilesByCapability(normalizedCapability) {
+		if NormalizeClientProfileName(rule.ClientProfile) != ClientProfileAny {
+			continue
+		}
+		if strings.TrimSpace(rule.UpstreamUserAgent) != "" {
+			return strings.TrimSpace(rule.UpstreamUserAgent)
+		}
+		if defaultUA := ResolveClientProfileDefaultUserAgent(ClientProfileAny, profiles); defaultUA != "" {
+			return defaultUA
+		}
+		return strings.TrimSpace(inboundUserAgent)
+	}
+	return strings.TrimSpace(inboundUserAgent)
+}
+
+func (channel *Channel) SupportsCapabilityClientProfile(capability string, clientProfile string) bool {
+	if channel == nil {
+		return false
+	}
+	normalizedCapability := NormalizeChannelCapabilityName(capability)
+	if normalizedCapability == "" {
+		return true
+	}
+	rules := channel.CapabilityProfilesByCapability(normalizedCapability)
+	if len(rules) == 0 {
+		return false
+	}
+	normalizedClientProfile := NormalizeClientProfileName(clientProfile)
+	for _, rule := range rules {
+		ruleProfile := NormalizeClientProfileName(rule.ClientProfile)
+		if ruleProfile == ClientProfileAny || ruleProfile == normalizedClientProfile {
+			return true
+		}
+	}
+	return false
 }
 
 func (channel *Channel) Insert() error {

@@ -41,6 +41,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return runMainBaselineMigrationWithDB(tx)
 			},
 		},
+		{
+			Version:     "202603071520_add_channel_capability_profiles",
+			Description: "add channel capability profile tables and seed default client profiles",
+			Up: func(tx *gorm.DB) error {
+				return runChannelCapabilityProfilesMigrationWithDB(tx)
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

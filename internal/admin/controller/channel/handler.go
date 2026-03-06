@@ -36,6 +36,7 @@ func sanitizeChannelForResponse(channel *model.Channel) {
 	channel.TestModel = strings.TrimSpace(channel.TestModel)
 	channel.Models = strings.TrimSpace(channel.Models)
 	channel.AvailableModels = model.NormalizeChannelModelIDsPreserveOrder(channel.AvailableModels)
+	channel.SetCapabilityProfiles(channel.CapabilityProfiles)
 	channel.KeySet = strings.TrimSpace(channel.Key) != ""
 	channel.Key = ""
 }
@@ -353,6 +354,7 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 	_, channel.ModelsProvided = rawFields["models"]
+	_, channel.CapabilityProfilesProvided = rawFields["capability_profiles"]
 	err = channelsvc.Update(&channel)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

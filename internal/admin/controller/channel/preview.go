@@ -36,13 +36,14 @@ type previewModelsRequest struct {
 }
 
 type previewCapabilitiesRequest struct {
-	Protocol  string          `json:"protocol"`
-	Key       string          `json:"key"`
-	BaseURL   string          `json:"base_url"`
-	DraftID   string          `json:"draft_id"`
-	Config    json.RawMessage `json:"config"`
-	Models    []string        `json:"models"`
-	TestModel string          `json:"test_model"`
+	Protocol           string                                `json:"protocol"`
+	Key                string                                `json:"key"`
+	BaseURL            string                                `json:"base_url"`
+	DraftID            string                                `json:"draft_id"`
+	Config             json.RawMessage                       `json:"config"`
+	Models             []string                              `json:"models"`
+	TestModel          string                                `json:"test_model"`
+	CapabilityProfiles *[]model.ChannelCapabilityProfileRule `json:"capability_profiles"`
 }
 
 type openAIModelsResponse struct {
@@ -56,14 +57,16 @@ type openAIModelsResponse struct {
 }
 
 type previewCapabilityResult struct {
-	Capability string `json:"capability"`
-	Label      string `json:"label"`
-	Endpoint   string `json:"endpoint"`
-	Model      string `json:"model,omitempty"`
-	Status     string `json:"status"`
-	Supported  bool   `json:"supported"`
-	Message    string `json:"message,omitempty"`
-	LatencyMs  int64  `json:"latency_ms,omitempty"`
+	Capability    string `json:"capability"`
+	Label         string `json:"label"`
+	Endpoint      string `json:"endpoint"`
+	Model         string `json:"model,omitempty"`
+	ClientProfile string `json:"client_profile,omitempty"`
+	UserAgent     string `json:"user_agent,omitempty"`
+	Status        string `json:"status"`
+	Supported     bool   `json:"supported"`
+	Message       string `json:"message,omitempty"`
+	LatencyMs     int64  `json:"latency_ms,omitempty"`
 }
 
 const (
@@ -170,7 +173,7 @@ func resolvePreviewBaseURL(protocol string, baseURL string) string {
 	return relaychannel.BaseURLByProtocol(normalized)
 }
 
-func loadPreviewChannel(protocol string, key string, baseURL string, draftID string, configRaw json.RawMessage, selectedModels []string, testModel string) (*model.Channel, string, error) {
+func loadPreviewChannel(protocol string, key string, baseURL string, draftID string, configRaw json.RawMessage, selectedModels []string, testModel string, capabilityProfiles *[]model.ChannelCapabilityProfileRule) (*model.Channel, string, error) {
 	normalizedProtocol := relaychannel.NormalizeProtocolName(protocol)
 	trimmedKey := strings.TrimSpace(key)
 	trimmedBaseURL := strings.TrimSpace(baseURL)
@@ -227,10 +230,29 @@ func loadPreviewChannel(protocol string, key string, baseURL string, draftID str
 	if len(normalizedModels) > 0 {
 		previewChannel.SetSelectedModelIDs(normalizedModels)
 	}
+	if capabilityProfiles != nil {
+		previewChannel.SetCapabilityProfiles(*capabilityProfiles)
+	}
 	if strings.TrimSpace(testModel) != "" {
 		previewChannel.TestModel = strings.TrimSpace(testModel)
 	}
 	return previewChannel, keySource, nil
+}
+
+func buildClientProfileDisplayNames(profiles []model.ClientProfile) map[string]string {
+	result := make(map[string]string, len(profiles))
+	for _, profile := range profiles {
+		name := model.NormalizeClientProfileName(profile.Name)
+		if name == "" {
+			continue
+		}
+		displayName := strings.TrimSpace(profile.DisplayName)
+		if displayName == "" {
+			displayName = name
+		}
+		result[name] = displayName
+	}
+	return result
 }
 
 func pickCapabilityModels(channel *model.Channel) (string, string, string) {
@@ -523,7 +545,7 @@ func PreviewChannelModels(c *gin.Context) {
 		})
 		return
 	}
-	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, nil, "")
+	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, nil, "", nil)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -594,7 +616,7 @@ func PreviewChannelCapabilities(c *gin.Context) {
 		})
 		return
 	}
-	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, req.Models, req.TestModel)
+	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, req.Models, req.TestModel, req.CapabilityProfiles)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -619,6 +641,15 @@ func PreviewChannelCapabilities(c *gin.Context) {
 
 	textModel, imageModel, audioModel := pickCapabilityModels(previewChannel)
 	userAgent := strings.TrimSpace(c.Request.UserAgent())
+	clientProfiles, err := model.ListEnabledClientProfilesWithDB(model.DB)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "读取客户端画像失败: " + err.Error(),
+		})
+		return
+	}
+	clientProfileNames := buildClientProfileDisplayNames(clientProfiles)
 	results := make([]previewCapabilityResult, 0, 4)
 
 	if strings.TrimSpace(textModel) == "" {
@@ -646,11 +677,40 @@ func PreviewChannelCapabilities(c *gin.Context) {
 		}, userAgent)
 		results = append(results, buildPreviewCapabilityResult("chat", "Chat", "/v1/chat/completions", textModel, latencyMs, message, execErr))
 
-		latencyMs, message, execErr = executePreviewTextCapability(previewChannel, "/v1/responses", &relaymodel.GeneralOpenAIRequest{
-			Model: textModel,
-			Input: "Reply with pong.",
-		}, userAgent)
-		results = append(results, buildPreviewCapabilityResult("responses", "Responses", "/v1/responses", textModel, latencyMs, message, execErr))
+		responseRules := previewChannel.CapabilityProfilesByCapability(model.ChannelCapabilityResponses)
+		if len(responseRules) == 0 {
+			results = append(results, previewCapabilityResult{
+				Capability: model.ChannelCapabilityResponses,
+				Label:      "Responses",
+				Endpoint:   "/v1/responses",
+				Model:      textModel,
+				Status:     previewCapabilityStatusSkipped,
+				Message:    "未选择 responses 客户端白名单，已跳过 responses 测试",
+			})
+		} else {
+			for _, rule := range responseRules {
+				resolvedUserAgent := previewChannel.ResolveCapabilityUpstreamUserAgent(model.ChannelCapabilityResponses, rule.ClientProfile, clientProfiles, userAgent)
+				latencyMs, message, execErr = executePreviewTextCapability(previewChannel, "/v1/responses", &relaymodel.GeneralOpenAIRequest{
+					Model: textModel,
+					Input: "Reply with pong.",
+				}, resolvedUserAgent)
+				label := "Responses"
+				if displayName := clientProfileNames[rule.ClientProfile]; displayName != "" {
+					label = "Responses / " + displayName
+				}
+				result := buildPreviewCapabilityResult("responses:"+rule.ClientProfile, label, "/v1/responses", textModel, latencyMs, message, execErr)
+				result.ClientProfile = rule.ClientProfile
+				result.UserAgent = resolvedUserAgent
+				if resolvedUserAgent != "" {
+					if strings.TrimSpace(result.Message) == "" {
+						result.Message = "User-Agent: " + resolvedUserAgent
+					} else {
+						result.Message = "User-Agent: " + resolvedUserAgent + " | " + result.Message
+					}
+				}
+				results = append(results, result)
+			}
+		}
 	}
 
 	if strings.TrimSpace(imageModel) == "" {
