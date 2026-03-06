@@ -57,7 +57,7 @@ func NormalizeChannelCapabilityResultRows(rows []ChannelCapabilityResult) []Chan
 	for idx, row := range rows {
 		channelID := strings.TrimSpace(row.ChannelId)
 		capability := strings.TrimSpace(row.Capability)
-		clientProfile := NormalizeClientProfileName(row.ClientProfile)
+		clientProfile := strings.TrimSpace(strings.ToLower(row.ClientProfile))
 		if channelID == "" || capability == "" {
 			continue
 		}

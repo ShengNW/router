@@ -245,9 +245,6 @@
         "test_success": "Capability tests completed",
         "test_failed": "Capability test failed",
         "stale": "Connection info or model selection changed. Please run capability tests again.",
-        "responses_whitelist": "Responses Client Whitelist",
-        "responses_whitelist_hint": "Choose which client profiles can use /v1/responses on this channel. Router identifies the client profile from the inbound User-Agent and forwards that original User-Agent upstream.",
-        "responses_whitelist_empty": "No client profiles available.",
         "status": {
           "supported": "Supported",
           "unsupported": "Unsupported",

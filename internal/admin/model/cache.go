@@ -186,9 +186,6 @@ func InitChannelCache() {
 		newGroup2model2channels[group] = make(map[string][]*Channel)
 	}
 	channelByID := make(map[string]*Channel, len(channels))
-	if err := HydrateChannelsWithCapabilityProfiles(DB, channels); err != nil {
-		logger.SysError("failed to hydrate channel capability profiles: " + err.Error())
-	}
 	for _, channel := range channels {
 		if channel == nil {
 			continue

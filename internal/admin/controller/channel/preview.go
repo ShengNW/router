@@ -37,14 +37,13 @@ type previewModelsRequest struct {
 }
 
 type previewCapabilitiesRequest struct {
-	Protocol           string                                `json:"protocol"`
-	Key                string                                `json:"key"`
-	BaseURL            string                                `json:"base_url"`
-	DraftID            string                                `json:"draft_id"`
-	Config             json.RawMessage                       `json:"config"`
-	Models             []string                              `json:"models"`
-	TestModel          string                                `json:"test_model"`
-	CapabilityProfiles *[]model.ChannelCapabilityProfileRule `json:"capability_profiles"`
+	Protocol  string          `json:"protocol"`
+	Key       string          `json:"key"`
+	BaseURL   string          `json:"base_url"`
+	DraftID   string          `json:"draft_id"`
+	Config    json.RawMessage `json:"config"`
+	Models    []string        `json:"models"`
+	TestModel string          `json:"test_model"`
 }
 
 type openAIModelsResponse struct {
@@ -58,16 +57,14 @@ type openAIModelsResponse struct {
 }
 
 type previewCapabilityResult struct {
-	Capability    string `json:"capability"`
-	Label         string `json:"label"`
-	Endpoint      string `json:"endpoint"`
-	Model         string `json:"model,omitempty"`
-	ClientProfile string `json:"client_profile,omitempty"`
-	UserAgent     string `json:"user_agent,omitempty"`
-	Status        string `json:"status"`
-	Supported     bool   `json:"supported"`
-	Message       string `json:"message,omitempty"`
-	LatencyMs     int64  `json:"latency_ms,omitempty"`
+	Capability string `json:"capability"`
+	Label      string `json:"label"`
+	Endpoint   string `json:"endpoint"`
+	Model      string `json:"model,omitempty"`
+	Status     string `json:"status"`
+	Supported  bool   `json:"supported"`
+	Message    string `json:"message,omitempty"`
+	LatencyMs  int64  `json:"latency_ms,omitempty"`
 }
 
 const (
@@ -84,18 +81,16 @@ func persistPreviewCapabilityResults(channelID string, results []previewCapabili
 	rows := make([]model.ChannelCapabilityResult, 0, len(results))
 	for idx, item := range results {
 		rows = append(rows, model.ChannelCapabilityResult{
-			ChannelId:     normalizedChannelID,
-			Capability:    strings.TrimSpace(item.Capability),
-			ClientProfile: model.NormalizeClientProfileName(item.ClientProfile),
-			Label:         strings.TrimSpace(item.Label),
-			Endpoint:      strings.TrimSpace(item.Endpoint),
-			Model:         strings.TrimSpace(item.Model),
-			UserAgent:     strings.TrimSpace(item.UserAgent),
-			Status:        model.NormalizeChannelCapabilityStatus(item.Status),
-			Supported:     item.Supported && item.Status == previewCapabilityStatusSupported,
-			Message:       strings.TrimSpace(item.Message),
-			LatencyMs:     item.LatencyMs,
-			SortOrder:     int64(idx),
+			ChannelId:  normalizedChannelID,
+			Capability: strings.TrimSpace(item.Capability),
+			Label:      strings.TrimSpace(item.Label),
+			Endpoint:   strings.TrimSpace(item.Endpoint),
+			Model:      strings.TrimSpace(item.Model),
+			Status:     model.NormalizeChannelCapabilityStatus(item.Status),
+			Supported:  item.Supported && item.Status == previewCapabilityStatusSupported,
+			Message:    strings.TrimSpace(item.Message),
+			LatencyMs:  item.LatencyMs,
+			SortOrder:  int64(idx),
 		})
 	}
 	return model.ReplaceChannelCapabilityResultsWithDB(model.DB, normalizedChannelID, rows)
@@ -199,7 +194,7 @@ func resolvePreviewBaseURL(protocol string, baseURL string) string {
 	return relaychannel.BaseURLByProtocol(normalized)
 }
 
-func loadPreviewChannel(protocol string, key string, baseURL string, draftID string, configRaw json.RawMessage, selectedModels []string, testModel string, capabilityProfiles *[]model.ChannelCapabilityProfileRule) (*model.Channel, string, error) {
+func loadPreviewChannel(protocol string, key string, baseURL string, draftID string, configRaw json.RawMessage, selectedModels []string, testModel string) (*model.Channel, string, error) {
 	normalizedProtocol := relaychannel.NormalizeProtocolName(protocol)
 	trimmedKey := strings.TrimSpace(key)
 	trimmedBaseURL := strings.TrimSpace(baseURL)
@@ -256,38 +251,14 @@ func loadPreviewChannel(protocol string, key string, baseURL string, draftID str
 	if len(normalizedModels) > 0 {
 		previewChannel.SetSelectedModelIDs(normalizedModels)
 	}
-	if capabilityProfiles != nil {
-		previewChannel.SetCapabilityProfiles(*capabilityProfiles)
-	}
 	if strings.TrimSpace(testModel) != "" {
 		previewChannel.TestModel = strings.TrimSpace(testModel)
 	}
 	return previewChannel, keySource, nil
 }
 
-func buildClientProfileDisplayNames(profiles []model.ClientProfile) map[string]string {
-	result := make(map[string]string, len(profiles))
-	for _, profile := range profiles {
-		name := model.NormalizeClientProfileName(profile.Name)
-		if name == "" {
-			continue
-		}
-		displayName := strings.TrimSpace(profile.DisplayName)
-		if displayName == "" {
-			displayName = name
-		}
-		result[name] = displayName
-	}
-	return result
-}
-
 func runChannelCapabilityTests(channel *model.Channel) ([]previewCapabilityResult, error) {
 	textModel, imageModel, audioModel := pickCapabilityModels(channel)
-	clientProfiles, err := model.ListEnabledClientProfilesWithDB(model.DB)
-	if err != nil {
-		return nil, fmt.Errorf("读取客户端画像失败: %w", err)
-	}
-	clientProfileNames := buildClientProfileDisplayNames(clientProfiles)
 	results := make([]previewCapabilityResult, 0, 4)
 
 	if strings.TrimSpace(textModel) == "" {
@@ -315,34 +286,14 @@ func runChannelCapabilityTests(channel *model.Channel) ([]previewCapabilityResul
 		})
 		results = append(results, buildPreviewCapabilityResult("chat", "Chat", "/v1/chat/completions", textModel, latencyMs, message, execErr))
 
-		responseRules := channel.CapabilityProfilesByCapability(model.ChannelCapabilityResponses)
-		if len(responseRules) == 0 {
-			results = append(results, previewCapabilityResult{
-				Capability: model.ChannelCapabilityResponses,
-				Label:      "Responses",
-				Endpoint:   "/v1/responses",
-				Model:      textModel,
-				Status:     previewCapabilityStatusSkipped,
-				Message:    "未选择 responses 客户端白名单，已跳过 responses 测试",
-			})
-		} else {
-			for _, rule := range responseRules {
-				latencyMs, message, execErr = executePreviewTextCapability(channel, "/v1/responses", &relaymodel.GeneralOpenAIRequest{
-					Model: textModel,
-					Input: []relaymodel.Message{{
-						Role:    "user",
-						Content: config.TestPrompt,
-					}},
-				})
-				label := "Responses"
-				if displayName := clientProfileNames[rule.ClientProfile]; displayName != "" {
-					label = "Responses / " + displayName
-				}
-				result := buildPreviewCapabilityResult("responses:"+rule.ClientProfile, label, "/v1/responses", textModel, latencyMs, message, execErr)
-				result.ClientProfile = rule.ClientProfile
-				results = append(results, result)
-			}
-		}
+		latencyMs, message, execErr = executePreviewTextCapability(channel, "/v1/responses", &relaymodel.GeneralOpenAIRequest{
+			Model: textModel,
+			Input: []relaymodel.Message{{
+				Role:    "user",
+				Content: config.TestPrompt,
+			}},
+		})
+		results = append(results, buildPreviewCapabilityResult("responses", "Responses", "/v1/responses", textModel, latencyMs, message, execErr))
 	}
 
 	if strings.TrimSpace(imageModel) == "" {
@@ -666,7 +617,7 @@ func PreviewChannelModels(c *gin.Context) {
 		})
 		return
 	}
-	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, nil, "", nil)
+	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, nil, "")
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -740,7 +691,7 @@ func PreviewChannelCapabilities(c *gin.Context) {
 		})
 		return
 	}
-	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, req.Models, req.TestModel, req.CapabilityProfiles)
+	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, req.Models, req.TestModel)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

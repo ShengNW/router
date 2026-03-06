@@ -78,64 +78,6 @@ const normalizeModelIDs = (models) => {
   return result;
 };
 
-const normalizeClientProfileName = (name) => {
-  const normalized = (name || '').toString().trim().toLowerCase();
-  switch (normalized) {
-    case 'codex':
-    case 'codex-cli':
-      return 'codex_cli';
-    case 'claude':
-    case 'claude-code':
-      return 'claude_code';
-    case 'gemini':
-    case 'gemini-cli':
-      return 'gemini_cli';
-    case 'generic':
-    case 'generic-api':
-    case 'api':
-      return 'generic_api';
-    case 'all':
-    case '*':
-      return 'any';
-    default:
-      return normalized;
-  }
-};
-
-const normalizeCapabilityProfiles = (profiles) => {
-  if (!Array.isArray(profiles)) {
-    return [];
-  }
-  const seen = new Set();
-  const result = [];
-  profiles.forEach((item) => {
-    if (!item || typeof item !== 'object') return;
-    const capability = (item.capability || '').toString().trim().toLowerCase();
-    const clientProfile = normalizeClientProfileName(item.client_profile);
-    if (!capability || !clientProfile) return;
-    const key = `${capability}:${clientProfile}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    result.push({
-      capability,
-      client_profile: clientProfile,
-      enabled: true,
-    });
-  });
-  result.sort((left, right) => {
-    if (left.capability !== right.capability) {
-      return left.capability.localeCompare(right.capability);
-    }
-    return left.client_profile.localeCompare(right.client_profile);
-  });
-  return result;
-};
-
-const serializeCapabilityProfiles = (profiles) =>
-  normalizeCapabilityProfiles(profiles)
-    .map((item) => `${item.capability}:${item.client_profile}`)
-    .join('|');
-
 const normalizeBaseURL = (baseURL) =>
   (baseURL || '').trim().replace(/\/+$/, '');
 
@@ -158,16 +100,13 @@ const buildChannelCapabilitySignature = ({
   baseURL,
   draftID,
   models,
-  capabilityProfiles,
 }) =>
   `${buildChannelConnectionSignature({
     protocol,
     key,
     baseURL,
     draftID,
-  })}|${normalizeModelIDs(models).join(',')}|${serializeCapabilityProfiles(
-    capabilityProfiles
-  )}`;
+  })}|${normalizeModelIDs(models).join(',')}`;
 
 const normalizeCapabilityResults = (results) => {
   if (!Array.isArray(results)) {
@@ -183,8 +122,6 @@ const normalizeCapabilityResults = (results) => {
       label: item.label || item.capability,
       endpoint: item.endpoint || '',
       model: item.model || '',
-      client_profile: item.client_profile || '',
-      user_agent: item.user_agent || '',
       status: item.status || 'unsupported',
       supported: !!item.supported,
       message: item.message || '',
@@ -243,7 +180,6 @@ const CHANNEL_ORIGIN_INPUTS = {
   completion_ratio: '',
   system_prompt: '',
   models: [],
-  capability_profiles: [],
 };
 
 const CHANNEL_DEFAULT_CONFIG = {
@@ -310,7 +246,6 @@ const EditChannel = () => {
   const [inputs, setInputs] = useState(CHANNEL_ORIGIN_INPUTS);
   const [originModelOptions, setOriginModelOptions] = useState([]);
   const [modelOptions, setModelOptions] = useState([]);
-  const [clientProfiles, setClientProfiles] = useState([]);
   const [channelProtocolOptions, setChannelProtocolOptions] = useState(() =>
     getChannelProtocolOptions()
   );
@@ -382,16 +317,8 @@ const EditChannel = () => {
         baseURL: inputs.base_url,
         draftID: previewChannelID,
         models: inputs.models,
-        capabilityProfiles: inputs.capability_profiles,
       }),
-    [
-      effectivePreviewKey,
-      inputs.base_url,
-      inputs.capability_profiles,
-      inputs.models,
-      inputs.protocol,
-      previewChannelID,
-    ]
+    [effectivePreviewKey, inputs.base_url, inputs.models, inputs.protocol, previewChannelID]
   );
   const requiresConnectionVerification = !isEdit && inputs.protocol !== 'proxy';
   const showStepOne = isEdit || createStep === 1;
@@ -530,9 +457,6 @@ const EditChannel = () => {
       localInputs.other = '2024-03-01-preview';
     }
     localInputs.models = (localInputs.models || []).join(',');
-    localInputs.capability_profiles = normalizeCapabilityProfiles(
-      localInputs.capability_profiles
-    );
     const submitConfig = { ...config };
     delete submitConfig.use_responses;
     delete submitConfig.user_agent;
@@ -784,9 +708,6 @@ const EditChannel = () => {
         const availableModels = Array.isArray(data.available_models)
           ? data.available_models
           : [];
-        const capabilityProfiles = normalizeCapabilityProfiles(
-          data.capability_profiles
-        );
         const storedCapabilityResults = normalizeCapabilityResults(
           data.capability_results
         );
@@ -831,7 +752,6 @@ const EditChannel = () => {
           baseURL: data.base_url || '',
           draftID: data.id || targetId,
           models: selectedModels,
-          capabilityProfiles,
         });
 
         if (forCopy) {
@@ -846,7 +766,6 @@ const EditChannel = () => {
             completion_ratio: data.completion_ratio || '',
             system_prompt: data.system_prompt || '',
             models: selectedModels,
-            capability_profiles: capabilityProfiles,
           });
           setCapabilityResults([]);
           setCapabilityTestError('');
@@ -865,7 +784,6 @@ const EditChannel = () => {
             completion_ratio: data.completion_ratio || '',
             system_prompt: data.system_prompt || '',
             models: selectedModels,
-            capability_profiles: capabilityProfiles,
             test_model: data.test_model || '',
             status: data.status,
             weight: data.weight,
@@ -1000,23 +918,6 @@ const EditChannel = () => {
     }
   }, []);
 
-  const fetchClientProfiles = useCallback(async () => {
-    const res = await API.get('/api/v1/admin/channel/client_profiles');
-    const { success, message, data } = res.data || {};
-    if (!success) {
-      showError(message || 'Failed to load client profiles');
-      return;
-    }
-    const items = Array.isArray(data) ? data : [];
-    const normalized = items
-      .map((item) => ({
-        name: normalizeClientProfileName(item?.name),
-        display_name: item?.display_name || item?.name || '',
-      }))
-      .filter((item) => item.name !== '');
-    setClientProfiles(normalized);
-  }, []);
-
   const handleTestCapabilities = useCallback(async () => {
     if (inputs.protocol === 'proxy') {
       return;
@@ -1039,9 +940,6 @@ const EditChannel = () => {
         config,
         models: inputs.models,
         test_model: inputs.test_model || '',
-        capability_profiles: normalizeCapabilityProfiles(
-          inputs.capability_profiles
-        ),
       });
       const { success, message, data } = res.data || {};
       if (!success) {
@@ -1075,7 +973,6 @@ const EditChannel = () => {
     currentCapabilitySignature,
     effectivePreviewKey,
     inputs.base_url,
-    inputs.capability_profiles,
     inputs.models,
     inputs.protocol,
     inputs.test_model,
@@ -1119,51 +1016,6 @@ const EditChannel = () => {
   const clearSelectedModels = useCallback(() => {
     setInputs((prev) => ({ ...prev, models: [] }));
   }, []);
-
-  const responseCapabilityProfiles = useMemo(
-    () =>
-      normalizeCapabilityProfiles(inputs.capability_profiles).filter(
-        (item) => item.capability === 'responses'
-      ),
-    [inputs.capability_profiles]
-  );
-
-  const getSelectedResponseProfile = useCallback(
-    (profileName) =>
-      responseCapabilityProfiles.find(
-        (item) => item.client_profile === normalizeClientProfileName(profileName)
-      ) || null,
-    [responseCapabilityProfiles]
-  );
-
-  const toggleResponseProfileSelection = useCallback(
-    (profile, checked) => {
-      const normalizedProfileName = normalizeClientProfileName(profile?.name);
-      if (!normalizedProfileName) return;
-      setInputs((prev) => {
-        const current = normalizeCapabilityProfiles(prev.capability_profiles);
-        const next = current.filter(
-          (item) =>
-            !(
-              item.capability === 'responses' &&
-              item.client_profile === normalizedProfileName
-            )
-        );
-        if (checked) {
-          next.push({
-            capability: 'responses',
-            client_profile: normalizedProfileName,
-            enabled: true,
-          });
-        }
-        return {
-          ...prev,
-          capability_profiles: normalizeCapabilityProfiles(next),
-        };
-      });
-    },
-    []
-  );
 
   useEffect(() => {
     if (isEdit) {
@@ -1356,8 +1208,7 @@ const EditChannel = () => {
 
   useEffect(() => {
     fetchChannelTypes().then();
-    fetchClientProfiles().then();
-  }, [fetchChannelTypes, fetchClientProfiles]);
+  }, [fetchChannelTypes]);
 
   const submit = async () => {
     const effectiveKey = buildEffectiveKey();
@@ -1784,94 +1635,6 @@ const EditChannel = () => {
                 </Message>
                 <div
                   style={{
-                    border: '1px solid rgba(34, 36, 38, 0.15)',
-                    borderRadius: '6px',
-                    padding: '12px',
-                    marginBottom: '12px',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      marginBottom: '6px',
-                    }}
-                  >
-                    {t('channel.edit.capability_tester.responses_whitelist')}
-                  </div>
-                  <div
-                    style={{
-                      color: 'rgba(0, 0, 0, 0.6)',
-                      marginBottom: '10px',
-                    }}
-                  >
-                    {t(
-                      'channel.edit.capability_tester.responses_whitelist_hint'
-                    )}
-                  </div>
-                  {clientProfiles.length === 0 ? (
-                    <div style={{ color: 'rgba(0, 0, 0, 0.55)' }}>
-                      {t(
-                        'channel.edit.capability_tester.responses_whitelist_empty'
-                      )}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px',
-                      }}
-                    >
-                      {clientProfiles.map((profile) => {
-                        const selectedProfile = getSelectedResponseProfile(
-                          profile.name
-                        );
-                        const selected = !!selectedProfile;
-                        return (
-                          <div
-                            key={profile.name}
-                            style={{
-                              border: '1px solid rgba(34, 36, 38, 0.1)',
-                              borderRadius: '6px',
-                              padding: '10px 12px',
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: '12px',
-                                flexWrap: 'wrap',
-                              }}
-                            >
-                              <Checkbox
-                                checked={selected}
-                                label={profile.display_name || profile.name}
-                                onChange={(e, { checked }) =>
-                                  toggleResponseProfileSelection(
-                                    profile,
-                                    checked
-                                  )
-                                }
-                              />
-                              <span
-                                style={{
-                                  color: 'rgba(0, 0, 0, 0.55)',
-                                  fontSize: '12px',
-                                }}
-                              >
-                                {profile.name}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                <div
-                  style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -1942,7 +1705,7 @@ const EditChannel = () => {
                             : 'red';
                         return (
                           <Table.Row
-                            key={`${item.capability}-${item.client_profile}-${item.endpoint}-${item.model}`}
+                            key={`${item.capability}-${item.endpoint}-${item.model}`}
                           >
                             <Table.Cell>{item.label}</Table.Cell>
                             <Table.Cell>{item.endpoint || '-'}</Table.Cell>

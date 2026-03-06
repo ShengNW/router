@@ -81,9 +81,6 @@ func ListSatisfiedChannels(group string, modelName string) ([]*model.Channel, er
 	if err := model.DB.Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
 		return nil, err
 	}
-	if err := model.HydrateChannelsWithCapabilityProfiles(model.DB, channels); err != nil {
-		return nil, err
-	}
 	channelByID := make(map[string]*model.Channel, len(channels))
 	for _, channel := range channels {
 		if channel == nil {

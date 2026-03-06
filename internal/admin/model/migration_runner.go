@@ -42,17 +42,17 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			},
 		},
 		{
-			Version:     "202603071520_add_channel_capability_profiles",
-			Description: "add channel capability profile tables and seed default client profiles",
-			Up: func(tx *gorm.DB) error {
-				return runChannelCapabilityProfilesMigrationWithDB(tx)
-			},
-		},
-		{
 			Version:     "202603071700_add_channel_capability_results",
 			Description: "add channel capability result table",
 			Up: func(tx *gorm.DB) error {
 				return runChannelCapabilityResultsMigrationWithDB(tx)
+			},
+		},
+		{
+			Version:     "202603072100_drop_channel_capability_profiles_and_client_profiles",
+			Description: "drop response whitelist tables no longer used",
+			Up: func(tx *gorm.DB) error {
+				return dropChannelCapabilityProfileTablesWithDB(tx)
 			},
 		},
 	}

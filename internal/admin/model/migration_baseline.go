@@ -17,7 +17,6 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		&User{},
 		&Channel{},
 		&ChannelModel{},
-		&ChannelCapabilityProfile{},
 		&ChannelCapabilityResult{},
 		&Token{},
 		&Redemption{},
@@ -26,7 +25,6 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		&Option{},
 		&ModelProvider{},
 		&ModelProviderModel{},
-		&ClientProfile{},
 		&ChannelProtocolCatalog{},
 		&GroupCatalog{},
 	); err != nil {
@@ -40,9 +38,6 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		return err
 	}
 	if err := syncModelProviderCatalogWithDB(tx); err != nil {
-		return err
-	}
-	if err := syncClientProfilesWithDB(tx); err != nil {
 		return err
 	}
 	return syncChannelTestModelsWithDB(tx)
