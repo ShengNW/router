@@ -314,15 +314,6 @@ function App() {
           }
         />
         <Route
-          path='/admin/model-provider'
-          element={
-            <Navigate
-              to='/admin/provider'
-              replace
-            />
-          }
-        />
-        <Route
           path='/admin/provider'
           element={<ModelProviders />}
         />
@@ -429,15 +420,6 @@ function App() {
           <PrefixRedirect
             from='/channel'
             to='/admin/channel'
-          />
-        }
-      />
-      <Route
-        path='/model-provider/*'
-        element={
-          <PrefixRedirect
-            from='/model-provider'
-            to='/admin/provider'
           />
         }
       />

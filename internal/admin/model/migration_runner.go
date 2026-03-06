@@ -41,13 +41,6 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return runMainBaselineMigrationWithDB(tx)
 			},
 		},
-		{
-			Version:     "202603071410_rename_model_providers_to_providers",
-			Description: "rename model_providers table to providers",
-			Up: func(tx *gorm.DB) error {
-				return renameModelProvidersTableToProviders(tx)
-			},
-		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }
