@@ -1,4 +1,4 @@
-package channeltype
+package channel
 
 const (
 	Unknown = iota
@@ -56,9 +56,9 @@ const (
 	Dummy
 )
 
-// ChannelTypeNames maps channel type id to human readable provider name.
+// ChannelProtocolNames maps channel protocol id to its canonical protocol name.
 // Index aligns exactly with the const list above; keep length == Dummy.
-var ChannelTypeNames = []string{
+var ChannelProtocolNames = []string{
 	"unknown",
 	"openai",
 	"api2d",

@@ -4,10 +4,11 @@ const (
 	channelProtocolTableName = "channel_protocol"
 )
 
-// ChannelTypeCatalog stores channel protocol type options for admin UI.
-type ChannelTypeCatalog struct {
-	ID          int    `json:"id" gorm:"primaryKey;autoIncrement:false"`
-	Name        string `json:"name" gorm:"type:varchar(64);default:''"`
+// ChannelProtocolCatalog stores channel protocol options for admin UI.
+// `name` is the protocol key and should be treated as the canonical identifier.
+type ChannelProtocolCatalog struct {
+	Name        string `json:"name" gorm:"type:varchar(64);not null;uniqueIndex:idx_channel_protocol_name"`
+	ProtocolID  int    `json:"protocol_id" gorm:"column:id;index"`
 	Label       string `json:"label" gorm:"type:varchar(128);default:''"`
 	Color       string `json:"color" gorm:"type:varchar(32);default:''"`
 	Description string `json:"description" gorm:"type:text"`
@@ -18,6 +19,6 @@ type ChannelTypeCatalog struct {
 	UpdatedAt   int64  `json:"updated_at" gorm:"bigint"`
 }
 
-func (ChannelTypeCatalog) TableName() string {
+func (ChannelProtocolCatalog) TableName() string {
 	return channelProtocolTableName
 }

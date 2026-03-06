@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -14,21 +14,21 @@ func TestRunRemoveOpenAICompatibleProtocolMigrationWithDB(t *testing.T) {
 		t.Fatalf("open sqlite failed: %v", err)
 	}
 
-	if err := db.AutoMigrate(&Channel{}, &ChannelTypeCatalog{}); err != nil {
+	if err := db.AutoMigrate(&Channel{}, &ChannelProtocolCatalog{}); err != nil {
 		t.Fatalf("auto migrate failed: %v", err)
 	}
 
-	catalogRows := []ChannelTypeCatalog{
-		{ID: channeltype.OpenAI, Name: "openai", Label: "OpenAI", Enabled: true},
-		{ID: channeltype.OpenAICompatible, Name: "openai-compatible", Label: "OpenAI 兼容", Enabled: true},
+	catalogRows := []ChannelProtocolCatalog{
+		{ProtocolID: relaychannel.OpenAI, Name: "openai", Label: "OpenAI", Enabled: true},
+		{ProtocolID: relaychannel.OpenAICompatible, Name: "openai-compatible", Label: "OpenAI 兼容", Enabled: true},
 	}
 	if err := db.Create(&catalogRows).Error; err != nil {
 		t.Fatalf("insert channel protocol rows failed: %v", err)
 	}
 
 	channels := []Channel{
-		{Id: "channel-openai", Type: channeltype.OpenAI},
-		{Id: "channel-openai-compatible", Type: channeltype.OpenAICompatible},
+		{Id: "channel-openai", Protocol: "openai"},
+		{Id: "channel-openai-compatible", Protocol: "openai-compatible"},
 	}
 	if err := db.Create(&channels).Error; err != nil {
 		t.Fatalf("insert channels failed: %v", err)
@@ -40,7 +40,7 @@ func TestRunRemoveOpenAICompatibleProtocolMigrationWithDB(t *testing.T) {
 
 	var compatibleChannelCount int64
 	if err := db.Model(&Channel{}).
-		Where("type = ?", channeltype.OpenAICompatible).
+		Where("protocol = ?", "openai-compatible").
 		Count(&compatibleChannelCount).Error; err != nil {
 		t.Fatalf("count openai-compatible channels failed: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRunRemoveOpenAICompatibleProtocolMigrationWithDB(t *testing.T) {
 
 	var openAIChannelCount int64
 	if err := db.Model(&Channel{}).
-		Where("type = ?", channeltype.OpenAI).
+		Where("protocol = ?", "openai").
 		Count(&openAIChannelCount).Error; err != nil {
 		t.Fatalf("count openai channels failed: %v", err)
 	}
@@ -59,8 +59,8 @@ func TestRunRemoveOpenAICompatibleProtocolMigrationWithDB(t *testing.T) {
 	}
 
 	var compatibleCatalogCount int64
-	if err := db.Model(&ChannelTypeCatalog{}).
-		Where("id = ?", channeltype.OpenAICompatible).
+	if err := db.Model(&ChannelProtocolCatalog{}).
+		Where("name = ?", "openai-compatible").
 		Count(&compatibleCatalogCount).Error; err != nil {
 		t.Fatalf("count openai-compatible channel protocol rows failed: %v", err)
 	}

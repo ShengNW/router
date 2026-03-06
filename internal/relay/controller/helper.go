@@ -19,7 +19,7 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	billingratio "github.com/yeying-community/router/internal/relay/billing/ratio"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/controller/validator"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
@@ -107,7 +107,7 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 		return
 	}
 	var quota int64
-	completionRatio := billingratio.GetChannelCompletionRatio(textRequest.Model, meta.ChannelType, meta.ChannelCompletionRatio)
+	completionRatio := billingratio.GetChannelCompletionRatio(textRequest.Model, meta.ChannelProtocol, meta.ChannelCompletionRatio)
 	promptTokens := usage.PromptTokens
 	completionTokens := usage.CompletionTokens
 	quota = int64(math.Ceil((float64(promptTokens) + float64(completionTokens)*completionRatio) * ratio))
@@ -172,7 +172,7 @@ func getMappedModelName(modelName string, mapping map[string]string) (string, bo
 
 func isErrorHappened(meta *meta.Meta, resp *http.Response) bool {
 	if resp == nil {
-		if meta.ChannelType == channeltype.AwsClaude {
+		if meta.ChannelProtocol == relaychannel.AwsClaude {
 			return false
 		}
 		return true
@@ -182,7 +182,7 @@ func isErrorHappened(meta *meta.Meta, resp *http.Response) bool {
 		resp.StatusCode != http.StatusCreated {
 		return true
 	}
-	if meta.ChannelType == channeltype.DeepL {
+	if meta.ChannelProtocol == relaychannel.DeepL {
 		// skip stream check for deepl
 		return false
 	}
@@ -190,7 +190,7 @@ func isErrorHappened(meta *meta.Meta, resp *http.Response) bool {
 	if meta.IsStream && strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") &&
 		// Even if stream mode is enabled, replicate will first return a task info in JSON format,
 		// requiring the client to request the stream endpoint in the task info
-		meta.ChannelType != channeltype.Replicate {
+		meta.ChannelProtocol != relaychannel.Replicate {
 		return true
 	}
 	return false

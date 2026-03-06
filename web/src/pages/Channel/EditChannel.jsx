@@ -3,7 +3,10 @@ import {useTranslation} from 'react-i18next';
 import {Button, Card, Checkbox, Form, Message} from 'semantic-ui-react';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import {API, showError, showInfo, showSuccess, verifyJSON,} from '../../helpers';
-import {getChannelOptions, loadChannelOptions} from '../../helpers/helper';
+import {
+  getChannelProtocolOptions,
+  loadChannelProtocolOptions,
+} from '../../helpers/helper';
 
 const MODEL_MAPPING_EXAMPLE = {
   'gpt-3.5-turbo-0301': 'gpt-3.5-turbo',
@@ -58,11 +61,11 @@ const normalizeModelIDs = (models) => {
 const normalizeBaseURL = (baseURL) =>
   (baseURL || '').trim().replace(/\/+$/, '');
 
-const buildChannelConnectionSignature = ({ type, key, baseURL, draftID }) => {
+const buildChannelConnectionSignature = ({ protocol, key, baseURL, draftID }) => {
   const normalizedKey = (key || '').trim();
   const normalizedDraftID = (draftID || '').trim();
   const keyPart = normalizedKey !== '' ? normalizedKey : `@draft:${normalizedDraftID}`;
-  return `${type}|${normalizeBaseURL(baseURL)}|${keyPart}`;
+  return `${protocol}|${normalizeBaseURL(baseURL)}|${keyPart}`;
 };
 
 const sanitizeDraftInputsForLocalStorage = (inputs) => {
@@ -107,7 +110,7 @@ const parseCreateStep = (rawStep) => {
 
 const CHANNEL_ORIGIN_INPUTS = {
   name: '',
-  type: 1,
+  protocol: 'openai',
   key: '',
   base_url: '',
   other: '',
@@ -127,20 +130,28 @@ const CHANNEL_DEFAULT_CONFIG = {
   vertex_ai_adc: '',
 };
 
-function type2secretPrompt(type, t) {
-  switch (type) {
-    case 15:
+function protocol2secretPrompt(protocol, t) {
+  switch (protocol) {
+    case 'zhipu':
       return t('channel.edit.key_prompts.zhipu');
-    case 18:
+    case 'xunfei':
       return t('channel.edit.key_prompts.spark');
-    case 22:
+    case 'fastgpt':
       return t('channel.edit.key_prompts.fastgpt');
-    case 23:
+    case 'tencent':
       return t('channel.edit.key_prompts.tencent');
     default:
       return t('channel.edit.key_prompts.default');
   }
 }
+
+const resolveProtocolFromChannelPayload = (payload) => {
+  const protocol = (payload?.protocol || '').toString().trim().toLowerCase();
+  if (protocol !== '') {
+    return protocol;
+  }
+  return 'openai';
+};
 
 const EditChannel = () => {
   const { t } = useTranslation();
@@ -174,8 +185,8 @@ const EditChannel = () => {
   const [inputs, setInputs] = useState(CHANNEL_ORIGIN_INPUTS);
   const [originModelOptions, setOriginModelOptions] = useState([]);
   const [modelOptions, setModelOptions] = useState([]);
-  const [channelTypeOptions, setChannelTypeOptions] = useState(() =>
-    getChannelOptions()
+  const [channelProtocolOptions, setChannelProtocolOptions] = useState(() =>
+    getChannelProtocolOptions()
   );
   const [fetchModelsLoading, setFetchModelsLoading] = useState(false);
   const [modelsSyncError, setModelsSyncError] = useState('');
@@ -217,14 +228,14 @@ const EditChannel = () => {
   const currentModelSignature = useMemo(
     () =>
       buildChannelConnectionSignature({
-        type: inputs.type,
+        protocol: inputs.protocol,
         key: effectivePreviewKey,
         baseURL: inputs.base_url,
         draftID: previewChannelID,
       }),
-    [effectivePreviewKey, inputs.base_url, inputs.type, previewChannelID]
+    [effectivePreviewKey, inputs.base_url, inputs.protocol, previewChannelID]
   );
-  const requiresConnectionVerification = !isEdit && inputs.type !== 43;
+  const requiresConnectionVerification = !isEdit && inputs.protocol !== 'proxy';
   const showStepOne = isEdit || createStep === 1;
   const showStepTwo = isEdit || createStep === 2;
   const showStepThree = isEdit || createStep === 3;
@@ -342,7 +353,7 @@ const EditChannel = () => {
         localInputs.base_url.length - 1
       );
     }
-    if (localInputs.type === 3 && localInputs.other === '') {
+    if (localInputs.protocol === 'azure' && localInputs.other === '') {
       localInputs.other = '2024-03-01-preview';
     }
     localInputs.models = (localInputs.models || []).join(',');
@@ -357,7 +368,7 @@ const EditChannel = () => {
     const payload = buildChannelPayload();
     const res = await API.post('/api/v1/admin/channel/draft', {
       name: payload.name,
-      type: payload.type,
+      protocol: payload.protocol,
       key: payload.key,
       base_url: payload.base_url,
       config: payload.config,
@@ -489,7 +500,7 @@ const EditChannel = () => {
         return;
       }
     }
-    if (inputs.type !== 43 && inputs.models.length === 0) {
+    if (inputs.protocol !== 'proxy' && inputs.models.length === 0) {
       showInfo(t('channel.edit.messages.models_required'));
       return;
     }
@@ -530,7 +541,7 @@ const EditChannel = () => {
     hasModelPreviewCredentials,
     inputs.models.length,
     inputs.models,
-    inputs.type,
+    inputs.protocol,
     isCreateMode,
     isCurrentSignatureVerified,
     requireVerificationBeforeProceed,
@@ -578,12 +589,12 @@ const EditChannel = () => {
         parsedConfig = JSON.parse(data.config);
         delete parsedConfig.use_responses;
       }
-      const normalizedType = data.type || 1;
+      const normalizedProtocol = resolveProtocolFromChannelPayload(data);
 
       if (forCopy) {
         setInputs({
           name: data.name || '',
-          type: normalizedType,
+          protocol: normalizedProtocol,
           key: '',
           base_url: data.base_url || '',
           other: data.other || '',
@@ -594,7 +605,7 @@ const EditChannel = () => {
           models: data.models || [],
         });
       } else {
-        setInputs({ ...data, key: '', type: normalizedType });
+        setInputs({ ...data, key: '', protocol: normalizedProtocol });
       }
       setConfig((prev) => ({
         ...prev,
@@ -635,13 +646,13 @@ const EditChannel = () => {
         const normalizedBaseURL = normalizeBaseURL(inputs.base_url);
         const key = buildEffectiveKey().trim();
         const requestSignature = buildChannelConnectionSignature({
-          type: inputs.type,
+          protocol: inputs.protocol,
           key,
           baseURL: normalizedBaseURL,
           draftID: previewChannelID,
         });
         const res = await API.post(`/api/v1/admin/channel/preview/models`, {
-          type: inputs.type,
+          protocol: inputs.protocol,
           key,
           base_url: normalizedBaseURL,
           draft_id: previewChannelID,
@@ -695,16 +706,16 @@ const EditChannel = () => {
       buildEffectiveKey,
       config,
       inputs.base_url,
-      inputs.type,
+      inputs.protocol,
       previewChannelID,
       t,
     ]
   );
 
   const fetchChannelTypes = useCallback(async () => {
-    const options = await loadChannelOptions();
+    const options = await loadChannelProtocolOptions();
     if (Array.isArray(options) && options.length > 0) {
-      setChannelTypeOptions(options);
+      setChannelProtocolOptions(options);
     }
   }, []);
 
@@ -928,7 +939,7 @@ const EditChannel = () => {
         return;
       }
     }
-    if (inputs.type !== 43 && inputs.models.length === 0) {
+    if (inputs.protocol !== 'proxy' && inputs.models.length === 0) {
       showInfo(t('channel.edit.messages.models_required'));
       return;
     }
@@ -1040,15 +1051,15 @@ const EditChannel = () => {
                 <Form.Field>
                   <Form.Select
                     label={t('channel.edit.type')}
-                    name='type'
+                    name='protocol'
                     required
                     search
-                    options={channelTypeOptions}
-                    value={inputs.type}
+                    options={channelProtocolOptions}
+                    value={inputs.protocol}
                     onChange={handleInputChange}
                   />
                 </Form.Field>
-                {inputs.type === 3 && (
+                {inputs.protocol === 'azure' && (
                   <Form.Field>
                     <Form.Input
                       label='AZURE_OPENAI_ENDPOINT'
@@ -1060,7 +1071,7 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type === 8 && (
+                {inputs.protocol === 'custom' && (
                   <Form.Field>
                     <Form.Input
                       required
@@ -1073,7 +1084,7 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type === 1 && (
+                {inputs.protocol === 'openai' && (
                   <Form.Field>
                     <Form.Input
                       label={t('channel.edit.base_url')}
@@ -1085,7 +1096,7 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type === 22 && (
+                {inputs.protocol === 'fastgpt' && (
                   <Form.Field>
                     <Form.Input
                       label='私有部署地址'
@@ -1101,11 +1112,11 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type !== 3 &&
-                  inputs.type !== 33 &&
-                  inputs.type !== 8 &&
-                  inputs.type !== 1 &&
-                  inputs.type !== 22 && (
+                {inputs.protocol !== 'azure' &&
+                  inputs.protocol !== 'awsclaude' &&
+                  inputs.protocol !== 'custom' &&
+                  inputs.protocol !== 'openai' &&
+                  inputs.protocol !== 'fastgpt' && (
                     <Form.Field>
                       <Form.Input
                         label={t('channel.edit.proxy_url')}
@@ -1118,8 +1129,8 @@ const EditChannel = () => {
                     </Form.Field>
                   )}
 
-                {inputs.type !== 33 &&
-                  inputs.type !== 42 && (
+                {inputs.protocol !== 'awsclaude' &&
+                  inputs.protocol !== 'vertexai' && (
                     <Form.Field>
                       <Form.Input
                         label={t('channel.edit.key')}
@@ -1129,7 +1140,7 @@ const EditChannel = () => {
                         placeholder={
                           channelKeySet && (inputs.key || '').trim() === ''
                             ? '********'
-                            : type2secretPrompt(inputs.type, t)
+                            : protocol2secretPrompt(inputs.protocol, t)
                         }
                         onChange={handleInputChange}
                         value={inputs.key}
@@ -1138,7 +1149,7 @@ const EditChannel = () => {
                     </Form.Field>
                   )}
                 {/* Azure OpenAI specific fields */}
-                {inputs.type === 3 && (
+                {inputs.protocol === 'azure' && (
                   <>
                     <Message>
                       注意，<strong>模型部署名称必须和模型名称保持一致</strong>
@@ -1166,7 +1177,7 @@ const EditChannel = () => {
                   </>
                 )}
 
-                {inputs.type === 18 && (
+                {inputs.protocol === 'xunfei' && (
                   <Form.Field>
                     <Form.Input
                       label={t('channel.edit.spark_version')}
@@ -1178,7 +1189,7 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type === 21 && (
+                {inputs.protocol === 'aiproxy-library' && (
                   <Form.Field>
                     <Form.Input
                       label={t('channel.edit.knowledge_id')}
@@ -1190,7 +1201,7 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type === 17 && (
+                {inputs.protocol === 'ali' && (
                   <Form.Field>
                     <Form.Input
                       label={t('channel.edit.plugin_param')}
@@ -1202,10 +1213,10 @@ const EditChannel = () => {
                     />
                   </Form.Field>
                 )}
-                {inputs.type === 34 && (
+                {inputs.protocol === 'coze' && (
                   <Message>{t('channel.edit.coze_notice')}</Message>
                 )}
-                {inputs.type === 40 && (
+                {inputs.protocol === 'doubao' && (
                   <Message>
                     {t('channel.edit.douban_notice')}
                     <a
@@ -1220,7 +1231,7 @@ const EditChannel = () => {
                 )}
               </>
             )}
-            {showStepTwo && inputs.type !== 43 && (
+            {showStepTwo && inputs.protocol !== 'proxy' && (
               <Form.Field>
                 <label>{t('channel.edit.models')}</label>
                 <div
@@ -1310,7 +1321,7 @@ const EditChannel = () => {
                 )}
               </Form.Field>
             )}
-            {showStepThree && inputs.type !== 43 && (
+            {showStepThree && inputs.protocol !== 'proxy' && (
               <>
                 <Form.Field>
                   <Form.TextArea
@@ -1378,7 +1389,7 @@ const EditChannel = () => {
                 </Form.Field>
               </>
             )}
-            {showStepOne && inputs.type === 33 && (
+            {showStepOne && inputs.protocol === 'awsclaude' && (
               <Form.Field>
                 <Form.Input
                   label='Region'
@@ -1409,7 +1420,7 @@ const EditChannel = () => {
                 />
               </Form.Field>
             )}
-            {showStepOne && inputs.type === 42 && (
+            {showStepOne && inputs.protocol === 'vertexai' && (
               <Form.Field>
                 <Form.Input
                   label='Region'
@@ -1440,7 +1451,7 @@ const EditChannel = () => {
                 />
               </Form.Field>
             )}
-            {showStepOne && inputs.type === 34 && (
+            {showStepOne && inputs.protocol === 'coze' && (
               <Form.Input
                 label={t('channel.edit.user_id')}
                 name='user_id'
@@ -1451,7 +1462,7 @@ const EditChannel = () => {
                 autoComplete=''
               />
             )}
-            {showStepOne && inputs.type === 37 && (
+            {showStepOne && inputs.protocol === 'cloudflare' && (
               <Form.Field>
                 <Form.Input
                   label='Account ID'

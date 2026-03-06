@@ -9,7 +9,7 @@ import (
 	"github.com/yeying-community/router/common/ctxkey"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/admin/model"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 )
 
 type ModelRequest struct {
@@ -58,7 +58,8 @@ func Distribute() func(c *gin.Context) {
 }
 
 func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, modelName string) {
-	c.Set(ctxkey.Channel, channel.Type)
+	channelProtocol := channel.GetChannelProtocol()
+	c.Set(ctxkey.Channel, channelProtocol)
 	c.Set(ctxkey.ChannelId, channel.Id)
 	c.Set(ctxkey.ChannelName, channel.Name)
 	if channel.SystemPrompt != nil && *channel.SystemPrompt != "" {
@@ -81,24 +82,24 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	cfg, _ := channel.LoadConfig()
 	// this is for backward compatibility
 	if channel.Other != nil {
-		switch channel.Type {
-		case channeltype.Azure:
+		switch channelProtocol {
+		case relaychannel.Azure:
 			if cfg.APIVersion == "" {
 				cfg.APIVersion = *channel.Other
 			}
-		case channeltype.Xunfei:
+		case relaychannel.Xunfei:
 			if cfg.APIVersion == "" {
 				cfg.APIVersion = *channel.Other
 			}
-		case channeltype.Gemini:
+		case relaychannel.Gemini:
 			if cfg.APIVersion == "" {
 				cfg.APIVersion = *channel.Other
 			}
-		case channeltype.AIProxyLibrary:
+		case relaychannel.AIProxyLibrary:
 			if cfg.LibraryID == "" {
 				cfg.LibraryID = *channel.Other
 			}
-		case channeltype.Ali:
+		case relaychannel.Ali:
 			if cfg.Plugin == "" {
 				cfg.Plugin = *channel.Other
 			}

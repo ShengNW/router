@@ -9,7 +9,7 @@ import (
 
 	commonutils "github.com/yeying-community/router/common/utils"
 	billingratio "github.com/yeying-community/router/internal/relay/billing/ratio"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 )
 
 const (
@@ -294,8 +294,8 @@ func GetModelProviderDefaultBaseURLs() map[string]string {
 		"xunfei":      "https://spark-api-open.xf-yun.com",
 	}
 
-	for idx, rawProvider := range channeltype.ChannelTypeNames {
-		if idx <= 0 || idx >= len(channeltype.ChannelBaseURLs) {
+	for idx, rawProvider := range relaychannel.ChannelProtocolNames {
+		if idx <= 0 || idx >= len(relaychannel.ChannelBaseURLs) {
 			continue
 		}
 		provider := commonutils.NormalizeModelProvider(rawProvider)
@@ -305,7 +305,7 @@ func GetModelProviderDefaultBaseURLs() map[string]string {
 		if provider == "" || provider == "unknown" {
 			continue
 		}
-		baseURL := strings.TrimSpace(channeltype.ChannelBaseURLs[idx])
+		baseURL := strings.TrimSpace(relaychannel.ChannelBaseURLs[idx])
 		if baseURL == "" {
 			continue
 		}
@@ -374,14 +374,14 @@ func buildDefaultProviderModelDetailIndex(now int64) map[string]map[string]Model
 	}
 
 	for modelKey, ratio := range billingratio.ModelRatio {
-		modelName, channelType, hasChannelType := splitModelAndChannelType(modelKey)
-		provider := inferProviderByModel(modelName, channelType, hasChannelType)
+		modelName, channelProtocol, hasChannelProtocol := splitModelAndChannelProtocol(modelKey)
+		provider := inferProviderByModel(modelName, channelProtocol, hasChannelProtocol)
 		modelType := normalizeModelType("", modelName)
 		priceUnit := defaultPriceUnitByType(modelType, modelName)
 		inputPrice := ratioToOriginalPrice(modelType, priceUnit, ratio)
 		outputPrice := 0.0
 		if modelType == ModelProviderModelTypeText {
-			multiplier := completionRatioByModel(modelName, channelType, hasChannelType)
+			multiplier := completionRatioByModel(modelName, channelProtocol, hasChannelProtocol)
 			if multiplier > 0 {
 				outputPrice = inputPrice * multiplier
 			}
@@ -399,8 +399,8 @@ func buildDefaultProviderModelDetailIndex(now int64) map[string]map[string]Model
 	}
 
 	for modelKey := range billingratio.CompletionRatio {
-		modelName, channelType, hasChannelType := splitModelAndChannelType(modelKey)
-		provider := inferProviderByModel(modelName, channelType, hasChannelType)
+		modelName, channelProtocol, hasChannelProtocol := splitModelAndChannelProtocol(modelKey)
+		provider := inferProviderByModel(modelName, channelProtocol, hasChannelProtocol)
 		addModel(provider, ModelProviderModelDetail{
 			Model:       modelName,
 			Type:        normalizeModelType("", modelName),
@@ -430,7 +430,7 @@ func buildDefaultProviderModelDetailIndex(now int64) map[string]map[string]Model
 	return providerModels
 }
 
-func splitModelAndChannelType(raw string) (string, int, bool) {
+func splitModelAndChannelProtocol(raw string) (string, int, bool) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "", 0, false
@@ -441,7 +441,7 @@ func splitModelAndChannelType(raw string) (string, int, bool) {
 		return trimmed, 0, false
 	}
 	idRaw := strings.TrimSpace(trimmed[left+1 : right])
-	channelType, err := strconv.Atoi(idRaw)
+	channelProtocol, err := strconv.Atoi(idRaw)
 	if err != nil {
 		return trimmed, 0, false
 	}
@@ -449,10 +449,10 @@ func splitModelAndChannelType(raw string) (string, int, bool) {
 	if modelName == "" {
 		return trimmed, 0, false
 	}
-	return modelName, channelType, true
+	return modelName, channelProtocol, true
 }
 
-func inferProviderByModel(modelName string, channelType int, hasChannelType bool) string {
+func inferProviderByModel(modelName string, channelProtocol int, hasChannelProtocol bool) string {
 	provider := commonutils.NormalizeModelProvider(commonutils.ResolveModelProvider(modelName))
 	if provider != "" && provider != "unknown" {
 		return provider
@@ -470,8 +470,8 @@ func inferProviderByModel(modelName string, channelType int, hasChannelType bool
 		}
 	}
 
-	if hasChannelType && channelType > 0 && channelType < len(channeltype.ChannelTypeNames) {
-		rawProvider := strings.TrimSpace(channeltype.ChannelTypeNames[channelType])
+	if hasChannelProtocol && channelProtocol > 0 && channelProtocol < len(relaychannel.ChannelProtocolNames) {
+		rawProvider := strings.TrimSpace(relaychannel.ChannelProtocolNames[channelProtocol])
 		normalized := commonutils.NormalizeModelProvider(rawProvider)
 		if normalized != "" && normalized != "unknown" {
 			return normalized
@@ -503,9 +503,9 @@ func inferProviderByModel(modelName string, channelType int, hasChannelType bool
 	return "other"
 }
 
-func completionRatioByModel(modelName string, channelType int, hasChannelType bool) float64 {
-	if hasChannelType {
-		key := fmt.Sprintf("%s(%d)", modelName, channelType)
+func completionRatioByModel(modelName string, channelProtocol int, hasChannelProtocol bool) float64 {
+	if hasChannelProtocol {
+		key := fmt.Sprintf("%s(%d)", modelName, channelProtocol)
 		if ratio, ok := billingratio.CompletionRatio[key]; ok {
 			return ratio
 		}
@@ -519,7 +519,7 @@ func completionRatioByModel(modelName string, channelType int, hasChannelType bo
 	if ratio, ok := billingratio.DefaultCompletionRatio[modelName]; ok {
 		return ratio
 	}
-	return billingratio.GetCompletionRatio(modelName, channelType)
+	return billingratio.GetCompletionRatio(modelName, channelProtocol)
 }
 
 func ratioToOriginalPrice(modelType string, priceUnit string, ratio float64) float64 {

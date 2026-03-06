@@ -5,11 +5,11 @@ import (
 
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"gorm.io/gorm"
 )
 
-type channelTypeSeed struct {
+type channelProtocolSeed struct {
 	ID          int
 	Label       string
 	Color       string
@@ -17,7 +17,7 @@ type channelTypeSeed struct {
 	Tip         string
 }
 
-var defaultChannelTypeSeeds = []channelTypeSeed{
+var defaultChannelProtocolSeeds = []channelProtocolSeed{
 	{ID: 1, Label: "OpenAI", Color: "green"},
 	{ID: 14, Label: "Anthropic", Color: "black"},
 	{ID: 33, Label: "AWS", Color: "black"},
@@ -70,45 +70,101 @@ var defaultChannelTypeSeeds = []channelTypeSeed{
 	{ID: 13, Label: "代理：AIGC2D", Color: "purple"},
 }
 
-func runChannelTypeCatalogMigrationsWithDB(db *gorm.DB) error {
-	if err := db.AutoMigrate(&ChannelTypeCatalog{}); err != nil {
+func runChannelProtocolCatalogMigrationsWithDB(db *gorm.DB) error {
+	if err := db.AutoMigrate(&ChannelProtocolCatalog{}); err != nil {
 		return err
 	}
-	var count int64
-	if err := db.Model(&ChannelTypeCatalog{}).Count(&count).Error; err != nil {
+	now := helper.GetTimestamp()
+	if err := normalizeChannelProtocolCatalogRows(db, now); err != nil {
 		return err
 	}
-	if count > 0 {
-		return nil
-	}
-	defaults := buildDefaultChannelTypeCatalog(helper.GetTimestamp())
+	defaults := buildDefaultChannelProtocolCatalog(now)
 	if len(defaults) == 0 {
 		return nil
 	}
-	if err := db.Create(&defaults).Error; err != nil {
+	for _, item := range defaults {
+		updateValues := map[string]any{
+			"id":          item.ProtocolID,
+			"label":       item.Label,
+			"color":       item.Color,
+			"description": item.Description,
+			"tip":         item.Tip,
+			"source":      item.Source,
+			"enabled":     item.Enabled,
+			"sort_order":  item.SortOrder,
+			"updated_at":  item.UpdatedAt,
+		}
+		result := db.Model(&ChannelProtocolCatalog{}).Where("name = ?", item.Name).Updates(updateValues)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			if err := db.Create(&item).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// OpenAI-compatible has been removed; keep catalog normalized.
+	if err := db.Where("name = ?", "openai-compatible").Delete(&ChannelProtocolCatalog{}).Error; err != nil {
 		return err
 	}
-	logger.SysLogf("migration: initialized channel type catalog with %d default items", len(defaults))
+	logger.SysLogf("migration: synchronized channel protocol catalog with %d default items", len(defaults))
 	return nil
 }
 
-func resolveChannelTypeNameByID(id int) string {
-	if id >= 0 && id < len(channeltype.ChannelTypeNames) {
-		return strings.TrimSpace(channeltype.ChannelTypeNames[id])
+func normalizeChannelProtocolCatalogRows(db *gorm.DB, now int64) error {
+	rows := make([]ChannelProtocolCatalog, 0)
+	if err := db.Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if row.ProtocolID == relaychannel.OpenAICompatible || strings.EqualFold(strings.TrimSpace(row.Name), "openai-compatible") {
+			if err := db.Where("id = ? OR name = ?", row.ProtocolID, row.Name).Delete(&ChannelProtocolCatalog{}).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		normalizedName := relaychannel.NormalizeProtocolName(row.Name)
+		if normalizedName == "" {
+			normalizedName = relaychannel.ProtocolByType(row.ProtocolID)
+		}
+		if normalizedName == "" {
+			continue
+		}
+		updates := map[string]any{
+			"name":       normalizedName,
+			"updated_at": now,
+		}
+		if row.ProtocolID <= 0 {
+			updates["id"] = relaychannel.TypeByProtocol(normalizedName)
+		}
+		if err := db.Model(&ChannelProtocolCatalog{}).
+			Where("id = ?", row.ProtocolID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resolveChannelProtocolNameByProtocolID(id int) string {
+	if id >= 0 && id < len(relaychannel.ChannelProtocolNames) {
+		return strings.TrimSpace(relaychannel.ProtocolByType(id))
 	}
 	return ""
 }
 
-func buildDefaultChannelTypeCatalog(now int64) []ChannelTypeCatalog {
-	items := make([]ChannelTypeCatalog, 0, len(defaultChannelTypeSeeds))
-	for idx, seed := range defaultChannelTypeSeeds {
-		name := resolveChannelTypeNameByID(seed.ID)
+func buildDefaultChannelProtocolCatalog(now int64) []ChannelProtocolCatalog {
+	items := make([]ChannelProtocolCatalog, 0, len(defaultChannelProtocolSeeds))
+	for idx, seed := range defaultChannelProtocolSeeds {
+		name := resolveChannelProtocolNameByProtocolID(seed.ID)
 		if name == "" {
 			continue
 		}
-		items = append(items, ChannelTypeCatalog{
-			ID:          seed.ID,
+		items = append(items, ChannelProtocolCatalog{
 			Name:        name,
+			ProtocolID:  seed.ID,
 			Label:       strings.TrimSpace(seed.Label),
 			Color:       strings.TrimSpace(seed.Color),
 			Description: strings.TrimSpace(seed.Description),

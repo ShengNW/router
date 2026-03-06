@@ -21,7 +21,7 @@ import (
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	"github.com/yeying-community/router/internal/relay/billing"
 	billingratio "github.com/yeying-community/router/internal/relay/billing/ratio"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 	"github.com/yeying-community/router/internal/relay/relaymode"
@@ -33,7 +33,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	audioModel := "whisper-1"
 
 	tokenId := c.GetString(ctxkey.TokenId)
-	channelType := c.GetInt(ctxkey.Channel)
+	channelProtocol := c.GetInt(ctxkey.Channel)
 	channelId := c.GetString(ctxkey.ChannelId)
 	userId := c.GetString(ctxkey.Id)
 	group := c.GetString(ctxkey.Group)
@@ -54,7 +54,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		}
 	}
 
-	modelRatio := billingratio.GetChannelModelRatio(audioModel, channelType, meta.ChannelModelRatio)
+	modelRatio := billingratio.GetChannelModelRatio(audioModel, channelProtocol, meta.ChannelModelRatio)
 	groupRatio := billingratio.GetGroupRatio(group)
 	ratio := modelRatio * groupRatio
 	var quota int64
@@ -126,14 +126,14 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		audioModel = modelMapping[audioModel]
 	}
 
-	baseURL := channeltype.ChannelBaseURLs[channelType]
+	baseURL := relaychannel.ChannelBaseURLs[channelProtocol]
 	requestURL := c.Request.URL.String()
 	if c.GetString(ctxkey.BaseURL) != "" {
 		baseURL = c.GetString(ctxkey.BaseURL)
 	}
 
-	fullRequestURL := openai.GetFullRequestURL(baseURL, requestURL, channelType)
-	if channelType == channeltype.Azure {
+	fullRequestURL := openai.GetFullRequestURL(baseURL, requestURL, channelProtocol)
+	if channelProtocol == relaychannel.Azure {
 		apiVersion := meta.Config.APIVersion
 		if relayMode == relaymode.AudioTranscription {
 			// https://learn.microsoft.com/en-us/azure/ai-services/openai/whisper-quickstart?tabs=command-line#rest-api
@@ -157,7 +157,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		return openai.ErrorWrapper(err, "new_request_failed", http.StatusInternalServerError)
 	}
 
-	if (relayMode == relaymode.AudioTranscription || relayMode == relaymode.AudioSpeech) && channelType == channeltype.Azure {
+	if (relayMode == relaymode.AudioTranscription || relayMode == relaymode.AudioSpeech) && channelProtocol == relaychannel.Azure {
 		// https://learn.microsoft.com/en-us/azure/ai-services/openai/whisper-quickstart?tabs=command-line#rest-api
 		apiKey := c.Request.Header.Get("Authorization")
 		apiKey = strings.TrimPrefix(apiKey, "Bearer ")

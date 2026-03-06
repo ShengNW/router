@@ -683,7 +683,7 @@ func UpdateModelRatioByJSONString(jsonStr string) error {
 	return json.Unmarshal([]byte(jsonStr), &ModelRatio)
 }
 
-func GetModelRatio(name string, channelType int) float64 {
+func GetModelRatio(name string, channelProtocol int) float64 {
 	modelRatioLock.RLock()
 	defer modelRatioLock.RUnlock()
 	if strings.HasPrefix(name, "qwen-") && strings.HasSuffix(name, "-internet") {
@@ -692,7 +692,7 @@ func GetModelRatio(name string, channelType int) float64 {
 	if strings.HasPrefix(name, "command-") && strings.HasSuffix(name, "-internet") {
 		name = strings.TrimSuffix(name, "-internet")
 	}
-	model := fmt.Sprintf("%s(%d)", name, channelType)
+	model := fmt.Sprintf("%s(%d)", name, channelProtocol)
 	if ratio, ok := ModelRatio[model]; ok {
 		return ratio
 	}
@@ -734,7 +734,7 @@ func parseChannelRatioJSON(jsonStr string) map[string]float64 {
 	return ratio
 }
 
-func GetChannelModelRatio(name string, channelType int, channelRatioJSON string) float64 {
+func GetChannelModelRatio(name string, channelProtocol int, channelRatioJSON string) float64 {
 	if strings.HasPrefix(name, "qwen-") && strings.HasSuffix(name, "-internet") {
 		name = strings.TrimSuffix(name, "-internet")
 	}
@@ -742,7 +742,7 @@ func GetChannelModelRatio(name string, channelType int, channelRatioJSON string)
 		name = strings.TrimSuffix(name, "-internet")
 	}
 	if ratioMap := parseChannelRatioJSON(channelRatioJSON); ratioMap != nil {
-		model := fmt.Sprintf("%s(%d)", name, channelType)
+		model := fmt.Sprintf("%s(%d)", name, channelProtocol)
 		if ratio, ok := ratioMap[model]; ok {
 			return ratio
 		}
@@ -750,14 +750,14 @@ func GetChannelModelRatio(name string, channelType int, channelRatioJSON string)
 			return ratio
 		}
 	}
-	return GetModelRatio(name, channelType)
+	return GetModelRatio(name, channelProtocol)
 }
 
-func GetCompletionRatio(name string, channelType int) float64 {
+func GetCompletionRatio(name string, channelProtocol int) float64 {
 	if strings.HasPrefix(name, "qwen-") && strings.HasSuffix(name, "-internet") {
 		name = strings.TrimSuffix(name, "-internet")
 	}
-	model := fmt.Sprintf("%s(%d)", name, channelType)
+	model := fmt.Sprintf("%s(%d)", name, channelProtocol)
 	if ratio, ok := CompletionRatio[model]; ok {
 		return ratio
 	}
@@ -865,12 +865,12 @@ func GetCompletionRatio(name string, channelType int) float64 {
 	return 1
 }
 
-func GetChannelCompletionRatio(name string, channelType int, channelRatioJSON string) float64 {
+func GetChannelCompletionRatio(name string, channelProtocol int, channelRatioJSON string) float64 {
 	if strings.HasPrefix(name, "qwen-") && strings.HasSuffix(name, "-internet") {
 		name = strings.TrimSuffix(name, "-internet")
 	}
 	if ratioMap := parseChannelRatioJSON(channelRatioJSON); ratioMap != nil {
-		model := fmt.Sprintf("%s(%d)", name, channelType)
+		model := fmt.Sprintf("%s(%d)", name, channelProtocol)
 		if ratio, ok := ratioMap[model]; ok {
 			return ratio
 		}
@@ -878,5 +878,5 @@ func GetChannelCompletionRatio(name string, channelType int, channelRatioJSON st
 			return ratio
 		}
 	}
-	return GetCompletionRatio(name, channelType)
+	return GetCompletionRatio(name, channelProtocol)
 }

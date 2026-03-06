@@ -19,7 +19,7 @@ import (
 	"github.com/yeying-community/router/internal/relay"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	billingratio "github.com/yeying-community/router/internal/relay/billing/ratio"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 )
@@ -136,7 +136,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	c.Set("response_format", imageRequest.ResponseFormat)
 
 	var requestBody io.Reader
-	if isModelMapped || meta.ChannelType == channeltype.Azure { // make Azure channel request body
+	if isModelMapped || meta.ChannelProtocol == relaychannel.Azure { // make Azure channel request body
 		jsonStr, err := json.Marshal(imageRequest)
 		if err != nil {
 			return openai.ErrorWrapper(err, "marshal_image_request_failed", http.StatusInternalServerError)
@@ -153,11 +153,11 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	adaptor.Init(meta)
 
 	// these adaptors need to convert the request
-	switch meta.ChannelType {
-	case channeltype.Zhipu,
-		channeltype.Ali,
-		channeltype.Replicate,
-		channeltype.Baidu:
+	switch meta.ChannelProtocol {
+	case relaychannel.Zhipu,
+		relaychannel.Ali,
+		relaychannel.Replicate,
+		relaychannel.Baidu:
 		finalRequest, err := adaptor.ConvertImageRequest(imageRequest)
 		if err != nil {
 			return openai.ErrorWrapper(err, "convert_image_request_failed", http.StatusInternalServerError)
@@ -169,14 +169,14 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		requestBody = bytes.NewBuffer(jsonStr)
 	}
 
-	modelRatio := billingratio.GetChannelModelRatio(imageModel, meta.ChannelType, meta.ChannelModelRatio)
+	modelRatio := billingratio.GetChannelModelRatio(imageModel, meta.ChannelProtocol, meta.ChannelModelRatio)
 	groupRatio := billingratio.GetGroupRatio(meta.Group)
 	ratio := modelRatio * groupRatio
 	userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 
 	var quota int64
-	switch meta.ChannelType {
-	case channeltype.Replicate:
+	switch meta.ChannelProtocol {
+	case relaychannel.Replicate:
 		// replicate always return 1 image
 		quota = int64(ratio * imageCostRatio * 1000)
 	default:

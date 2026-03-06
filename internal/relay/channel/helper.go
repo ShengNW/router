@@ -1,10 +1,10 @@
-package channeltype
+package channel
 
 import "github.com/yeying-community/router/internal/relay/apitype"
 
-func ToAPIType(channelType int) int {
+func ToAPIType(channelProtocol int) int {
 	apiType := apitype.OpenAI
-	switch channelType {
+	switch channelProtocol {
 	case Anthropic:
 		apiType = apitype.Anthropic
 	case Baidu:
@@ -44,4 +44,8 @@ func ToAPIType(channelType int) int {
 	}
 
 	return apiType
+}
+
+func ToAPITypeByProtocol(protocol string) int {
+	return ToAPIType(TypeByProtocol(protocol))
 }

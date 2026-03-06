@@ -15,7 +15,7 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/admin/monitor"
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 
 	"github.com/gin-gonic/gin"
 )
@@ -310,34 +310,35 @@ func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
 }
 
 func updateChannelBalance(channel *model.Channel) (float64, error) {
-	baseURL := channeltype.ChannelBaseURLs[channel.Type]
+	channelProtocol := channel.GetChannelProtocol()
+	baseURL := relaychannel.BaseURLByProtocol(channel.GetProtocol())
 	if channel.GetBaseURL() == "" {
 		channel.BaseURL = &baseURL
 	}
-	switch channel.Type {
-	case channeltype.OpenAI:
+	switch channelProtocol {
+	case relaychannel.OpenAI:
 		if channel.GetBaseURL() != "" {
 			baseURL = channel.GetBaseURL()
 		}
-	case channeltype.Azure:
+	case relaychannel.Azure:
 		return 0, errors.New("尚未实现")
-	case channeltype.Custom:
+	case relaychannel.Custom:
 		baseURL = channel.GetBaseURL()
-	case channeltype.CloseAI:
+	case relaychannel.CloseAI:
 		return updateChannelCloseAIBalance(channel)
-	case channeltype.OpenAISB:
+	case relaychannel.OpenAISB:
 		return updateChannelOpenAISBBalance(channel)
-	case channeltype.AIProxy:
+	case relaychannel.AIProxy:
 		return updateChannelAIProxyBalance(channel)
-	case channeltype.API2GPT:
+	case relaychannel.API2GPT:
 		return updateChannelAPI2GPTBalance(channel)
-	case channeltype.AIGC2D:
+	case relaychannel.AIGC2D:
 		return updateChannelAIGC2DBalance(channel)
-	case channeltype.SiliconFlow:
+	case relaychannel.SiliconFlow:
 		return updateChannelSiliconFlowBalance(channel)
-	case channeltype.DeepSeek:
+	case relaychannel.DeepSeek:
 		return updateChannelDeepSeekBalance(channel)
-	case channeltype.OpenRouter:
+	case relaychannel.OpenRouter:
 		return updateChannelOpenRouterBalance(channel)
 	default:
 		return 0, errors.New("尚未实现")
@@ -427,7 +428,8 @@ func updateAllChannelsBalance() error {
 			continue
 		}
 		// TODO: support Azure
-		if channel.Type != channeltype.OpenAI && channel.Type != channeltype.Custom {
+		channelProtocol := channel.GetChannelProtocol()
+		if channelProtocol != relaychannel.OpenAI && channelProtocol != relaychannel.Custom {
 			continue
 		}
 		balance, err := updateChannelBalance(channel)

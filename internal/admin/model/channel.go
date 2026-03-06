@@ -3,8 +3,10 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/yeying-community/router/common/logger"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 
 type Channel struct {
 	Id                 string  `json:"id" gorm:"type:char(36);primaryKey"`
-	Type               int     `json:"type" gorm:"default:0"`
+	Protocol           string  `json:"protocol" gorm:"type:varchar(64);default:'openai';index"`
 	Key                string  `json:"key" gorm:"type:text"`
 	Status             int     `json:"status" gorm:"default:1"`
 	Name               string  `json:"name" gorm:"index"`
@@ -53,6 +55,35 @@ type ChannelConfig struct {
 	VertexAIADC       string `json:"vertex_ai_adc,omitempty"`
 }
 
+func (channel *Channel) NormalizeProtocol() {
+	if channel == nil {
+		return
+	}
+	protocol := relaychannel.NormalizeProtocolName(channel.Protocol)
+	if protocol == "" {
+		protocol = "openai"
+	}
+	channel.Protocol = protocol
+}
+
+func (channel *Channel) GetProtocol() string {
+	if channel == nil {
+		return "openai"
+	}
+	protocol := relaychannel.NormalizeProtocolName(channel.Protocol)
+	if protocol != "" {
+		return protocol
+	}
+	return "openai"
+}
+
+func (channel *Channel) GetChannelProtocol() int {
+	if channel == nil {
+		return relaychannel.OpenAI
+	}
+	return relaychannel.TypeByProtocol(channel.GetProtocol())
+}
+
 func GetAllChannels(startIdx int, num int, scope string) ([]*Channel, error) {
 	return mustChannelRepo().GetAllChannels(startIdx, num, scope)
 }
@@ -80,7 +111,7 @@ func (channel *Channel) GetBaseURL() string {
 	if channel.BaseURL == nil {
 		return ""
 	}
-	return *channel.BaseURL
+	return strings.TrimSpace(*channel.BaseURL)
 }
 
 func (channel *Channel) GetModelMapping() map[string]string {

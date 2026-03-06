@@ -13,15 +13,15 @@ import (
 	"github.com/yeying-community/router/common/logger"
 	commonutils "github.com/yeying-community/router/common/utils"
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 )
 
 type previewModelsRequest struct {
-	Type    int             `json:"type"`
-	Key     string          `json:"key"`
-	BaseURL string          `json:"base_url"`
-	DraftID string          `json:"draft_id"`
-	Config  json.RawMessage `json:"config"`
+	Protocol string          `json:"protocol"`
+	Key      string          `json:"key"`
+	BaseURL  string          `json:"base_url"`
+	DraftID  string          `json:"draft_id"`
+	Config   json.RawMessage `json:"config"`
 }
 
 type openAIModelsResponse struct {
@@ -120,19 +120,20 @@ func fetchOpenAICompatibleModelIDsByBaseURL(key, baseURL, modelProvider string) 
 	return fetchModelsByConfiguredChannel(key, baseURL, modelProvider)
 }
 
-func resolvePreviewBaseURL(channelType int, baseURL string) string {
+func resolvePreviewBaseURL(protocol string, baseURL string) string {
 	trimmedBaseURL := strings.TrimSpace(baseURL)
 	if trimmedBaseURL != "" {
 		return trimmedBaseURL
 	}
-	if channelType <= 0 || channelType >= channeltype.Dummy {
+	normalized := relaychannel.NormalizeProtocolName(protocol)
+	if normalized == "" {
 		return ""
 	}
-	return strings.TrimSpace(channeltype.ChannelBaseURLs[channelType])
+	return relaychannel.BaseURLByProtocol(normalized)
 }
 
 // PreviewChannelModels godoc
-// @Summary Preview models for channel type (admin)
+// @Summary Preview models for channel protocol (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Accept json
@@ -151,7 +152,7 @@ func PreviewChannelModels(c *gin.Context) {
 		return
 	}
 
-	channelType := req.Type
+	protocol := relaychannel.NormalizeProtocolName(req.Protocol)
 	key := strings.TrimSpace(req.Key)
 	baseURL := strings.TrimSpace(req.BaseURL)
 	draftID := strings.TrimSpace(req.DraftID)
@@ -167,15 +168,15 @@ func PreviewChannelModels(c *gin.Context) {
 		}
 		key = strings.TrimSpace(channel.Key)
 		keySource = "draft"
-		if channelType == 0 {
-			channelType = channel.Type
+		if protocol == "" {
+			protocol = channel.GetProtocol()
 		}
 		if baseURL == "" {
 			baseURL = strings.TrimSpace(channel.GetBaseURL())
 		}
 	}
 
-	baseURL = resolvePreviewBaseURL(channelType, baseURL)
+	baseURL = resolvePreviewBaseURL(protocol, baseURL)
 	modelIDs, modelsURL, err := fetchModelsByConfiguredChannelDetailed(key, baseURL, "")
 	if err != nil {
 		logger.SysWarnf("channel preview models failed: source=%s draft_id=%s models_url=%s err=%v", keySource, draftID, modelsURL, err)

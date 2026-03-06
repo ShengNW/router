@@ -12,32 +12,36 @@ import {
 } from '../helpers';
 
 import {ITEMS_PER_PAGE} from '../constants';
-import {getChannelOptions, loadChannelOptions} from '../helpers/helper';
+import {
+  getChannelProtocolOptions,
+  loadChannelProtocolOptions,
+} from '../helpers/helper';
 import {renderNumber} from '../helpers/render';
 
 function renderTimestamp(timestamp) {
   return <>{timestamp2string(timestamp)}</>;
 }
 
-function buildTypeMap(options, t) {
-  const typeMap = {};
+function buildProtocolMap(options, t) {
+  const protocolMap = {};
   if (Array.isArray(options)) {
     options.forEach((option) => {
-      if (option && Number.isInteger(option.value)) {
-        typeMap[option.value] = option;
+      if (option && typeof option.value === 'string' && option.value.trim() !== '') {
+        protocolMap[option.value] = option;
       }
     });
   }
-  typeMap[0] = {
-    value: 0,
+  protocolMap.unknown = {
+    value: 'unknown',
     text: t('channel.table.status_unknown'),
     color: 'grey',
   };
-  return typeMap;
+  return protocolMap;
 }
 
-function renderType(type, typeMap) {
-  const option = typeMap[type];
+function renderProtocol(protocol, protocolMap) {
+  const normalized = (protocol || '').toString().trim().toLowerCase();
+  const option = protocolMap[normalized] || protocolMap.unknown;
   const colorMap = {
     grey: 'rgba(0, 0, 0, 0.5)',
     green: '#1f8f4b',
@@ -49,35 +53,36 @@ function renderType(type, typeMap) {
   };
   return (
     <span style={{ color: colorMap[option?.color] || 'inherit', fontWeight: 500 }}>
-      {option ? option.text : type}
+      {option ? option.text : normalized || 'unknown'}
     </span>
   );
 }
 
-function renderBalance(type, balance, t) {
-  switch (type) {
-    case 1: // OpenAI
-        if (balance === 0) {
-            return <span>{t('channel.table.balance_not_supported')}</span>;
-        }
+function renderBalance(protocol, balance, t) {
+  const normalized = (protocol || '').toString().trim().toLowerCase();
+  switch (normalized) {
+    case 'openai':
+      if (balance === 0) {
+        return <span>{t('channel.table.balance_not_supported')}</span>;
+      }
       return <span>${balance.toFixed(2)}</span>;
-    case 4: // CloseAI
+    case 'closeai':
       return <span>¥{balance.toFixed(2)}</span>;
-    case 8: // 自定义
+    case 'custom':
       return <span>${balance.toFixed(2)}</span>;
-    case 5: // OpenAI-SB
+    case 'openai-sb':
       return <span>¥{(balance / 10000).toFixed(2)}</span>;
-    case 10: // AI Proxy
+    case 'aiproxy':
       return <span>{renderNumber(balance)}</span>;
-    case 12: // API2GPT
+    case 'api2gpt':
       return <span>¥{balance.toFixed(2)}</span>;
-    case 13: // AIGC2D
+    case 'aigc2d':
       return <span>{renderNumber(balance)}</span>;
-    case 20: // OpenRouter
+    case 'openrouter':
       return <span>${balance.toFixed(2)}</span>;
-    case 36: // DeepSeek
+    case 'deepseek':
       return <span>¥{balance.toFixed(2)}</span>;
-    case 44: // SiliconFlow
+    case 'siliconflow':
       return <span>¥{balance.toFixed(2)}</span>;
     default:
       return <span>{t('channel.table.balance_not_supported')}</span>;
@@ -103,13 +108,17 @@ const ChannelsTable = () => {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchDisabling, setBatchDisabling] = useState(false);
   const [selectedChannelIds, setSelectedChannelIds] = useState([]);
-  const [typeMap, setTypeMap] = useState(() =>
-    buildTypeMap(getChannelOptions(), t)
+  const [protocolMap, setProtocolMap] = useState(() =>
+    buildProtocolMap(getChannelProtocolOptions(), t)
   );
 
   const processChannelData = useCallback((channel) => {
     const next = { ...channel };
     next.id = (next.id || '').toString().trim();
+    next.protocol = (next.protocol || '').toString().trim().toLowerCase();
+    if (next.protocol === '') {
+      next.protocol = 'openai';
+    }
     const models = (next.models || '')
       .split(',')
       .map((model) => model.trim())
@@ -181,12 +190,12 @@ const ChannelsTable = () => {
 
   useEffect(() => {
     let disposed = false;
-    setTypeMap(buildTypeMap(getChannelOptions(), t));
-    loadChannelOptions().then((options) => {
+    setProtocolMap(buildProtocolMap(getChannelProtocolOptions(), t));
+    loadChannelProtocolOptions().then((options) => {
       if (disposed) {
         return;
       }
-      setTypeMap(buildTypeMap(options, t));
+      setProtocolMap(buildProtocolMap(options, t));
     });
     return () => {
       disposed = true;
@@ -544,7 +553,7 @@ const ChannelsTable = () => {
     if (!channel) {
       return 1;
     }
-    if (channel.type === 43) {
+    if (channel.protocol === 'proxy') {
       return 1;
     }
     const models = Array.isArray(channel.models) ? channel.models : [];
@@ -872,7 +881,7 @@ const ChannelsTable = () => {
             <Table.HeaderCell
               style={{ cursor: 'pointer' }}
               onClick={() => {
-                sortChannel('type');
+                sortChannel('protocol');
               }}
             >
               {t('channel.table.type')}
@@ -954,7 +963,7 @@ const ChannelsTable = () => {
                       {channel.name ? channel.name : t('channel.table.no_name')}
                     </span>
                   </Table.Cell>
-                  <Table.Cell>{renderType(channel.type, typeMap)}</Table.Cell>
+                  <Table.Cell>{renderProtocol(channel.protocol, protocolMap)}</Table.Cell>
                   <Table.Cell>{renderStatus(channel.status, t)}</Table.Cell>
                   <Table.Cell>
                     <Popup
@@ -983,7 +992,7 @@ const ChannelsTable = () => {
                           }}
                           style={{ cursor: 'pointer' }}
                         >
-                          {renderBalance(channel.type, channel.balance, t)}
+                          {renderBalance(channel.protocol, channel.balance, t)}
                         </span>
                       }
                       content={t('channel.table.click_to_update')}

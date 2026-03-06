@@ -26,7 +26,7 @@ import (
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
 	"github.com/yeying-community/router/internal/relay"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/controller"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
@@ -156,7 +156,8 @@ func testChannel(ctx context.Context, channel *model.Channel, request *relaymode
 	if strings.TrimSpace(userAgent) != "" {
 		c.Request.Header.Set("User-Agent", userAgent)
 	}
-	c.Set(ctxkey.Channel, channel.Type)
+	channelProtocol := channel.GetChannelProtocol()
+	c.Set(ctxkey.Channel, channelProtocol)
 	c.Set(ctxkey.BaseURL, channel.GetBaseURL())
 	cfg, _ := channel.LoadConfig()
 	relayMode := relaymode.ChatCompletions
@@ -166,7 +167,7 @@ func testChannel(ctx context.Context, channel *model.Channel, request *relaymode
 	meta := meta.GetByContext(c)
 	logger.SysLog(fmt.Sprintf("[testChannel] meta mode=%d request_path=%s base_url=%s api_type=%d", meta.Mode, meta.RequestURLPath, meta.BaseURL, meta.APIType))
 	logger.SysLog(fmt.Sprintf("[testChannel] ua=%s", c.Request.Header.Get("User-Agent")))
-	apiType := channeltype.ToAPIType(channel.Type)
+	apiType := relaychannel.ToAPIType(channelProtocol)
 	adaptor := relay.GetAdaptor(apiType)
 	if adaptor == nil {
 		return "", fmt.Errorf("invalid api type: %d, adaptor is nil", apiType), nil

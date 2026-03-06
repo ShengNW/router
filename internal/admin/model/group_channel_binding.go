@@ -9,13 +9,13 @@ import (
 )
 
 type GroupChannelBindingItem struct {
-	Id      string `json:"id"`
-	Name    string `json:"name"`
-	Type    int    `json:"type"`
-	Status  int    `json:"status"`
-	Models  string `json:"models"`
-	Bound   bool   `json:"bound"`
-	Updated int64  `json:"updated_at"`
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+	Status   int    `json:"status"`
+	Models   string `json:"models"`
+	Bound    bool   `json:"bound"`
+	Updated  int64  `json:"updated_at"`
 }
 
 func ListGroupChannelBindings(group string) ([]GroupChannelBindingItem, error) {
@@ -26,7 +26,7 @@ func ListGroupChannelBindings(group string) ([]GroupChannelBindingItem, error) {
 
 	channels := make([]Channel, 0)
 	if err := DB.
-		Select("id", "name", "type", "status", "models", "created_time").
+		Select("id", "name", "protocol", "status", "models", "created_time").
 		Order("created_time desc").
 		Find(&channels).Error; err != nil {
 		return nil, err
@@ -53,13 +53,13 @@ func ListGroupChannelBindings(group string) ([]GroupChannelBindingItem, error) {
 	for _, channel := range channels {
 		_, bound := boundSet[channel.Id]
 		items = append(items, GroupChannelBindingItem{
-			Id:      channel.Id,
-			Name:    strings.TrimSpace(channel.Name),
-			Type:    channel.Type,
-			Status:  channel.Status,
-			Models:  strings.TrimSpace(channel.Models),
-			Bound:   bound,
-			Updated: channel.CreatedTime,
+			Id:       channel.Id,
+			Name:     strings.TrimSpace(channel.Name),
+			Protocol: channel.GetProtocol(),
+			Status:   channel.Status,
+			Models:   strings.TrimSpace(channel.Models),
+			Bound:    bound,
+			Updated:  channel.CreatedTime,
 		})
 	}
 	return items, nil

@@ -20,17 +20,18 @@ type updateChannelTestModelRequest struct {
 }
 
 type createChannelDraftRequest struct {
-	Name    string `json:"name"`
-	Type    int    `json:"type"`
-	Key     string `json:"key"`
-	BaseURL string `json:"base_url"`
-	Config  string `json:"config"`
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+	Key      string `json:"key"`
+	BaseURL  string `json:"base_url"`
+	Config   string `json:"config"`
 }
 
 func sanitizeChannelForResponse(channel *model.Channel) {
 	if channel == nil {
 		return
 	}
+	channel.NormalizeProtocol()
 	channel.Id = strings.TrimSpace(channel.Id)
 	channel.TestModel = strings.TrimSpace(channel.TestModel)
 	channel.Models = strings.TrimSpace(channel.Models)
@@ -231,7 +232,7 @@ func CreateChannelDraft(c *gin.Context) {
 	baseURL := strings.TrimSpace(req.BaseURL)
 	channel := model.Channel{
 		Name:        name,
-		Type:        req.Type,
+		Protocol:    strings.TrimSpace(req.Protocol),
 		Key:         key,
 		Status:      model.ChannelStatusCreating,
 		Models:      "",

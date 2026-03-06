@@ -1,4 +1,4 @@
-package channeltype
+package channel
 
 var ChannelBaseURLs = []string{
 	"",                              // 0

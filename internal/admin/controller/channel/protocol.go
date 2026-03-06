@@ -8,26 +8,26 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 )
 
-type channelTypeOptionItem struct {
-	Key         int    `json:"key"`
+type channelProtocolOptionItem struct {
+	Key         string `json:"key"`
 	Text        string `json:"text"`
-	Value       int    `json:"value"`
+	Value       string `json:"value"`
 	Name        string `json:"name,omitempty"`
 	Color       string `json:"color,omitempty"`
 	Description string `json:"description,omitempty"`
 	Tip         string `json:"tip,omitempty"`
 }
 
-// GetChannelTypes godoc
-// @Summary Get channel protocol type catalog (admin)
+// GetChannelProtocols godoc
+// @Summary Get channel protocol catalog (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/types [get]
-func GetChannelTypes(c *gin.Context) {
-	rows := make([]model.ChannelTypeCatalog, 0)
+// @Router /api/v1/admin/channel/protocols [get]
+func GetChannelProtocols(c *gin.Context) {
+	rows := make([]model.ChannelProtocolCatalog, 0)
 	if err := model.DB.
 		Where("enabled = ?", true).
 		Order("sort_order asc, id asc").
@@ -39,20 +39,24 @@ func GetChannelTypes(c *gin.Context) {
 		return
 	}
 
-	options := make([]channelTypeOptionItem, 0, len(rows))
+	options := make([]channelProtocolOptionItem, 0, len(rows))
 	for _, row := range rows {
+		name := strings.TrimSpace(row.Name)
+		if name == "" {
+			continue
+		}
 		label := strings.TrimSpace(row.Label)
 		if label == "" {
-			label = strings.TrimSpace(row.Name)
+			label = name
 		}
 		if label == "" {
 			label = "unknown"
 		}
-		options = append(options, channelTypeOptionItem{
-			Key:         row.ID,
-			Value:       row.ID,
+		options = append(options, channelProtocolOptionItem{
+			Key:         name,
+			Value:       name,
 			Text:        label,
-			Name:        strings.TrimSpace(row.Name),
+			Name:        name,
 			Color:       strings.TrimSpace(row.Color),
 			Description: strings.TrimSpace(row.Description),
 			Tip:         strings.TrimSpace(row.Tip),

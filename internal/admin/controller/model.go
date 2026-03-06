@@ -12,7 +12,7 @@ import (
 	relay "github.com/yeying-community/router/internal/relay"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	"github.com/yeying-community/router/internal/relay/apitype"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 )
@@ -123,11 +123,11 @@ func init() {
 			})
 		}
 	}
-	for _, channelType := range openai.CompatibleChannels {
-		if channelType == channeltype.Azure {
+	for _, channelProtocol := range openai.CompatibleChannels {
+		if channelProtocol == relaychannel.Azure {
 			continue
 		}
-		channelName, channelModelList := openai.GetCompatibleChannelMeta(channelType)
+		channelName, channelModelList := openai.GetCompatibleChannelMeta(channelProtocol)
 		for _, modelName := range channelModelList {
 			models = append(models, OpenAIModels{
 				Id:         modelName,
@@ -145,13 +145,13 @@ func init() {
 		modelsMap[model.Id] = model
 	}
 	channelId2Models = make(map[int][]string)
-	for i := 1; i < channeltype.Dummy; i++ {
-		if i == channeltype.OpenAICompatible {
+	for i := 1; i < relaychannel.Dummy; i++ {
+		if i == relaychannel.OpenAICompatible {
 			continue
 		}
-		adaptor := relay.GetAdaptor(channeltype.ToAPIType(i))
+		adaptor := relay.GetAdaptor(relaychannel.ToAPIType(i))
 		meta := &meta.Meta{
-			ChannelType: i,
+			ChannelProtocol: i,
 		}
 		adaptor.Init(meta)
 		channelId2Models[i] = adaptor.GetModelList()
@@ -179,8 +179,8 @@ func DashboardListModels(c *gin.Context) {
 	filteredMap := make(map[int][]string, len(channelId2Models))
 	for id, models := range channelId2Models {
 		name := ""
-		if id >= 0 && id < len(channeltype.ChannelTypeNames) {
-			name = channeltype.ChannelTypeNames[id]
+		if id >= 0 && id < len(relaychannel.ChannelProtocolNames) {
+			name = relaychannel.ChannelProtocolNames[id]
 		}
 		filteredModels := filterModelsByProvider(models, modelProvider)
 		metaList = append(metaList, gin.H{
@@ -361,15 +361,13 @@ func GetUserAvailableModels(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		name := ""
-		if ch.Type >= 0 && ch.Type < len(channeltype.ChannelTypeNames) {
-			name = channeltype.ChannelTypeNames[ch.Type]
-		}
+		name := ch.GetProtocol()
 		if strings.ToLower(name) == provider && modelBelongsToProvider(provider, m) {
 			filtered = append(filtered, m)
 			continue
 		}
-		// in case channel type被配置为通用openai但实际是其他供应商，允许通过模型名归类
+		// If the channel protocol is configured as generic OpenAI,
+		// still allow provider classification by model name.
 		if modelBelongsToProvider(provider, m) {
 			filtered = append(filtered, m)
 		}

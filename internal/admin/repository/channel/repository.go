@@ -70,6 +70,7 @@ func GetByID(id string, selectAll bool) (*model.Channel, error) {
 func BatchInsert(channels []model.Channel) error {
 	now := helper.GetTimestamp()
 	for i := range channels {
+		channels[i].NormalizeProtocol()
 		if strings.TrimSpace(channels[i].Id) == "" {
 			channels[i].Id = random.GetUUID()
 		}
@@ -91,6 +92,7 @@ func BatchInsert(channels []model.Channel) error {
 }
 
 func Insert(channel *model.Channel) error {
+	channel.NormalizeProtocol()
 	if strings.TrimSpace(channel.Id) == "" {
 		channel.Id = random.GetUUID()
 	}
@@ -105,6 +107,9 @@ func Insert(channel *model.Channel) error {
 }
 
 func Update(channel *model.Channel) error {
+	if strings.TrimSpace(channel.Protocol) != "" {
+		channel.NormalizeProtocol()
+	}
 	err := model.DB.Model(channel).Updates(channel).Error
 	if err != nil {
 		return err

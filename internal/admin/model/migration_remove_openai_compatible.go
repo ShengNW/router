@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 
-	"github.com/yeying-community/router/internal/relay/channeltype"
 	"gorm.io/gorm"
 )
 
@@ -14,15 +13,15 @@ func runRemoveOpenAICompatibleProtocolMigrationWithDB(tx *gorm.DB) error {
 
 	if tx.Migrator().HasTable(&Channel{}) {
 		if err := tx.Model(&Channel{}).
-			Where("type = ?", channeltype.OpenAICompatible).
-			Update("type", channeltype.OpenAI).Error; err != nil {
+			Where("protocol = ?", "openai-compatible").
+			Update("protocol", "openai").Error; err != nil {
 			return err
 		}
 	}
 
-	if tx.Migrator().HasTable(&ChannelTypeCatalog{}) {
-		if err := tx.Where("id = ?", channeltype.OpenAICompatible).
-			Delete(&ChannelTypeCatalog{}).Error; err != nil {
+	if tx.Migrator().HasTable(&ChannelProtocolCatalog{}) {
+		if err := tx.Where("name = ?", "openai-compatible").
+			Delete(&ChannelProtocolCatalog{}).Error; err != nil {
 			return err
 		}
 	}

@@ -77,6 +77,27 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			},
 		},
 		{
+			Version:     "202603060100_channel_protocol_name",
+			Description: "migrate channels to protocol name and normalize legacy type mapping",
+			Up: func(tx *gorm.DB) error {
+				return runChannelProtocolMigrationWithDB(tx)
+			},
+		},
+		{
+			Version:     "202603060110_channel_protocol_catalog_name_key",
+			Description: "normalize channel protocol catalog to use protocol name as key",
+			Up: func(tx *gorm.DB) error {
+				return runChannelProtocolCatalogMigrationsWithDB(tx)
+			},
+		},
+		{
+			Version:     "202603060120_drop_channel_type_column",
+			Description: "drop deprecated channels.type column after protocol migration",
+			Up: func(tx *gorm.DB) error {
+				return runDropChannelTypeColumnMigrationWithDB(tx)
+			},
+		},
+		{
 			Version:     "202603051100_remove_openai_compatible_protocol",
 			Description: "remove openai-compatible protocol type and normalize existing channels to openai",
 			Up: func(tx *gorm.DB) error {

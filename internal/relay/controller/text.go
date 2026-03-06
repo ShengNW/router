@@ -21,7 +21,7 @@ import (
 	"github.com/yeying-community/router/internal/relay/apitype"
 	"github.com/yeying-community/router/internal/relay/billing"
 	billingratio "github.com/yeying-community/router/internal/relay/billing/ratio"
-	"github.com/yeying-community/router/internal/relay/channeltype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
 	"github.com/yeying-community/router/internal/relay/model"
 	"github.com/yeying-community/router/internal/relay/relaymode"
@@ -45,7 +45,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	// set system prompt if not empty
 	systemPromptReset := setSystemPrompt(ctx, textRequest, meta.ForcedSystemPrompt)
 	// get model ratio & group ratio
-	modelRatio := billingratio.GetChannelModelRatio(textRequest.Model, meta.ChannelType, meta.ChannelModelRatio)
+	modelRatio := billingratio.GetChannelModelRatio(textRequest.Model, meta.ChannelProtocol, meta.ChannelModelRatio)
 	groupRatio := billingratio.GetGroupRatio(meta.Group)
 	ratio := modelRatio * groupRatio
 	// pre-consume quota
@@ -126,7 +126,7 @@ func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *model.GeneralO
 	if !config.EnforceIncludeUsage &&
 		meta.APIType == apitype.OpenAI &&
 		meta.OriginModelName == meta.ActualModelName &&
-		meta.ChannelType != channeltype.Baichuan &&
+		meta.ChannelProtocol != relaychannel.Baichuan &&
 		meta.ForcedSystemPrompt == "" {
 		// no need to convert request for openai
 		return c.Request.Body, nil

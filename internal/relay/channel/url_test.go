@@ -1,4 +1,4 @@
-package channeltype
+package channel
 
 import (
 	. "github.com/smartystreets/goconvey/convey"
