@@ -184,6 +184,7 @@
       }
     },
     "edit": {
+      "title_detail": "渠道详情",
       "title_edit": "更新渠道信息",
       "title_create": "创建新的渠道",
       "type": "协议类型",
@@ -205,6 +206,7 @@
       "key": "密钥",
       "key_placeholder": "请输入密钥",
       "buttons": {
+        "back": "返回",
         "cancel": "取消",
         "submit": "提交",
         "previous_step": "上一步",

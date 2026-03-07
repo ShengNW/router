@@ -575,7 +575,7 @@ const ChannelsTable = () => {
       );
       return;
     }
-    navigate(`/channel/edit/${channel.id}`);
+    navigate(`/channel/detail/${channel.id}`);
   };
 
   const stopRowClick = (event) => {

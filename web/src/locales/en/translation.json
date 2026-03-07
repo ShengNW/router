@@ -184,6 +184,7 @@
       }
     },
     "edit": {
+      "title_detail": "Channel Details",
       "title_edit": "Update Channel Information",
       "title_create": "Create New Channel",
       "type": "Protocol Type",
@@ -205,6 +206,7 @@
       "key": "Key",
       "key_placeholder": "Please enter key",
       "buttons": {
+        "back": "Back",
         "cancel": "Cancel",
         "submit": "Submit",
         "previous_step": "Previous",

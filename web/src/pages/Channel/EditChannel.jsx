@@ -11,6 +11,7 @@ import {
   Card,
   Checkbox,
   Form,
+  Icon,
   Label,
   Message,
   Table,
@@ -220,19 +221,23 @@ const EditChannel = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const channelId = params.id;
-  const isEdit = channelId !== undefined;
+  const hasChannelID = channelId !== undefined;
+  const isDetailMode =
+    hasChannelID && location.pathname.includes('/channel/detail/');
+  const isEditMode = hasChannelID && !isDetailMode;
+  const isCreateMode = !hasChannelID;
   const copyFromId = useMemo(() => {
-    if (isEdit) return 0;
+    if (hasChannelID) return 0;
     const query = new URLSearchParams(location.search);
     const id = Number(query.get('copy_from') || 0);
     return Number.isInteger(id) && id > 0 ? id : 0;
-  }, [isEdit, location.search]);
+  }, [hasChannelID, location.search]);
   const draftIdFromQuery = useMemo(() => {
-    if (isEdit) return '';
+    if (hasChannelID) return '';
     const query = new URLSearchParams(location.search);
     return (query.get('draft_id') || '').trim();
-  }, [isEdit, location.search]);
-  const [loading, setLoading] = useState(isEdit || copyFromId > 0);
+  }, [hasChannelID, location.search]);
+  const [loading, setLoading] = useState(hasChannelID || copyFromId > 0);
   const [createStep, setCreateStep] = useState(() => {
     const query = new URLSearchParams(location.search);
     return parseCreateStep(query.get('step'));
@@ -242,6 +247,12 @@ const EditChannel = () => {
   const handleCancel = () => {
     navigate('/admin/channel');
   };
+  const openEditPage = useCallback(() => {
+    if (!channelId) {
+      return;
+    }
+    navigate(`/admin/channel/edit/${channelId}`);
+  }, [channelId, navigate]);
 
   const [inputs, setInputs] = useState(CHANNEL_ORIGIN_INPUTS);
   const [originModelOptions, setOriginModelOptions] = useState([]);
@@ -291,10 +302,9 @@ const EditChannel = () => {
     [buildEffectiveKey]
   );
   const previewChannelID = useMemo(
-    () => ((isEdit ? channelId : draftChannelId) || '').trim(),
-    [channelId, draftChannelId, isEdit]
+    () => ((hasChannelID ? channelId : draftChannelId) || '').trim(),
+    [channelId, draftChannelId, hasChannelID]
   );
-  const isCreateMode = !isEdit;
   const hasModelPreviewCredentials =
     effectivePreviewKey !== '' || (previewChannelID !== '' && channelKeySet);
   const canReuseStoredKeyForCreate =
@@ -320,11 +330,12 @@ const EditChannel = () => {
       }),
     [effectivePreviewKey, inputs.base_url, inputs.models, inputs.protocol, previewChannelID]
   );
-  const requiresConnectionVerification = !isEdit && inputs.protocol !== 'proxy';
-  const showStepOne = isEdit || createStep === 1;
-  const showStepTwo = isEdit || createStep === 2;
-  const showStepThree = isEdit || createStep === 3;
-  const showStepFour = isEdit || createStep === 4;
+  const requiresConnectionVerification = isCreateMode && inputs.protocol !== 'proxy';
+  const showAllSections = hasChannelID;
+  const showStepOne = showAllSections || createStep === 1;
+  const showStepTwo = showAllSections || createStep === 2;
+  const showStepThree = showAllSections || createStep === 3;
+  const showStepFour = showAllSections || createStep === 4;
   const isCurrentSignatureVerified =
     requiresConnectionVerification &&
     verifiedModelSignature !== '' &&
@@ -333,6 +344,9 @@ const EditChannel = () => {
     requiresConnectionVerification && inputs.models.length === 0;
   const visibleModelOptions = modelOptions;
   const fetchModelsButtonText = t('channel.edit.buttons.fetch_models');
+  const inputReadonlyProps = isDetailMode ? { readOnly: true } : {};
+  const textAreaReadonlyProps = isDetailMode ? { readOnly: true } : {};
+  const selectDisabledProps = isDetailMode ? { disabled: true } : {};
 
   const handleInputChange = (e, { name, value }) => {
     setInputs((inputs) => ({ ...inputs, [name]: value }));
@@ -429,12 +443,12 @@ const EditChannel = () => {
 
   const goToCreateStep = useCallback(
     (targetStep) => {
-      if (isEdit) {
+      if (!isCreateMode) {
         return;
       }
       setCreateStep(parseCreateStep(targetStep));
     },
-    [isEdit]
+    [isCreateMode]
   );
 
   const moveToPreviousCreateStep = useCallback(() => {
@@ -803,7 +817,7 @@ const EditChannel = () => {
           ...prev,
           ...parsedConfig,
         }));
-        if (fromDraft || isEdit) {
+        if (fromDraft || hasChannelID) {
           setChannelKeySet(keySet);
         } else {
           setChannelKeySet(false);
@@ -813,7 +827,7 @@ const EditChannel = () => {
       }
       setLoading(false);
     },
-    [isEdit]
+    [hasChannelID]
   );
 
   const applyModelCandidates = useCallback((models, selectAll = false) => {
@@ -1015,7 +1029,7 @@ const EditChannel = () => {
   }, []);
 
   useEffect(() => {
-    if (isEdit) {
+    if (hasChannelID) {
       return;
     }
     if (draftIdFromQuery === draftChannelId) {
@@ -1023,10 +1037,10 @@ const EditChannel = () => {
     }
     setDraftChannelId(draftIdFromQuery);
     draftChannelIdRef.current = draftIdFromQuery;
-  }, [draftIdFromQuery, isEdit]);
+  }, [draftIdFromQuery, draftChannelId, hasChannelID]);
 
   useEffect(() => {
-    if (isEdit) {
+    if (hasChannelID) {
       setLoading(true);
       loadChannelById(channelId, false, true, false).then();
       return;
@@ -1048,13 +1062,13 @@ const EditChannel = () => {
     channelId,
     copyFromId,
     draftIdFromQuery,
-    isEdit,
+    hasChannelID,
     loadChannelById,
     restoreCreateDraft,
   ]);
 
   useEffect(() => {
-    if (isEdit) {
+    if (hasChannelID) {
       return;
     }
     const query = new URLSearchParams(location.search);
@@ -1066,10 +1080,10 @@ const EditChannel = () => {
     if (queryStep !== createStep) {
       setCreateStep(queryStep);
     }
-  }, [isEdit, location.search]);
+  }, [createStep, hasChannelID, location.search]);
 
   useEffect(() => {
-    if (isEdit) {
+    if (hasChannelID) {
       return;
     }
     const query = new URLSearchParams(location.search);
@@ -1094,10 +1108,10 @@ const EditChannel = () => {
       },
       { replace: true }
     );
-  }, [createStep, isEdit, location.pathname, location.search, navigate]);
+  }, [createStep, hasChannelID, location.pathname, location.search, navigate]);
 
   useEffect(() => {
-    if (isEdit) {
+    if (hasChannelID) {
       return;
     }
     const query = new URLSearchParams(location.search);
@@ -1119,10 +1133,10 @@ const EditChannel = () => {
       },
       { replace: true }
     );
-  }, [draftChannelId, isEdit, location.pathname, location.search, navigate]);
+  }, [draftChannelId, hasChannelID, location.pathname, location.search, navigate]);
 
   useEffect(() => {
-    if (isEdit || loading || typeof window === 'undefined') {
+    if (hasChannelID || loading || typeof window === 'undefined') {
       return;
     }
     const payload = {
@@ -1148,7 +1162,7 @@ const EditChannel = () => {
     createStep,
     draftChannelId,
     inputs,
-    isEdit,
+    hasChannelID,
     loading,
     capabilityResults,
     capabilityTestError,
@@ -1210,7 +1224,7 @@ const EditChannel = () => {
   const submit = async () => {
     const effectiveKey = buildEffectiveKey();
     if (
-      !isEdit &&
+      isCreateMode &&
       (inputs.name.trim() === '' ||
         (effectiveKey.trim() === '' && !canReuseStoredKeyForCreate))
     ) {
@@ -1248,7 +1262,7 @@ const EditChannel = () => {
     }
     let localInputs = buildChannelPayload();
     let res;
-    if (isEdit) {
+    if (isEditMode) {
       res = await API.put(`/api/v1/admin/channel/`, {
         ...localInputs,
         id: channelId,
@@ -1264,7 +1278,7 @@ const EditChannel = () => {
     }
     const { success, message } = res.data;
     if (success) {
-      if (isEdit) {
+      if (isEditMode) {
         showSuccess(t('channel.edit.messages.update_success'));
       } else {
         showSuccess(t('channel.edit.messages.create_success'));
@@ -1281,8 +1295,31 @@ const EditChannel = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
+          {isDetailMode && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                gap: '8px',
+                flexWrap: 'wrap',
+                marginBottom: 12,
+              }}
+            >
+              <Button type='button' onClick={handleCancel}>
+                <Icon name='undo' />
+                {t('channel.edit.buttons.back')}
+              </Button>
+              <Button type='button' color='blue' onClick={openEditPage}>
+                <Icon name='edit' />
+                {t('channel.buttons.edit')}
+              </Button>
+            </div>
+          )}
           <Card.Header className='header'>
-            {isEdit
+            {isDetailMode
+              ? t('channel.edit.title_detail')
+              : isEditMode
               ? t('channel.edit.title_edit')
               : t('channel.edit.title_create')}
           </Card.Header>
@@ -1345,6 +1382,7 @@ const EditChannel = () => {
                     placeholder={t('channel.edit.name_placeholder')}
                     onChange={handleInputChange}
                     value={inputs.name}
+                    readOnly={isDetailMode}
                     required
                   />
                 </Form.Field>
@@ -1357,6 +1395,7 @@ const EditChannel = () => {
                     options={channelProtocolOptions}
                     value={inputs.protocol}
                     onChange={handleInputChange}
+                    {...selectDisabledProps}
                   />
                 </Form.Field>
                 {inputs.protocol === 'azure' && (
@@ -1368,6 +1407,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.base_url}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1381,6 +1421,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.base_url}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1393,6 +1434,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.base_url}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1409,6 +1451,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.base_url}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1425,6 +1468,7 @@ const EditChannel = () => {
                         onChange={handleInputChange}
                         value={inputs.base_url}
                         autoComplete='new-password'
+                        {...inputReadonlyProps}
                       />
                     </Form.Field>
                   )}
@@ -1436,7 +1480,7 @@ const EditChannel = () => {
                         label={t('channel.edit.key')}
                         name='key'
                         type='password'
-                        required={!isEdit && !canReuseStoredKeyForCreate}
+                        required={isCreateMode && !canReuseStoredKeyForCreate}
                         placeholder={
                           channelKeySet && (inputs.key || '').trim() === ''
                             ? '********'
@@ -1445,6 +1489,7 @@ const EditChannel = () => {
                         onChange={handleInputChange}
                         value={inputs.key}
                         autoComplete='new-password'
+                        {...inputReadonlyProps}
                       />
                     </Form.Field>
                   )}
@@ -1472,6 +1517,7 @@ const EditChannel = () => {
                         onChange={handleInputChange}
                         value={inputs.other}
                         autoComplete='new-password'
+                        {...inputReadonlyProps}
                       />
                     </Form.Field>
                   </>
@@ -1486,6 +1532,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.other}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1498,6 +1545,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.other}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1510,6 +1558,7 @@ const EditChannel = () => {
                       onChange={handleInputChange}
                       value={inputs.other}
                       autoComplete='new-password'
+                      {...inputReadonlyProps}
                     />
                   </Form.Field>
                 )}
@@ -1550,42 +1599,44 @@ const EditChannel = () => {
                       total: visibleModelOptions.length,
                     })}
                   </span>
-                  <div
-                    style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}
-                  >
-                    <Button
-                      type='button'
-                      size='tiny'
-                      color='green'
-                      loading={fetchModelsLoading}
-                      disabled={
-                        fetchModelsLoading ||
-                        (requiresConnectionVerification &&
-                          !hasModelPreviewCredentials)
-                      }
-                      onClick={() =>
-                        handleFetchModels({ silent: false, selectAll: true })
-                      }
+                  {!isDetailMode && (
+                    <div
+                      style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}
                     >
-                      {fetchModelsButtonText}
-                    </Button>
-                    <Button
-                      type='button'
-                      size='tiny'
-                      onClick={selectAllModels}
-                      disabled={visibleModelOptions.length === 0}
-                    >
-                      {t('channel.edit.buttons.select_all')}
-                    </Button>
-                    <Button
-                      type='button'
-                      size='tiny'
-                      onClick={clearSelectedModels}
-                      disabled={inputs.models.length === 0}
-                    >
-                      {t('channel.edit.buttons.clear')}
-                    </Button>
-                  </div>
+                      <Button
+                        type='button'
+                        size='tiny'
+                        color='green'
+                        loading={fetchModelsLoading}
+                        disabled={
+                          fetchModelsLoading ||
+                          (requiresConnectionVerification &&
+                            !hasModelPreviewCredentials)
+                        }
+                        onClick={() =>
+                          handleFetchModels({ silent: false, selectAll: true })
+                        }
+                      >
+                        {fetchModelsButtonText}
+                      </Button>
+                      <Button
+                        type='button'
+                        size='tiny'
+                        onClick={selectAllModels}
+                        disabled={visibleModelOptions.length === 0}
+                      >
+                        {t('channel.edit.buttons.select_all')}
+                      </Button>
+                      <Button
+                        type='button'
+                        size='tiny'
+                        onClick={clearSelectedModels}
+                        disabled={inputs.models.length === 0}
+                      >
+                        {t('channel.edit.buttons.clear')}
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div
                   style={{
@@ -1610,6 +1661,7 @@ const EditChannel = () => {
                         key={option.key}
                         label={option.text}
                         checked={inputs.models.includes(option.value)}
+                        disabled={isDetailMode}
                         onChange={(e, { checked }) =>
                           toggleModelSelection(option.value, checked)
                         }
@@ -1633,22 +1685,24 @@ const EditChannel = () => {
                 <div
                   style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
+                    justifyContent: isDetailMode ? 'flex-end' : 'space-between',
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '8px',
                     marginBottom: '12px',
                   }}
                 >
-                  <Button
-                    type='button'
-                    color='blue'
-                    loading={capabilityTesting}
-                    disabled={capabilityTesting || inputs.models.length === 0}
-                    onClick={handleTestCapabilities}
-                  >
-                    {t('channel.edit.capability_tester.button')}
-                  </Button>
+                  {!isDetailMode && (
+                    <Button
+                      type='button'
+                      color='blue'
+                      loading={capabilityTesting}
+                      disabled={capabilityTesting || inputs.models.length === 0}
+                      onClick={handleTestCapabilities}
+                    >
+                      {t('channel.edit.capability_tester.button')}
+                    </Button>
+                  )}
                   {capabilityTestedAt > 0 && (
                     <span style={{ color: 'rgba(0, 0, 0, 0.6)' }}>
                       {t('channel.edit.capability_tester.last_tested', {
@@ -1744,6 +1798,7 @@ const EditChannel = () => {
                       fontFamily: 'JetBrains Mono, Consolas',
                     }}
                     autoComplete='new-password'
+                    {...textAreaReadonlyProps}
                   />
                 </Form.Field>
                 <Form.Field>
@@ -1764,6 +1819,7 @@ const EditChannel = () => {
                       fontFamily: 'JetBrains Mono, Consolas',
                     }}
                     autoComplete='new-password'
+                    {...textAreaReadonlyProps}
                   />
                 </Form.Field>
                 <Form.Field>
@@ -1784,6 +1840,7 @@ const EditChannel = () => {
                       fontFamily: 'JetBrains Mono, Consolas',
                     }}
                     autoComplete='new-password'
+                    {...textAreaReadonlyProps}
                   />
                 </Form.Field>
                 <Form.Field>
@@ -1798,6 +1855,7 @@ const EditChannel = () => {
                       fontFamily: 'JetBrains Mono, Consolas',
                     }}
                     autoComplete='new-password'
+                    {...textAreaReadonlyProps}
                   />
                 </Form.Field>
               </>
@@ -1812,6 +1870,7 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.region}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
                 <Form.Input
                   label='AK'
@@ -1821,6 +1880,7 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.ak}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
                 <Form.Input
                   label='SK'
@@ -1830,6 +1890,7 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.sk}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
               </Form.Field>
             )}
@@ -1843,6 +1904,7 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.region}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
                 <Form.Input
                   label={t('channel.edit.vertex_project_id')}
@@ -1852,6 +1914,7 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.vertex_ai_project_id}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
                 <Form.Input
                   label={t('channel.edit.vertex_credentials')}
@@ -1861,6 +1924,7 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.vertex_ai_adc}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
               </Form.Field>
             )}
@@ -1873,6 +1937,7 @@ const EditChannel = () => {
                 onChange={handleConfigChange}
                 value={config.user_id}
                 autoComplete=''
+                {...inputReadonlyProps}
               />
             )}
             {showStepOne && inputs.protocol === 'cloudflare' && (
@@ -1887,10 +1952,11 @@ const EditChannel = () => {
                   onChange={handleConfigChange}
                   value={config.user_id}
                   autoComplete=''
+                  {...inputReadonlyProps}
                 />
               </Form.Field>
             )}
-            {isEdit ? (
+            {isDetailMode ? null : isEditMode ? (
               <>
                 <Button onClick={handleCancel}>
                   {t('channel.edit.buttons.cancel')}
