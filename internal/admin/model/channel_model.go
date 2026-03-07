@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yeying-community/router/common/helper"
+	billingratio "github.com/yeying-community/router/internal/relay/billing/ratio"
 	"gorm.io/gorm"
 )
 
@@ -13,11 +14,14 @@ const (
 )
 
 type ChannelModel struct {
-	ChannelId string `json:"channel_id" gorm:"primaryKey;type:char(36);index"`
-	Model     string `json:"model" gorm:"primaryKey;type:varchar(255)"`
-	Selected  bool   `json:"selected" gorm:"default:true;index"`
-	SortOrder int    `json:"sort_order" gorm:"default:0"`
-	UpdatedAt int64  `json:"updated_at" gorm:"bigint"`
+	ChannelId       string  `json:"channel_id" gorm:"primaryKey;type:char(36);index"`
+	Model           string  `json:"model" gorm:"primaryKey;type:varchar(255)"`
+	UpstreamModel   string  `json:"upstream_model" gorm:"type:varchar(255);default:'';index"`
+	Selected        bool    `json:"selected" gorm:"default:true;index"`
+	ModelRatio      float64 `json:"model_ratio" gorm:"type:numeric(12,6);default:1"`
+	CompletionRatio float64 `json:"completion_ratio" gorm:"type:numeric(12,6);default:1"`
+	SortOrder       int     `json:"sort_order" gorm:"default:0"`
+	UpdatedAt       int64   `json:"updated_at" gorm:"bigint"`
 }
 
 func (ChannelModel) TableName() string {
@@ -26,6 +30,47 @@ func (ChannelModel) TableName() string {
 
 func NormalizeChannelModelIDsPreserveOrder(modelIDs []string) []string {
 	return normalizeTrimmedValuesPreserveOrder(modelIDs)
+}
+
+func NormalizeChannelModelConfigsPreserveOrder(rows []ChannelModel) []ChannelModel {
+	if len(rows) == 0 {
+		return []ChannelModel{}
+	}
+	seen := make(map[string]struct{}, len(rows))
+	result := make([]ChannelModel, 0, len(rows))
+	for _, row := range rows {
+		normalized := row
+		normalizeChannelModelRow(&normalized)
+		if normalized.Model == "" {
+			continue
+		}
+		if _, ok := seen[normalized.Model]; ok {
+			continue
+		}
+		seen[normalized.Model] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result
+}
+
+func BuildDefaultChannelModelConfigs(modelIDs []string) []ChannelModel {
+	return BuildDefaultChannelModelConfigsWithProtocol(modelIDs, 0)
+}
+
+func BuildDefaultChannelModelConfigsWithProtocol(modelIDs []string, channelProtocol int) []ChannelModel {
+	normalized := NormalizeChannelModelIDsPreserveOrder(modelIDs)
+	rows := make([]ChannelModel, 0, len(normalized))
+	for idx, modelID := range normalized {
+		row := ChannelModel{
+			Model:         modelID,
+			UpstreamModel: modelID,
+			Selected:      true,
+			SortOrder:     idx + 1,
+		}
+		completeChannelModelRowDefaults(&row, channelProtocol)
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func ParseChannelModelCSV(models string) []string {
@@ -62,6 +107,7 @@ func HydrateChannelsWithModels(db *gorm.DB, channels []*Channel) error {
 		if channel.Id == "" {
 			channel.SetSelectedModelIDs(nil)
 			channel.SetAvailableModelIDs(nil)
+			channel.SetModelConfigs(nil)
 			continue
 		}
 		channelIDs = append(channelIDs, channel.Id)
@@ -109,7 +155,24 @@ func ListAvailableChannelModelIDsByChannelIDWithDB(db *gorm.DB, channelID string
 }
 
 func SyncFetchedChannelModelsWithDB(db *gorm.DB, channelID string, modelIDs []string) error {
-	return replaceChannelModelRowsWithDB(db, channelID, modelIDs, buildChannelModelSelectionSet(modelIDs))
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	normalizedChannelID := strings.TrimSpace(channelID)
+	if normalizedChannelID == "" {
+		return nil
+	}
+	normalizedModelIDs := NormalizeChannelModelIDsPreserveOrder(modelIDs)
+	existingRows, err := listChannelModelRowsByChannelIDWithDB(db, normalizedChannelID)
+	if err != nil {
+		return err
+	}
+	channelProtocol, err := loadChannelProtocolByChannelIDWithDB(db, normalizedChannelID)
+	if err != nil {
+		return err
+	}
+	rows := BuildFetchedChannelModelConfigs(existingRows, normalizedModelIDs, channelProtocol, true)
+	return ReplaceChannelModelConfigsWithDB(db, normalizedChannelID, rows)
 }
 
 func ReplaceChannelSelectedModelsWithDB(db *gorm.DB, channelID string, selected []string) error {
@@ -117,23 +180,48 @@ func ReplaceChannelSelectedModelsWithDB(db *gorm.DB, channelID string, selected 
 	if err != nil {
 		return err
 	}
-	available := make([]string, 0, len(existingRows)+len(selected))
+	channelProtocol, err := loadChannelProtocolByChannelIDWithDB(db, channelID)
+	if err != nil {
+		return err
+	}
+	selectedSet := buildChannelModelSelectionSet(selected)
 	seen := make(map[string]struct{}, len(existingRows)+len(selected))
+	rows := make([]ChannelModel, 0, len(existingRows)+len(selected))
 	for _, row := range existingRows {
 		if _, ok := seen[row.Model]; ok {
 			continue
 		}
 		seen[row.Model] = struct{}{}
-		available = append(available, row.Model)
+		row.Selected = false
+		if _, ok := selectedSet[row.Model]; ok {
+			row.Selected = true
+		}
+		rows = append(rows, row)
 	}
 	for _, modelID := range NormalizeChannelModelIDsPreserveOrder(selected) {
 		if _, ok := seen[modelID]; ok {
 			continue
 		}
 		seen[modelID] = struct{}{}
-		available = append(available, modelID)
+		row := ChannelModel{
+			Model:         modelID,
+			UpstreamModel: modelID,
+			Selected:      true,
+		}
+		completeChannelModelRowDefaults(&row, channelProtocol)
+		rows = append(rows, row)
 	}
-	return replaceChannelModelRowsWithDB(db, channelID, available, buildChannelModelSelectionSet(selected))
+	if len(rows) == 0 {
+		return ReplaceChannelModelConfigsWithDB(db, channelID, nil)
+	}
+	for idx := range rows {
+		rows[idx].SortOrder = idx + 1
+	}
+	return ReplaceChannelModelConfigsWithDB(db, channelID, rows)
+}
+
+func ReplaceChannelModelConfigsWithDB(db *gorm.DB, channelID string, rows []ChannelModel) error {
+	return replaceChannelModelRowsWithDB(db, channelID, rows)
 }
 
 func DeleteChannelModelsByChannelIDWithDB(db *gorm.DB, channelID string) error {
@@ -265,22 +353,24 @@ func normalizeChannelModelRow(row *ChannelModel) {
 	}
 	row.ChannelId = strings.TrimSpace(row.ChannelId)
 	row.Model = strings.TrimSpace(row.Model)
+	row.UpstreamModel = strings.TrimSpace(row.UpstreamModel)
+	if row.Model == "" && row.UpstreamModel != "" {
+		row.Model = row.UpstreamModel
+	}
+	if row.UpstreamModel == "" {
+		row.UpstreamModel = row.Model
+	}
 }
 
 func applyChannelModelRows(channel *Channel, rows []ChannelModel) {
 	if channel == nil {
 		return
 	}
-	available := make([]string, 0, len(rows))
-	selected := make([]string, 0, len(rows))
-	for _, row := range rows {
-		available = append(available, row.Model)
-		if row.Selected {
-			selected = append(selected, row.Model)
-		}
+	normalized := NormalizeChannelModelConfigsPreserveOrder(rows)
+	for i := range normalized {
+		completeChannelModelRowDefaults(&normalized[i], channel.GetChannelProtocol())
 	}
-	channel.SetAvailableModelIDs(available)
-	channel.SetSelectedModelIDs(selected)
+	channel.SetModelConfigs(normalized)
 }
 
 func buildChannelModelSelectionSet(modelIDs []string) map[string]struct{} {
@@ -292,7 +382,7 @@ func buildChannelModelSelectionSet(modelIDs []string) map[string]struct{} {
 	return set
 }
 
-func replaceChannelModelRowsWithDB(db *gorm.DB, channelID string, available []string, selectedSet map[string]struct{}) error {
+func replaceChannelModelRowsWithDB(db *gorm.DB, channelID string, rows []ChannelModel) error {
 	if db == nil {
 		return fmt.Errorf("database handle is nil")
 	}
@@ -300,26 +390,121 @@ func replaceChannelModelRowsWithDB(db *gorm.DB, channelID string, available []st
 	if normalizedChannelID == "" {
 		return nil
 	}
-	normalizedAvailable := NormalizeChannelModelIDsPreserveOrder(available)
+	normalizedRows := NormalizeChannelModelConfigsPreserveOrder(rows)
+	channelProtocol, err := loadChannelProtocolByChannelIDWithDB(db, normalizedChannelID)
+	if err != nil {
+		return err
+	}
 	now := helper.GetTimestamp()
-	rows := make([]ChannelModel, 0, len(normalizedAvailable))
-	for idx, modelID := range normalizedAvailable {
-		_, selected := selectedSet[modelID]
-		rows = append(rows, ChannelModel{
-			ChannelId: normalizedChannelID,
-			Model:     modelID,
-			Selected:  selected,
-			SortOrder: idx + 1,
-			UpdatedAt: now,
-		})
+	dbRows := make([]ChannelModel, 0, len(normalizedRows))
+	for idx, row := range normalizedRows {
+		row.ChannelId = normalizedChannelID
+		row.SortOrder = idx + 1
+		row.UpdatedAt = now
+		normalizeChannelModelRow(&row)
+		completeChannelModelRowDefaults(&row, channelProtocol)
+		dbRows = append(dbRows, row)
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("channel_id = ?", normalizedChannelID).Delete(&ChannelModel{}).Error; err != nil {
 			return err
 		}
-		if len(rows) == 0 {
+		if len(dbRows) == 0 {
 			return nil
 		}
-		return tx.Create(&rows).Error
+		return tx.Create(&dbRows).Error
 	})
+}
+
+func BuildFetchedChannelModelConfigs(existingRows []ChannelModel, modelIDs []string, channelProtocol int, selectAll bool) []ChannelModel {
+	normalizedModelIDs := NormalizeChannelModelIDsPreserveOrder(modelIDs)
+	normalizedExisting := NormalizeChannelModelConfigsPreserveOrder(existingRows)
+	existingByUpstream := make(map[string]ChannelModel, len(normalizedExisting))
+	for _, row := range normalizedExisting {
+		upstream := strings.TrimSpace(row.UpstreamModel)
+		if upstream == "" {
+			upstream = strings.TrimSpace(row.Model)
+		}
+		if upstream == "" {
+			continue
+		}
+		if _, ok := existingByUpstream[upstream]; ok {
+			continue
+		}
+		completeChannelModelRowDefaults(&row, channelProtocol)
+		existingByUpstream[upstream] = row
+	}
+	rows := make([]ChannelModel, 0, len(normalizedModelIDs))
+	for idx, modelID := range normalizedModelIDs {
+		row, ok := existingByUpstream[modelID]
+		if !ok {
+			row = ChannelModel{
+				Model:         modelID,
+				UpstreamModel: modelID,
+			}
+		}
+		row.UpstreamModel = modelID
+		if selectAll {
+			row.Selected = true
+		}
+		row.SortOrder = idx + 1
+		completeChannelModelRowDefaults(&row, channelProtocol)
+		rows = append(rows, row)
+	}
+	return NormalizeChannelModelConfigsPreserveOrder(rows)
+}
+
+func loadChannelProtocolByChannelIDWithDB(db *gorm.DB, channelID string) (int, error) {
+	if db == nil {
+		return 0, fmt.Errorf("database handle is nil")
+	}
+	normalizedChannelID := strings.TrimSpace(channelID)
+	if normalizedChannelID == "" {
+		return 0, nil
+	}
+	type channelProtocolRecord struct {
+		Protocol string `gorm:"column:protocol"`
+	}
+	record := channelProtocolRecord{}
+	if err := db.Model(&Channel{}).
+		Select("protocol").
+		Where("id = ?", normalizedChannelID).
+		Take(&record).Error; err != nil {
+		return 0, err
+	}
+	channel := Channel{Protocol: record.Protocol}
+	return channel.GetChannelProtocol(), nil
+}
+
+func defaultChannelModelRatioValue(modelName string, channelProtocol int) float64 {
+	ratio := billingratio.GetModelRatio(strings.TrimSpace(modelName), channelProtocol)
+	if ratio <= 0 {
+		return 1
+	}
+	return ratio
+}
+
+func defaultChannelCompletionRatioValue(modelName string, channelProtocol int) float64 {
+	ratio := billingratio.GetCompletionRatio(strings.TrimSpace(modelName), channelProtocol)
+	if ratio <= 0 {
+		return 1
+	}
+	return ratio
+}
+
+func completeChannelModelRowDefaults(row *ChannelModel, channelProtocol int) {
+	if row == nil {
+		return
+	}
+	normalizeChannelModelRow(row)
+	referenceModel := strings.TrimSpace(row.UpstreamModel)
+	if referenceModel == "" {
+		referenceModel = strings.TrimSpace(row.Model)
+	}
+	if row.ModelRatio <= 0 {
+		row.ModelRatio = defaultChannelModelRatioValue(referenceModel, channelProtocol)
+	}
+	if row.CompletionRatio <= 0 {
+		row.CompletionRatio = defaultChannelCompletionRatioValue(referenceModel, channelProtocol)
+	}
 }

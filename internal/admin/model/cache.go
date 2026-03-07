@@ -171,6 +171,9 @@ var channelSyncLock sync.RWMutex
 func InitChannelCache() {
 	var channels []*Channel
 	DB.Where("status = ?", ChannelStatusEnabled).Find(&channels)
+	if err := HydrateChannelsWithModels(DB, channels); err != nil {
+		logger.SysError("failed to hydrate channel models for cache: " + err.Error())
+	}
 	var abilities []*Ability
 	DB.Where("enabled = ?", true).Find(&abilities)
 	groups := make(map[string]bool)

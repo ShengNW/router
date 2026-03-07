@@ -36,13 +36,14 @@ type previewModelsRequest struct {
 }
 
 type previewCapabilitiesRequest struct {
-	Protocol  string          `json:"protocol"`
-	Key       string          `json:"key"`
-	BaseURL   string          `json:"base_url"`
-	DraftID   string          `json:"draft_id"`
-	Config    json.RawMessage `json:"config"`
-	Models    []string        `json:"models"`
-	TestModel string          `json:"test_model"`
+	Protocol     string               `json:"protocol"`
+	Key          string               `json:"key"`
+	BaseURL      string               `json:"base_url"`
+	DraftID      string               `json:"draft_id"`
+	Config       json.RawMessage      `json:"config"`
+	Models       []string             `json:"models"`
+	ModelConfigs []model.ChannelModel `json:"model_configs"`
+	TestModel    string               `json:"test_model"`
 }
 
 type openAIModelsResponse struct {
@@ -172,11 +173,6 @@ func fetchModelsByConfiguredChannelDetailed(key, baseURL, modelProvider string) 
 	return modelIDs, modelsURL, nil
 }
 
-func fetchModelsByConfiguredChannel(key, baseURL, modelProvider string) ([]string, error) {
-	modelIDs, _, err := fetchModelsByConfiguredChannelDetailed(key, baseURL, modelProvider)
-	return modelIDs, err
-}
-
 func resolvePreviewBaseURL(protocol string, baseURL string) string {
 	trimmedBaseURL := strings.TrimSpace(baseURL)
 	if trimmedBaseURL != "" {
@@ -189,12 +185,13 @@ func resolvePreviewBaseURL(protocol string, baseURL string) string {
 	return relaychannel.BaseURLByProtocol(normalized)
 }
 
-func loadPreviewChannel(protocol string, key string, baseURL string, draftID string, configRaw json.RawMessage, selectedModels []string, testModel string) (*model.Channel, string, error) {
+func loadPreviewChannel(protocol string, key string, baseURL string, draftID string, configRaw json.RawMessage, selectedModels []string, modelConfigs []model.ChannelModel, testModel string) (*model.Channel, string, error) {
 	normalizedProtocol := relaychannel.NormalizeProtocolName(protocol)
 	trimmedKey := strings.TrimSpace(key)
 	trimmedBaseURL := strings.TrimSpace(baseURL)
 	trimmedDraftID := strings.TrimSpace(draftID)
 	normalizedModels := model.NormalizeChannelModelIDsPreserveOrder(selectedModels)
+	normalizedModelConfigs := model.NormalizeChannelModelConfigsPreserveOrder(modelConfigs)
 	keySource := "request"
 
 	previewChannel := &model.Channel{
@@ -218,7 +215,7 @@ func loadPreviewChannel(protocol string, key string, baseURL string, draftID str
 		if trimmedBaseURL == "" {
 			trimmedBaseURL = strings.TrimSpace(savedChannel.GetBaseURL())
 		}
-		if len(normalizedModels) == 0 {
+		if len(normalizedModelConfigs) == 0 && len(normalizedModels) == 0 {
 			normalizedModels = savedChannel.SelectedModelIDs()
 		}
 		if strings.TrimSpace(testModel) == "" {
@@ -243,7 +240,9 @@ func loadPreviewChannel(protocol string, key string, baseURL string, draftID str
 	if len(configRaw) > 0 && string(configRaw) != "null" {
 		previewChannel.Config = string(configRaw)
 	}
-	if len(normalizedModels) > 0 {
+	if len(normalizedModelConfigs) > 0 {
+		previewChannel.SetModelConfigs(normalizedModelConfigs)
+	} else if len(normalizedModels) > 0 {
 		previewChannel.SetSelectedModelIDs(normalizedModels)
 	}
 	if strings.TrimSpace(testModel) != "" {
@@ -613,7 +612,7 @@ func PreviewChannelModels(c *gin.Context) {
 		})
 		return
 	}
-	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, nil, "")
+	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, nil, nil, "")
 	if err != nil {
 		logChannelAdminWarn(c, "preview_models", stringField("draft_id", strings.TrimSpace(req.DraftID)), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{
@@ -633,6 +632,7 @@ func PreviewChannelModels(c *gin.Context) {
 		return
 	}
 	draftID := strings.TrimSpace(req.DraftID)
+	modelConfigs := model.BuildFetchedChannelModelConfigs(previewChannel.GetModelConfigs(), modelIDs, previewChannel.GetChannelProtocol(), true)
 	logChannelAdminInfo(c, "preview_models", stringField("source", keySource), stringField("draft_id", draftID), stringField("models_url", modelsURL), intField("count", len(modelIDs)))
 	if draftID != "" {
 		if err := model.SyncFetchedChannelModelsWithDB(model.DB, draftID, modelIDs); err != nil {
@@ -654,12 +654,22 @@ func PreviewChannelModels(c *gin.Context) {
 		if err := model.DeleteChannelCapabilityResultsByChannelIDWithDB(model.DB, draftID); err != nil {
 			logChannelAdminWarn(c, "preview_capabilities_reset", stringField("draft_id", draftID), stringField("reason", err.Error()))
 		}
+		savedChannel, getErr := channelsvc.GetByID(draftID, true)
+		if getErr != nil {
+			logChannelAdminWarn(c, "preview_models_reload", stringField("draft_id", draftID), stringField("reason", getErr.Error()))
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "读取渠道模型失败",
+			})
+			return
+		}
+		modelConfigs = savedChannel.GetModelConfigs()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    modelIDs,
+		"data":    modelConfigs,
 		"meta": gin.H{
 			"source":     "channel",
 			"key_source": keySource,
@@ -689,7 +699,7 @@ func PreviewChannelCapabilities(c *gin.Context) {
 		})
 		return
 	}
-	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, req.Models, req.TestModel)
+	previewChannel, keySource, err := loadPreviewChannel(req.Protocol, req.Key, req.BaseURL, req.DraftID, req.Config, req.Models, req.ModelConfigs, req.TestModel)
 	if err != nil {
 		logChannelAdminWarn(c, "preview_capabilities", stringField("draft_id", strings.TrimSpace(req.DraftID)), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{

@@ -81,6 +81,9 @@ func ListSatisfiedChannels(group string, modelName string) ([]*model.Channel, er
 	if err := model.DB.Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
 		return nil, err
 	}
+	if err := model.HydrateChannelsWithModels(model.DB, channels); err != nil {
+		return nil, err
+	}
 	channelByID := make(map[string]*model.Channel, len(channels))
 	for _, channel := range channels {
 		if channel == nil {
@@ -202,6 +205,9 @@ func GetTopChannelByModel(group string, modelName string) (*model.Channel, error
 	channel := model.Channel{Id: ability.ChannelId}
 	err = model.DB.Omit("key").First(&channel, "id = ?", ability.ChannelId).Error
 	if err != nil {
+		return nil, err
+	}
+	if err := model.HydrateChannelWithModels(model.DB, &channel); err != nil {
 		return nil, err
 	}
 	return &channel, nil

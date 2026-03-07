@@ -17,23 +17,11 @@ import {
   Table,
 } from 'semantic-ui-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import {
-  API,
-  showError,
-  showInfo,
-  showSuccess,
-  verifyJSON,
-} from '../../helpers';
+import { API, showError, showInfo, showSuccess } from '../../helpers';
 import {
   getChannelProtocolOptions,
   loadChannelProtocolOptions,
 } from '../../helpers/helper';
-
-const MODEL_MAPPING_EXAMPLE = {
-  'gpt-3.5-turbo-0301': 'gpt-3.5-turbo',
-  'gpt-4-0314': 'gpt-4',
-  'gpt-4-32k-0314': 'gpt-4-32k',
-};
 
 const normalizeModelId = (model) => {
   if (typeof model === 'string') return model;
@@ -45,22 +33,16 @@ const normalizeModelId = (model) => {
   return null;
 };
 
-const buildModelOptions = (models) => {
+const buildModelIDs = (models) => {
   const seen = new Set();
-  const options = [];
   const ids = [];
   models.forEach((model) => {
     const id = normalizeModelId(model);
     if (!id || seen.has(id)) return;
     seen.add(id);
-    options.push({
-      key: id,
-      text: id,
-      value: id,
-    });
     ids.push(id);
   });
-  return { options, ids };
+  return ids;
 };
 
 const normalizeModelIDs = (models) => {
@@ -81,6 +63,214 @@ const normalizeModelIDs = (models) => {
 
 const normalizeBaseURL = (baseURL) =>
   (baseURL || '').trim().replace(/\/+$/, '');
+
+const parseJSONObject = (value) => {
+  if (typeof value !== 'string') {
+    return {};
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const normalizeRatioValue = (value) => {
+  const ratio = Number(value);
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    return 1;
+  }
+  return ratio;
+};
+
+const normalizeChannelModelConfigRow = (row) => {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+  const upstreamModel = (
+    row.upstream_model ||
+    row.upstreamModel ||
+    row.name ||
+    row.model ||
+    ''
+  )
+    .toString()
+    .trim();
+  const alias = (row.model || row.alias || row.display_model || upstreamModel)
+    .toString()
+    .trim();
+  const model = alias || upstreamModel;
+  if (!model) {
+    return null;
+  }
+  return {
+    model,
+    upstream_model: upstreamModel || model,
+    selected: row.selected !== false,
+    model_ratio: normalizeRatioValue(row.model_ratio),
+    completion_ratio: normalizeRatioValue(row.completion_ratio),
+  };
+};
+
+const normalizeChannelModelConfigs = (rows) => {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  const seen = new Set();
+  const result = [];
+  rows.forEach((row) => {
+    const normalized = normalizeChannelModelConfigRow(row);
+    if (!normalized) {
+      return;
+    }
+    if (seen.has(normalized.model)) {
+      return;
+    }
+    seen.add(normalized.model);
+    result.push(normalized);
+  });
+  return result;
+};
+
+const buildModelConfigsFromLegacyFields = ({
+  modelConfigs,
+  availableModels,
+  selectedModels,
+  modelMapping,
+  modelRatio,
+  completionRatio,
+}) => {
+  const normalizedConfigs = normalizeChannelModelConfigs(modelConfigs);
+  if (normalizedConfigs.length > 0) {
+    return normalizedConfigs;
+  }
+  const orderedModels = [];
+  const seen = new Set();
+  const appendModel = (modelId) => {
+    const normalized = (modelId || '').toString().trim();
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    orderedModels.push(normalized);
+  };
+  (Array.isArray(availableModels) ? availableModels : []).forEach(appendModel);
+  (Array.isArray(selectedModels) ? selectedModels : []).forEach(appendModel);
+
+  const selectedSet = new Set(
+    normalizeModelIDs(Array.isArray(selectedModels) ? selectedModels : []),
+  );
+  const modelMappingMap = parseJSONObject(modelMapping);
+  const modelRatioMap = parseJSONObject(modelRatio);
+  const completionRatioMap = parseJSONObject(completionRatio);
+
+  return orderedModels.map((modelId) => ({
+    model: modelId,
+    upstream_model:
+      (modelMappingMap[modelId] || '').toString().trim() || modelId,
+    selected: selectedSet.has(modelId),
+    model_ratio: normalizeRatioValue(modelRatioMap[modelId]),
+    completion_ratio: normalizeRatioValue(completionRatioMap[modelId]),
+  }));
+};
+
+const buildChannelModelState = (modelConfigs) => {
+  const normalizedConfigs = normalizeChannelModelConfigs(modelConfigs);
+  const selectedModels = normalizedConfigs
+    .filter((row) => row.selected)
+    .map((row) => row.model);
+  return {
+    modelConfigs: normalizedConfigs,
+    selectedModels,
+  };
+};
+
+const buildFetchedModelConfigs = (
+  previousConfigs,
+  models,
+  selectAll = true,
+) => {
+  const fetchedConfigs = normalizeChannelModelConfigs(models);
+  if (fetchedConfigs.length > 0) {
+    return fetchedConfigs.map((row) => ({
+      ...row,
+      selected: selectAll ? true : row.selected !== false,
+    }));
+  }
+
+  const previousRows = normalizeChannelModelConfigs(previousConfigs);
+  const previousByUpstream = new Map();
+  previousRows.forEach((row) => {
+    const upstreamModel = row.upstream_model || row.model;
+    if (!upstreamModel || previousByUpstream.has(upstreamModel)) {
+      return;
+    }
+    previousByUpstream.set(upstreamModel, row);
+  });
+  return buildModelIDs(models).map((modelId) => {
+    const existing = previousByUpstream.get(modelId);
+    if (existing) {
+      return {
+        ...existing,
+        upstream_model: modelId,
+        selected: selectAll ? true : existing.selected,
+      };
+    }
+    return {
+      model: modelId,
+      upstream_model: modelId,
+      selected: selectAll,
+      model_ratio: 1,
+      completion_ratio: 1,
+    };
+  });
+};
+
+const buildNextInputsWithModelConfigs = (previousInputs, modelConfigs) => {
+  const { modelConfigs: normalizedConfigs, selectedModels } =
+    buildChannelModelState(modelConfigs);
+  const currentTestModel = (previousInputs.test_model || '').toString().trim();
+  const nextTestModel =
+    currentTestModel !== '' && selectedModels.includes(currentTestModel)
+      ? currentTestModel
+      : selectedModels[0] || '';
+  return {
+    ...previousInputs,
+    model_configs: normalizedConfigs,
+    models: selectedModels,
+    test_model: nextTestModel,
+  };
+};
+
+const validateModelConfigs = (modelConfigs, t) => {
+  const seen = new Set();
+  for (const row of Array.isArray(modelConfigs) ? modelConfigs : []) {
+    const alias = (row?.model || '').toString().trim();
+    const upstreamModel = (row?.upstream_model || '').toString().trim();
+    if (alias === '' || upstreamModel === '') {
+      return t('channel.edit.messages.model_config_invalid');
+    }
+    if (seen.has(alias)) {
+      return t('channel.edit.messages.model_config_invalid');
+    }
+    seen.add(alias);
+    if (normalizeRatioValue(row?.model_ratio) <= 0) {
+      return t('channel.edit.messages.model_config_invalid');
+    }
+    if (normalizeRatioValue(row?.completion_ratio) <= 0) {
+      return t('channel.edit.messages.model_config_invalid');
+    }
+  }
+  return '';
+};
 
 const buildChannelConnectionSignature = ({
   protocol,
@@ -116,7 +306,7 @@ const normalizeCapabilityResults = (results) => {
   return results
     .filter(
       (item) =>
-        item && typeof item === 'object' && typeof item.capability === 'string'
+        item && typeof item === 'object' && typeof item.capability === 'string',
     )
     .map((item) => ({
       capability: item.capability,
@@ -176,11 +366,10 @@ const CHANNEL_ORIGIN_INPUTS = {
   key: '',
   base_url: '',
   other: '',
-  model_mapping: '',
-  model_ratio: '',
-  completion_ratio: '',
+  model_configs: [],
   system_prompt: '',
   models: [],
+  test_model: '',
 };
 
 const CHANNEL_DEFAULT_CONFIG = {
@@ -255,10 +444,8 @@ const EditChannel = () => {
   }, [channelId, navigate]);
 
   const [inputs, setInputs] = useState(CHANNEL_ORIGIN_INPUTS);
-  const [originModelOptions, setOriginModelOptions] = useState([]);
-  const [modelOptions, setModelOptions] = useState([]);
   const [channelProtocolOptions, setChannelProtocolOptions] = useState(() =>
-    getChannelProtocolOptions()
+    getChannelProtocolOptions(),
   );
   const [fetchModelsLoading, setFetchModelsLoading] = useState(false);
   const [modelsSyncError, setModelsSyncError] = useState('');
@@ -299,11 +486,11 @@ const EditChannel = () => {
 
   const effectivePreviewKey = useMemo(
     () => buildEffectiveKey().trim(),
-    [buildEffectiveKey]
+    [buildEffectiveKey],
   );
   const previewChannelID = useMemo(
     () => ((hasChannelID ? channelId : draftChannelId) || '').trim(),
-    [channelId, draftChannelId, hasChannelID]
+    [channelId, draftChannelId, hasChannelID],
   );
   const hasModelPreviewCredentials =
     effectivePreviewKey !== '' || (previewChannelID !== '' && channelKeySet);
@@ -317,7 +504,7 @@ const EditChannel = () => {
         baseURL: inputs.base_url,
         draftID: previewChannelID,
       }),
-    [effectivePreviewKey, inputs.base_url, inputs.protocol, previewChannelID]
+    [effectivePreviewKey, inputs.base_url, inputs.protocol, previewChannelID],
   );
   const currentCapabilitySignature = useMemo(
     () =>
@@ -328,9 +515,16 @@ const EditChannel = () => {
         draftID: previewChannelID,
         models: inputs.models,
       }),
-    [effectivePreviewKey, inputs.base_url, inputs.models, inputs.protocol, previewChannelID]
+    [
+      effectivePreviewKey,
+      inputs.base_url,
+      inputs.models,
+      inputs.protocol,
+      previewChannelID,
+    ],
   );
-  const requiresConnectionVerification = isCreateMode && inputs.protocol !== 'proxy';
+  const requiresConnectionVerification =
+    isCreateMode && inputs.protocol !== 'proxy';
   const showAllSections = hasChannelID;
   const showStepOne = showAllSections || createStep === 1;
   const showStepTwo = showAllSections || createStep === 2;
@@ -342,11 +536,14 @@ const EditChannel = () => {
     currentModelSignature === verifiedModelSignature;
   const requireVerificationBeforeProceed =
     requiresConnectionVerification && inputs.models.length === 0;
-  const visibleModelOptions = modelOptions;
   const fetchModelsButtonText = t('channel.edit.buttons.fetch_models');
   const inputReadonlyProps = isDetailMode ? { readOnly: true } : {};
   const textAreaReadonlyProps = isDetailMode ? { readOnly: true } : {};
   const selectDisabledProps = isDetailMode ? { disabled: true } : {};
+  const visibleModelConfigs = useMemo(
+    () => normalizeChannelModelConfigs(inputs.model_configs),
+    [inputs.model_configs],
+  );
 
   const handleInputChange = (e, { name, value }) => {
     setInputs((inputs) => ({ ...inputs, [name]: value }));
@@ -390,17 +587,6 @@ const EditChannel = () => {
           ...sanitizeDraftConfigForLocalStorage(draft.config),
         });
       }
-      if (Array.isArray(draft.originModelOptions)) {
-        setOriginModelOptions(
-          draft.originModelOptions.filter(
-            (option) =>
-              option &&
-              typeof option === 'object' &&
-              typeof option.key === 'string' &&
-              typeof option.value === 'string'
-          )
-        );
-      }
       if (typeof draft.modelsSyncError === 'string') {
         setModelsSyncError(draft.modelsSyncError);
       }
@@ -412,7 +598,7 @@ const EditChannel = () => {
       }
       if (Array.isArray(draft.capabilityResults)) {
         setCapabilityResults(
-          normalizeCapabilityResults(draft.capabilityResults)
+          normalizeCapabilityResults(draft.capabilityResults),
         );
       }
       if (typeof draft.capabilityTestError === 'string') {
@@ -448,7 +634,7 @@ const EditChannel = () => {
       }
       setCreateStep(parseCreateStep(targetStep));
     },
-    [isCreateMode]
+    [isCreateMode],
   );
 
   const moveToPreviousCreateStep = useCallback(() => {
@@ -457,6 +643,7 @@ const EditChannel = () => {
 
   const buildChannelPayload = useCallback(() => {
     const effectiveKey = buildEffectiveKey();
+    const derivedModelState = buildChannelModelState(inputs.model_configs);
     let localInputs = { ...inputs, key: effectiveKey };
     if (localInputs.key === 'undefined|undefined|undefined') {
       localInputs.key = '';
@@ -464,13 +651,14 @@ const EditChannel = () => {
     if (localInputs.base_url && localInputs.base_url.endsWith('/')) {
       localInputs.base_url = localInputs.base_url.slice(
         0,
-        localInputs.base_url.length - 1
+        localInputs.base_url.length - 1,
       );
     }
     if (localInputs.protocol === 'azure' && localInputs.other === '') {
       localInputs.other = '2024-03-01-preview';
     }
-    localInputs.models = (localInputs.models || []).join(',');
+    localInputs.model_configs = derivedModelState.modelConfigs;
+    localInputs.models = derivedModelState.selectedModels.join(',');
     const submitConfig = { ...config };
     localInputs.config = JSON.stringify(submitConfig);
     return localInputs;
@@ -554,17 +742,21 @@ const EditChannel = () => {
       }
       try {
         const checkRes = await API.get(
-          `/api/v1/admin/channel/${targetDraftID}?select_all=1`
+          `/api/v1/admin/channel/${targetDraftID}?select_all=1`,
         );
         const { success, data } = checkRes.data || {};
         if (!success || !data) {
           return false;
         }
         const remoteModels = normalizeModelIDs(
-          (data.models || '')
-            .split(',')
-            .map((item) => item.trim())
-            .filter((item) => item !== '')
+          Array.isArray(data.model_configs) && data.model_configs.length > 0
+            ? data.model_configs
+                .filter((row) => row && row.selected !== false)
+                .map((row) => row.model)
+            : (data.models || '')
+                .split(',')
+                .map((item) => item.trim())
+                .filter((item) => item !== ''),
         );
         const localModels = normalizeModelIDs(expectedModels);
         if (remoteModels.length !== localModels.length) {
@@ -580,7 +772,7 @@ const EditChannel = () => {
         return false;
       }
     },
-    [draftChannelId]
+    [draftChannelId],
   );
 
   const ensureDraftChannel = useCallback(async () => {
@@ -621,6 +813,11 @@ const EditChannel = () => {
   ]);
 
   const ensureModelsStepCompleted = useCallback(async () => {
+    const modelConfigError = validateModelConfigs(visibleModelConfigs, t);
+    if (modelConfigError) {
+      showInfo(modelConfigError);
+      return false;
+    }
     if (requireVerificationBeforeProceed) {
       if (!hasModelPreviewCredentials) {
         showInfo(t('channel.edit.model_selector.verify_prerequisite'));
@@ -641,29 +838,7 @@ const EditChannel = () => {
         return false;
       }
       const expectedModels = [...inputs.models];
-      let persisted = await verifyDraftModelsPersisted(expectedModels);
-      if (!persisted) {
-        // Retry once with a minimal payload to force model persistence.
-        const targetDraftID = (
-          draftChannelIdRef.current ||
-          draftChannelId ||
-          ''
-        ).trim();
-        if (targetDraftID !== '') {
-          try {
-            const retryRes = await API.put('/api/v1/admin/channel/', {
-              id: targetDraftID,
-              status: 4,
-              models: expectedModels.join(','),
-            });
-            if (retryRes?.data?.success) {
-              persisted = await verifyDraftModelsPersisted(expectedModels);
-            }
-          } catch {
-            persisted = false;
-          }
-        }
-      }
+      const persisted = await verifyDraftModelsPersisted(expectedModels);
       if (!persisted) {
         showError(t('channel.edit.messages.update_draft_failed'));
         return false;
@@ -683,6 +858,7 @@ const EditChannel = () => {
     saveDraftChannel,
     t,
     verifyDraftModelsPersisted,
+    visibleModelConfigs,
   ]);
 
   const moveToStepThree = useCallback(async () => {
@@ -721,48 +897,34 @@ const EditChannel = () => {
           ? data.available_models
           : [];
         const storedCapabilityResults = normalizeCapabilityResults(
-          data.capability_results
+          data.capability_results,
         );
         const storedCapabilityTestedAt =
           Number(data.capability_last_tested_at || 0) > 0
             ? Number(data.capability_last_tested_at) * 1000
             : 0;
-        if (data.model_mapping !== '') {
-          data.model_mapping = JSON.stringify(
-            JSON.parse(data.model_mapping),
-            null,
-            2
-          );
-        }
-        if (data.model_ratio) {
-          data.model_ratio = JSON.stringify(
-            JSON.parse(data.model_ratio),
-            null,
-            2
-          );
-        } else {
-          data.model_ratio = '';
-        }
-        if (data.completion_ratio) {
-          data.completion_ratio = JSON.stringify(
-            JSON.parse(data.completion_ratio),
-            null,
-            2
-          );
-        } else {
-          data.completion_ratio = '';
-        }
         let parsedConfig = {};
         if (data.config !== '') {
           parsedConfig = JSON.parse(data.config);
         }
         const normalizedProtocol = resolveProtocolFromChannelPayload(data);
+        const modelState = buildChannelModelState(
+          buildModelConfigsFromLegacyFields({
+            modelConfigs: data.model_configs,
+            availableModels:
+              availableModels.length > 0 ? availableModels : selectedModels,
+            selectedModels,
+            modelMapping: data.model_mapping || '',
+            modelRatio: data.model_ratio || '',
+            completionRatio: data.completion_ratio || '',
+          }),
+        );
         const loadedCapabilitySignature = buildChannelCapabilitySignature({
           protocol: normalizedProtocol,
           key: '',
           baseURL: data.base_url || '',
           draftID: data.id || targetId,
-          models: selectedModels,
+          models: modelState.selectedModels,
         });
 
         if (forCopy) {
@@ -772,11 +934,10 @@ const EditChannel = () => {
             key: '',
             base_url: data.base_url || '',
             other: data.other || '',
-            model_mapping: data.model_mapping || '',
-            model_ratio: data.model_ratio || '',
-            completion_ratio: data.completion_ratio || '',
+            model_configs: modelState.modelConfigs,
             system_prompt: data.system_prompt || '',
-            models: selectedModels,
+            models: modelState.selectedModels,
+            test_model: data.test_model || modelState.selectedModels[0] || '',
           });
           setCapabilityResults([]);
           setCapabilityTestError('');
@@ -790,12 +951,10 @@ const EditChannel = () => {
             key: '',
             base_url: data.base_url || '',
             other: data.other || '',
-            model_mapping: data.model_mapping || '',
-            model_ratio: data.model_ratio || '',
-            completion_ratio: data.completion_ratio || '',
+            model_configs: modelState.modelConfigs,
             system_prompt: data.system_prompt || '',
-            models: selectedModels,
-            test_model: data.test_model || '',
+            models: modelState.selectedModels,
+            test_model: data.test_model || modelState.selectedModels[0] || '',
             status: data.status,
             weight: data.weight,
             priority: data.priority,
@@ -806,13 +965,9 @@ const EditChannel = () => {
           setCapabilityTestedSignature(
             storedCapabilityResults.length > 0 && storedCapabilityTestedAt > 0
               ? loadedCapabilitySignature
-              : ''
+              : '',
           );
         }
-        const { options } = buildModelOptions(
-          availableModels.length > 0 ? availableModels : selectedModels
-        );
-        setOriginModelOptions(options);
         setConfig((prev) => ({
           ...prev,
           ...parsedConfig,
@@ -827,20 +982,22 @@ const EditChannel = () => {
       }
       setLoading(false);
     },
-    [hasChannelID]
+    [hasChannelID],
   );
 
-  const applyModelCandidates = useCallback((models, selectAll = false) => {
-    const { options, ids } = buildModelOptions(models);
-    setOriginModelOptions(options);
-    setInputs((prev) => {
-      const selected = selectAll
-        ? ids
-        : prev.models.filter((model) => ids.includes(model));
-      return { ...prev, models: selected };
-    });
-    return ids;
-  }, []);
+  const applyModelCandidates = useCallback(
+    (models, selectAll = false) => {
+      const nextConfigs = buildFetchedModelConfigs(
+        inputs.model_configs,
+        models,
+        selectAll,
+      );
+      const nextInputs = buildNextInputsWithModelConfigs(inputs, nextConfigs);
+      setInputs(nextInputs);
+      return nextInputs.models;
+    },
+    [inputs],
+  );
 
   const handleFetchModels = useCallback(
     async ({ silent = false, selectAll = true } = {}) => {
@@ -919,7 +1076,7 @@ const EditChannel = () => {
       inputs.protocol,
       previewChannelID,
       t,
-    ]
+    ],
   );
 
   const fetchChannelTypes = useCallback(async () => {
@@ -950,6 +1107,7 @@ const EditChannel = () => {
         draft_id: previewChannelID,
         config,
         models: inputs.models,
+        model_configs: visibleModelConfigs,
         test_model: inputs.test_model || '',
       });
       const { success, message, data } = res.data || {};
@@ -993,40 +1151,95 @@ const EditChannel = () => {
     t,
   ]);
 
-  useEffect(() => {
-    let localModelOptions = [...originModelOptions];
-    inputs.models.forEach((model) => {
-      if (!localModelOptions.find((option) => option.key === model)) {
-        localModelOptions.push({
-          key: model,
-          text: model,
-          value: model,
-        });
-      }
-    });
-    setModelOptions(localModelOptions);
-  }, [originModelOptions, inputs.models]);
+  const toggleModelSelection = useCallback(
+    (upstreamModel, checked) => {
+      setInputs((prev) =>
+        buildNextInputsWithModelConfigs(
+          prev,
+          visibleModelConfigs.map((row) =>
+            row.upstream_model === upstreamModel
+              ? { ...row, selected: !!checked }
+              : row,
+          ),
+        ),
+      );
+    },
+    [visibleModelConfigs],
+  );
 
-  const toggleModelSelection = useCallback((modelId, checked) => {
-    setInputs((prev) => {
-      const set = new Set(prev.models || []);
-      if (checked) {
-        set.add(modelId);
-      } else {
-        set.delete(modelId);
-      }
-      return { ...prev, models: Array.from(set) };
-    });
-  }, []);
+  const updateModelConfigField = useCallback(
+    (upstreamModel, field, value) => {
+      setInputs((prev) =>
+        buildNextInputsWithModelConfigs(
+          prev,
+          visibleModelConfigs.map((row) => {
+            if (row.upstream_model !== upstreamModel) {
+              return row;
+            }
+            if (field === 'model') {
+              const alias = (value || '').toString().trim();
+              const targetAlias = alias || row.upstream_model;
+              const duplicated = visibleModelConfigs.some(
+                (item) =>
+                  item.upstream_model !== upstreamModel &&
+                  item.model === targetAlias,
+              );
+              if (duplicated) {
+                return row;
+              }
+              return {
+                ...row,
+                model: targetAlias,
+              };
+            }
+            if (field === 'model_ratio' || field === 'completion_ratio') {
+              return {
+                ...row,
+                [field]: normalizeRatioValue(value),
+              };
+            }
+            return {
+              ...row,
+              [field]: value,
+            };
+          }),
+        ),
+      );
+    },
+    [visibleModelConfigs],
+  );
 
   const selectAllModels = useCallback(() => {
-    const allModelIds = modelOptions.map((option) => option.value);
-    setInputs((prev) => ({ ...prev, models: allModelIds }));
-  }, [modelOptions]);
+    setInputs((prev) =>
+      buildNextInputsWithModelConfigs(
+        prev,
+        visibleModelConfigs.map((row) => ({ ...row, selected: true })),
+      ),
+    );
+  }, [visibleModelConfigs]);
 
   const clearSelectedModels = useCallback(() => {
-    setInputs((prev) => ({ ...prev, models: [] }));
-  }, []);
+    setInputs((prev) =>
+      buildNextInputsWithModelConfigs(
+        prev,
+        visibleModelConfigs.map((row) => ({ ...row, selected: false })),
+      ),
+    );
+  }, [visibleModelConfigs]);
+
+  useEffect(() => {
+    const selectedModels = visibleModelConfigs
+      .filter((row) => row.selected)
+      .map((row) => row.model);
+    const currentTestModel = (inputs.test_model || '').toString().trim();
+    if (currentTestModel === '' || selectedModels.includes(currentTestModel)) {
+      return;
+    }
+    setInputs((prev) => ({
+      ...prev,
+      test_model: selectedModels[0] || '',
+    }));
+  }, [inputs.test_model, visibleModelConfigs]);
 
   useEffect(() => {
     if (hasChannelID) {
@@ -1077,10 +1290,8 @@ const EditChannel = () => {
       return;
     }
     const queryStep = parseCreateStep(stepParam);
-    if (queryStep !== createStep) {
-      setCreateStep(queryStep);
-    }
-  }, [createStep, hasChannelID, location.search]);
+    setCreateStep((prev) => (prev === queryStep ? prev : queryStep));
+  }, [hasChannelID, location.search]);
 
   useEffect(() => {
     if (hasChannelID) {
@@ -1106,7 +1317,7 @@ const EditChannel = () => {
         pathname: location.pathname,
         search: nextSearch ? `?${nextSearch}` : '',
       },
-      { replace: true }
+      { replace: true },
     );
   }, [createStep, hasChannelID, location.pathname, location.search, navigate]);
 
@@ -1131,9 +1342,15 @@ const EditChannel = () => {
         pathname: location.pathname,
         search: nextSearch ? `?${nextSearch}` : '',
       },
-      { replace: true }
+      { replace: true },
     );
-  }, [draftChannelId, hasChannelID, location.pathname, location.search, navigate]);
+  }, [
+    draftChannelId,
+    hasChannelID,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
 
   useEffect(() => {
     if (hasChannelID || loading || typeof window === 'undefined') {
@@ -1143,7 +1360,6 @@ const EditChannel = () => {
       step: createStep,
       inputs: sanitizeDraftInputsForLocalStorage(inputs),
       config: sanitizeDraftConfigForLocalStorage(config),
-      originModelOptions,
       modelsSyncError,
       modelsLastSyncedAt,
       verifiedModelSignature,
@@ -1170,7 +1386,6 @@ const EditChannel = () => {
     capabilityTestedSignature,
     modelsLastSyncedAt,
     modelsSyncError,
-    originModelOptions,
     verifiedModelSignature,
   ]);
 
@@ -1184,7 +1399,6 @@ const EditChannel = () => {
     if (verifiedModelSignature === currentModelSignature) {
       return;
     }
-    setOriginModelOptions([]);
     setModelsLastSyncedAt(0);
     setModelsSyncError(t('channel.edit.model_selector.verify_stale'));
   }, [
@@ -1223,6 +1437,7 @@ const EditChannel = () => {
 
   const submit = async () => {
     const effectiveKey = buildEffectiveKey();
+    const modelConfigError = validateModelConfigs(visibleModelConfigs, t);
     if (
       isCreateMode &&
       (inputs.name.trim() === '' ||
@@ -1245,19 +1460,8 @@ const EditChannel = () => {
       showInfo(t('channel.edit.messages.models_required'));
       return;
     }
-    if (inputs.model_mapping !== '' && !verifyJSON(inputs.model_mapping)) {
-      showInfo(t('channel.edit.messages.model_mapping_invalid'));
-      return;
-    }
-    if (inputs.model_ratio !== '' && !verifyJSON(inputs.model_ratio)) {
-      showInfo('模型倍率必须是合法的 JSON 格式！');
-      return;
-    }
-    if (
-      inputs.completion_ratio !== '' &&
-      !verifyJSON(inputs.completion_ratio)
-    ) {
-      showInfo('补全倍率必须是合法的 JSON 格式！');
+    if (modelConfigError) {
+      showInfo(modelConfigError);
       return;
     }
     let localInputs = buildChannelPayload();
@@ -1320,8 +1524,8 @@ const EditChannel = () => {
             {isDetailMode
               ? t('channel.edit.title_detail')
               : isEditMode
-              ? t('channel.edit.title_edit')
-              : t('channel.edit.title_create')}
+                ? t('channel.edit.title_edit')
+                : t('channel.edit.title_create')}
           </Card.Header>
           <Form loading={loading} autoComplete='new-password'>
             {isCreateMode && (
@@ -1596,7 +1800,7 @@ const EditChannel = () => {
                   <span style={{ color: 'rgba(0, 0, 0, 0.6)' }}>
                     {t('channel.edit.model_selector.summary', {
                       selected: inputs.models.length,
-                      total: visibleModelOptions.length,
+                      total: visibleModelConfigs.length,
                     })}
                   </span>
                   {!isDetailMode && (
@@ -1623,7 +1827,7 @@ const EditChannel = () => {
                         type='button'
                         size='tiny'
                         onClick={selectAllModels}
-                        disabled={visibleModelOptions.length === 0}
+                        disabled={visibleModelConfigs.length === 0}
                       >
                         {t('channel.edit.buttons.select_all')}
                       </Button>
@@ -1638,37 +1842,114 @@ const EditChannel = () => {
                     </div>
                   )}
                 </div>
-                <div
-                  style={{
-                    border: '1px solid rgba(34, 36, 38, 0.15)',
-                    borderRadius: '6px',
-                    padding: '10px 12px',
-                    maxHeight: '320px',
-                    overflowY: 'auto',
-                    display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(auto-fill, minmax(260px, 1fr))',
-                    gap: '8px 16px',
-                  }}
-                >
-                  {visibleModelOptions.length === 0 ? (
-                    <div style={{ color: 'rgba(0, 0, 0, 0.55)' }}>
-                      {t('channel.edit.model_selector.empty')}
-                    </div>
-                  ) : (
-                    visibleModelOptions.map((option) => (
-                      <Checkbox
-                        key={option.key}
-                        label={option.text}
-                        checked={inputs.models.includes(option.value)}
-                        disabled={isDetailMode}
-                        onChange={(e, { checked }) =>
-                          toggleModelSelection(option.value, checked)
-                        }
-                      />
-                    ))
-                  )}
-                </div>
+                <Table celled stackable size='small'>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.HeaderCell collapsing textAlign='center'>
+                        {t('channel.edit.model_selector.table.selected')}
+                      </Table.HeaderCell>
+                      <Table.HeaderCell width={5}>
+                        {t('channel.edit.model_selector.table.name')}
+                      </Table.HeaderCell>
+                      <Table.HeaderCell width={5}>
+                        {t('channel.edit.model_selector.table.alias')}
+                      </Table.HeaderCell>
+                      <Table.HeaderCell width={3}>
+                        {t('channel.edit.model_selector.table.model_ratio')}
+                      </Table.HeaderCell>
+                      <Table.HeaderCell width={3}>
+                        {t(
+                          'channel.edit.model_selector.table.completion_ratio',
+                        )}
+                      </Table.HeaderCell>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {visibleModelConfigs.length === 0 ? (
+                      <Table.Row>
+                        <Table.Cell colSpan='5'>
+                          {t('channel.edit.model_selector.empty')}
+                        </Table.Cell>
+                      </Table.Row>
+                    ) : (
+                      visibleModelConfigs.map((row) => (
+                        <Table.Row key={`${row.upstream_model}-${row.model}`}>
+                          <Table.Cell textAlign='center' collapsing>
+                            <Checkbox
+                              checked={!!row.selected}
+                              disabled={isDetailMode}
+                              onChange={(e, { checked }) =>
+                                toggleModelSelection(
+                                  row.upstream_model,
+                                  checked,
+                                )
+                              }
+                            />
+                          </Table.Cell>
+                          <Table.Cell>{row.upstream_model}</Table.Cell>
+                          <Table.Cell>
+                            {isDetailMode ? (
+                              row.model
+                            ) : (
+                              <Form.Input
+                                transparent
+                                style={{ minWidth: 220 }}
+                                value={row.model}
+                                onChange={(e, { value }) =>
+                                  updateModelConfigField(
+                                    row.upstream_model,
+                                    'model',
+                                    value || row.upstream_model,
+                                  )
+                                }
+                              />
+                            )}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {isDetailMode ? (
+                              row.model_ratio
+                            ) : (
+                              <Form.Input
+                                type='number'
+                                min='0.000001'
+                                step='0.01'
+                                transparent
+                                value={row.model_ratio}
+                                onChange={(e, { value }) =>
+                                  updateModelConfigField(
+                                    row.upstream_model,
+                                    'model_ratio',
+                                    value,
+                                  )
+                                }
+                              />
+                            )}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {isDetailMode ? (
+                              row.completion_ratio
+                            ) : (
+                              <Form.Input
+                                type='number'
+                                min='0.000001'
+                                step='0.01'
+                                transparent
+                                value={row.completion_ratio}
+                                onChange={(e, { value }) =>
+                                  updateModelConfigField(
+                                    row.upstream_model,
+                                    'completion_ratio',
+                                    value,
+                                  )
+                                }
+                              />
+                            )}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
+                    )}
+                  </Table.Body>
+                </Table>
                 {modelsSyncError && (
                   <div style={{ color: '#d9534f', marginTop: '8px' }}>
                     {modelsSyncError}
@@ -1752,8 +2033,8 @@ const EditChannel = () => {
                           item.status === 'supported'
                             ? 'green'
                             : item.status === 'skipped'
-                            ? 'grey'
-                            : 'red';
+                              ? 'grey'
+                              : 'red';
                         return (
                           <Table.Row
                             key={`${item.capability}-${item.endpoint}-${item.model}`}
@@ -1764,7 +2045,7 @@ const EditChannel = () => {
                             <Table.Cell>
                               <Label basic color={labelColor}>
                                 {t(
-                                  `channel.edit.capability_tester.status.${item.status}`
+                                  `channel.edit.capability_tester.status.${item.status}`,
                                 )}
                               </Label>
                             </Table.Cell>
@@ -1783,82 +2064,21 @@ const EditChannel = () => {
               </Form.Field>
             )}
             {showStepFour && inputs.protocol !== 'proxy' && (
-              <>
-                <Form.Field>
-                  <Form.TextArea
-                    label={t('channel.edit.model_mapping')}
-                    placeholder={`${t(
-                      'channel.edit.model_mapping_placeholder'
-                    )}\n${JSON.stringify(MODEL_MAPPING_EXAMPLE, null, 2)}`}
-                    name='model_mapping'
-                    onChange={handleInputChange}
-                    value={inputs.model_mapping}
-                    style={{
-                      minHeight: 150,
-                      fontFamily: 'JetBrains Mono, Consolas',
-                    }}
-                    autoComplete='new-password'
-                    {...textAreaReadonlyProps}
-                  />
-                </Form.Field>
-                <Form.Field>
-                  <Form.TextArea
-                    label={`${t(
-                      'operation.ratio.model.title',
-                      '模型倍率'
-                    )}（JSON）`}
-                    placeholder={t(
-                      'operation.ratio.model.placeholder',
-                      '为一个 JSON 文本，键为模型名称，值为倍率'
-                    )}
-                    name='model_ratio'
-                    onChange={handleInputChange}
-                    value={inputs.model_ratio}
-                    style={{
-                      minHeight: 150,
-                      fontFamily: 'JetBrains Mono, Consolas',
-                    }}
-                    autoComplete='new-password'
-                    {...textAreaReadonlyProps}
-                  />
-                </Form.Field>
-                <Form.Field>
-                  <Form.TextArea
-                    label={`${t(
-                      'operation.ratio.completion.title',
-                      '补全倍率'
-                    )}（JSON）`}
-                    placeholder={t(
-                      'operation.ratio.completion.placeholder',
-                      '为一个 JSON 文本，键为模型名称，值为倍率'
-                    )}
-                    name='completion_ratio'
-                    onChange={handleInputChange}
-                    value={inputs.completion_ratio}
-                    style={{
-                      minHeight: 150,
-                      fontFamily: 'JetBrains Mono, Consolas',
-                    }}
-                    autoComplete='new-password'
-                    {...textAreaReadonlyProps}
-                  />
-                </Form.Field>
-                <Form.Field>
-                  <Form.TextArea
-                    label={t('channel.edit.system_prompt')}
-                    placeholder={t('channel.edit.system_prompt_placeholder')}
-                    name='system_prompt'
-                    onChange={handleInputChange}
-                    value={inputs.system_prompt}
-                    style={{
-                      minHeight: 150,
-                      fontFamily: 'JetBrains Mono, Consolas',
-                    }}
-                    autoComplete='new-password'
-                    {...textAreaReadonlyProps}
-                  />
-                </Form.Field>
-              </>
+              <Form.Field>
+                <Form.TextArea
+                  label={t('channel.edit.system_prompt')}
+                  placeholder={t('channel.edit.system_prompt_placeholder')}
+                  name='system_prompt'
+                  onChange={handleInputChange}
+                  value={inputs.system_prompt}
+                  style={{
+                    minHeight: 150,
+                    fontFamily: 'JetBrains Mono, Consolas',
+                  }}
+                  autoComplete='new-password'
+                  {...textAreaReadonlyProps}
+                />
+              </Form.Field>
             )}
             {showStepOne && inputs.protocol === 'awsclaude' && (
               <Form.Field>
@@ -1991,8 +2211,8 @@ const EditChannel = () => {
                       createStep === 1
                         ? moveToStepTwo
                         : createStep === 2
-                        ? moveToStepThree
-                        : moveToStepFour
+                          ? moveToStepThree
+                          : moveToStepFour
                     }
                   >
                     {t('channel.edit.buttons.next_step')}

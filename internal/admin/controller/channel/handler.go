@@ -36,6 +36,7 @@ func sanitizeChannelForResponse(channel *model.Channel) {
 	channel.TestModel = strings.TrimSpace(channel.TestModel)
 	channel.Models = strings.TrimSpace(channel.Models)
 	channel.AvailableModels = model.NormalizeChannelModelIDsPreserveOrder(channel.AvailableModels)
+	channel.ModelConfigs = model.NormalizeChannelModelConfigsPreserveOrder(channel.ModelConfigs)
 	channel.SetCapabilityResults(channel.CapabilityResults)
 	channel.KeySet = strings.TrimSpace(channel.Key) != ""
 	channel.Key = ""
@@ -179,6 +180,7 @@ func AddChannel(c *gin.Context) {
 		})
 		return
 	}
+	channel.NormalizeModelConfigState()
 	channel.CreatedTime = helper.GetTimestamp()
 	keys := strings.Split(channel.Key, "\n")
 	channels := make([]model.Channel, 0, len(keys))
@@ -367,6 +369,8 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 	_, channel.ModelsProvided = rawFields["models"]
+	_, channel.ModelConfigsProvided = rawFields["model_configs"]
+	channel.NormalizeModelConfigState()
 	err = channelsvc.Update(&channel)
 	if err != nil {
 		logChannelAdminWarn(c, "update", stringField("channel_id", channel.Id), stringField("name", channel.Name), stringField("protocol", channel.GetProtocol()), stringField("reason", err.Error()))

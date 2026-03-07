@@ -41,6 +41,20 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return runMainBaselineMigrationWithDB(tx)
 			},
 		},
+		{
+			Version:     "202603071130_channel_model_configs_v1",
+			Description: "expand channel_models with upstream model aliases and per-model ratios",
+			Up: func(tx *gorm.DB) error {
+				return migrateChannelModelConfigsWithDB(tx)
+			},
+		},
+		{
+			Version:     "202603071210_channel_model_configs_finalize_v1",
+			Description: "finalize channel_models as the single source of channel model mapping and ratios",
+			Up: func(tx *gorm.DB) error {
+				return finalizeChannelModelConfigsWithDB(tx)
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

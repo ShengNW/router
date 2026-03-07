@@ -2,10 +2,8 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
-	"github.com/yeying-community/router/common/logger"
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 )
 
@@ -33,18 +31,17 @@ type Channel struct {
 	BalanceUpdatedTime     int64                     `json:"balance_updated_time" gorm:"bigint"`
 	Models                 string                    `json:"models" gorm:"-"`
 	AvailableModels        []string                  `json:"available_models,omitempty" gorm:"-"`
+	ModelConfigs           []ChannelModel            `json:"model_configs,omitempty" gorm:"-"`
 	UsedQuota              int64                     `json:"used_quota" gorm:"bigint;default:0"`
-	ModelMapping           *string                   `json:"model_mapping" gorm:"type:varchar(1024);default:''"`
 	Priority               *int64                    `json:"priority" gorm:"bigint;default:0"`
 	Config                 string                    `json:"config"`
 	SystemPrompt           *string                   `json:"system_prompt" gorm:"type:text"`
-	ModelRatio             *string                   `json:"model_ratio" gorm:"type:text;default:''"`
-	CompletionRatio        *string                   `json:"completion_ratio" gorm:"type:text;default:''"`
 	TestModel              string                    `json:"test_model" gorm:"type:varchar(255);default:''"`
 	CapabilityResults      []ChannelCapabilityResult `json:"capability_results,omitempty" gorm:"-"`
 	CapabilityLastTestedAt int64                     `json:"capability_last_tested_at,omitempty" gorm:"-"`
 	KeySet                 bool                      `json:"key_set" gorm:"-"`
 	ModelsProvided         bool                      `json:"-" gorm:"-"`
+	ModelConfigsProvided   bool                      `json:"-" gorm:"-"`
 	CapabilityResultsStale bool                      `json:"-" gorm:"-"`
 }
 
@@ -120,21 +117,54 @@ func (channel *Channel) GetBaseURL() string {
 }
 
 func (channel *Channel) GetModelMapping() map[string]string {
-	if channel.ModelMapping == nil || *channel.ModelMapping == "" || *channel.ModelMapping == "{}" {
+	selected := channel.selectedModelConfigs()
+	if len(selected) == 0 {
 		return nil
 	}
-	modelMapping := make(map[string]string)
-	err := json.Unmarshal([]byte(*channel.ModelMapping), &modelMapping)
-	if err != nil {
-		logger.SysError(fmt.Sprintf("failed to unmarshal model mapping for channel %s, error: %s", channel.Id, err.Error()))
+	modelMapping := make(map[string]string, len(selected))
+	for _, row := range selected {
+		if row.Model == "" || row.UpstreamModel == "" || row.UpstreamModel == row.Model {
+			continue
+		}
+		modelMapping[row.Model] = row.UpstreamModel
+	}
+	if len(modelMapping) == 0 {
 		return nil
 	}
 	return modelMapping
 }
 
+func (channel *Channel) GetModelConfigs() []ChannelModel {
+	if channel == nil {
+		return nil
+	}
+	if len(channel.ModelConfigs) > 0 {
+		rows := NormalizeChannelModelConfigsPreserveOrder(channel.ModelConfigs)
+		for i := range rows {
+			completeChannelModelRowDefaults(&rows[i], channel.GetChannelProtocol())
+		}
+		return rows
+	}
+	selected := ParseChannelModelCSV(channel.Models)
+	if len(selected) == 0 {
+		return []ChannelModel{}
+	}
+	return BuildDefaultChannelModelConfigsWithProtocol(selected, channel.GetChannelProtocol())
+}
+
 func (channel *Channel) SelectedModelIDs() []string {
 	if channel == nil {
 		return nil
+	}
+	if len(channel.ModelConfigs) > 0 {
+		modelIDs := make([]string, 0, len(channel.ModelConfigs))
+		for _, row := range channel.GetModelConfigs() {
+			if !row.Selected {
+				continue
+			}
+			modelIDs = append(modelIDs, row.Model)
+		}
+		return NormalizeChannelModelIDsPreserveOrder(modelIDs)
 	}
 	return ParseChannelModelCSV(channel.Models)
 }
@@ -143,7 +173,39 @@ func (channel *Channel) SetSelectedModelIDs(modelIDs []string) {
 	if channel == nil {
 		return
 	}
-	channel.Models = JoinChannelModelCSV(modelIDs)
+	normalized := NormalizeChannelModelIDsPreserveOrder(modelIDs)
+	channel.Models = JoinChannelModelCSV(normalized)
+	if len(channel.ModelConfigs) == 0 {
+		return
+	}
+
+	selectedSet := buildChannelModelSelectionSet(normalized)
+	existing := NormalizeChannelModelConfigsPreserveOrder(channel.ModelConfigs)
+	next := make([]ChannelModel, 0, len(existing)+len(normalized))
+	seen := make(map[string]struct{}, len(existing)+len(normalized))
+	for _, row := range existing {
+		if row.Model == "" {
+			continue
+		}
+		row.Selected = false
+		if _, ok := selectedSet[row.Model]; ok {
+			row.Selected = true
+		}
+		completeChannelModelRowDefaults(&row, channel.GetChannelProtocol())
+		next = append(next, row)
+		seen[row.Model] = struct{}{}
+	}
+	for _, modelID := range normalized {
+		if _, ok := seen[modelID]; ok {
+			continue
+		}
+		rows := BuildDefaultChannelModelConfigsWithProtocol([]string{modelID}, channel.GetChannelProtocol())
+		if len(rows) == 0 {
+			continue
+		}
+		next = append(next, rows[0])
+	}
+	channel.SetModelConfigs(next)
 }
 
 func (channel *Channel) SetAvailableModelIDs(modelIDs []string) {
@@ -151,6 +213,46 @@ func (channel *Channel) SetAvailableModelIDs(modelIDs []string) {
 		return
 	}
 	channel.AvailableModels = NormalizeChannelModelIDsPreserveOrder(modelIDs)
+}
+
+func (channel *Channel) SetModelConfigs(configs []ChannelModel) {
+	if channel == nil {
+		return
+	}
+	normalized := NormalizeChannelModelConfigsPreserveOrder(configs)
+	for i := range normalized {
+		completeChannelModelRowDefaults(&normalized[i], channel.GetChannelProtocol())
+	}
+	channel.ModelConfigs = normalized
+
+	available := make([]string, 0, len(normalized))
+	selected := make([]string, 0, len(normalized))
+	for _, row := range normalized {
+		available = append(available, row.Model)
+		if !row.Selected {
+			continue
+		}
+		selected = append(selected, row.Model)
+	}
+	channel.SetAvailableModelIDs(available)
+	channel.Models = JoinChannelModelCSV(selected)
+}
+
+func (channel *Channel) NormalizeModelConfigState() {
+	if channel == nil {
+		return
+	}
+	if channel.ModelConfigsProvided {
+		channel.SetModelConfigs(channel.ModelConfigs)
+		return
+	}
+	if len(channel.ModelConfigs) > 0 {
+		channel.SetModelConfigs(channel.ModelConfigs)
+		return
+	}
+	if channel.ModelsProvided {
+		channel.Models = JoinChannelModelCSV(ParseChannelModelCSV(channel.Models))
+	}
 }
 
 func (channel *Channel) SetCapabilityResults(results []ChannelCapabilityResult) {
@@ -215,4 +317,77 @@ func DeleteDisabledChannel() (int64, error) {
 
 func UpdateChannelTestModel(id string, testModel string) error {
 	return mustChannelRepo().UpdateChannelTestModelByID(id, testModel)
+}
+
+func (channel *Channel) GetChannelModelRatioJSON() string {
+	selected := channel.selectedModelConfigs()
+	if len(selected) == 0 {
+		return ""
+	}
+	ratios := make(map[string]float64, len(selected))
+	for _, row := range selected {
+		key := strings.TrimSpace(row.UpstreamModel)
+		if key == "" {
+			key = strings.TrimSpace(row.Model)
+		}
+		if key == "" {
+			continue
+		}
+		if _, ok := ratios[key]; ok {
+			continue
+		}
+		ratios[key] = row.ModelRatio
+	}
+	return marshalChannelFloatMapJSON(ratios)
+}
+
+func (channel *Channel) GetChannelCompletionRatioJSON() string {
+	selected := channel.selectedModelConfigs()
+	if len(selected) == 0 {
+		return ""
+	}
+	ratios := make(map[string]float64, len(selected))
+	for _, row := range selected {
+		key := strings.TrimSpace(row.UpstreamModel)
+		if key == "" {
+			key = strings.TrimSpace(row.Model)
+		}
+		if key == "" {
+			continue
+		}
+		if _, ok := ratios[key]; ok {
+			continue
+		}
+		ratios[key] = row.CompletionRatio
+	}
+	return marshalChannelFloatMapJSON(ratios)
+}
+
+func (channel *Channel) selectedModelConfigs() []ChannelModel {
+	configs := channel.GetModelConfigs()
+	if len(configs) == 0 {
+		return nil
+	}
+	selected := make([]ChannelModel, 0, len(configs))
+	for _, row := range configs {
+		if !row.Selected {
+			continue
+		}
+		selected = append(selected, row)
+	}
+	if len(selected) == 0 {
+		return nil
+	}
+	return selected
+}
+
+func marshalChannelFloatMapJSON(values map[string]float64) string {
+	if len(values) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

@@ -89,6 +89,7 @@ func BatchInsert(channels []model.Channel) error {
 	now := helper.GetTimestamp()
 	for i := range channels {
 		channels[i].NormalizeProtocol()
+		channels[i].NormalizeModelConfigState()
 		if strings.TrimSpace(channels[i].Id) == "" {
 			channels[i].Id = random.GetUUID()
 		}
@@ -101,7 +102,7 @@ func BatchInsert(channels []model.Channel) error {
 			return err
 		}
 		for i := range channels {
-			if err := model.ReplaceChannelSelectedModelsWithDB(tx, channels[i].Id, channels[i].SelectedModelIDs()); err != nil {
+			if err := model.ReplaceChannelModelConfigsWithDB(tx, channels[i].Id, channels[i].GetModelConfigs()); err != nil {
 				return err
 			}
 			if err := model.EnsureChannelTestModelWithDB(tx, channels[i].Id); err != nil {
@@ -129,6 +130,7 @@ func BatchInsert(channels []model.Channel) error {
 
 func Insert(channel *model.Channel) error {
 	channel.NormalizeProtocol()
+	channel.NormalizeModelConfigState()
 	if strings.TrimSpace(channel.Id) == "" {
 		channel.Id = random.GetUUID()
 	}
@@ -139,7 +141,7 @@ func Insert(channel *model.Channel) error {
 		if err := tx.Create(channel).Error; err != nil {
 			return err
 		}
-		if err := model.ReplaceChannelSelectedModelsWithDB(tx, channel.Id, channel.SelectedModelIDs()); err != nil {
+		if err := model.ReplaceChannelModelConfigsWithDB(tx, channel.Id, channel.GetModelConfigs()); err != nil {
 			return err
 		}
 		return model.EnsureChannelTestModelWithDB(tx, channel.Id)
@@ -168,6 +170,32 @@ func sameStringPointerValue(left *string, right *string) bool {
 	return leftValue == rightValue
 }
 
+func buildSelectedModelCapabilitySignature(channel *model.Channel) string {
+	if channel == nil {
+		return ""
+	}
+	rows := channel.GetModelConfigs()
+	if len(rows) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if !row.Selected {
+			continue
+		}
+		modelID := strings.TrimSpace(row.Model)
+		upstreamModel := strings.TrimSpace(row.UpstreamModel)
+		if modelID == "" {
+			continue
+		}
+		if upstreamModel == "" {
+			upstreamModel = modelID
+		}
+		parts = append(parts, modelID+"=>"+upstreamModel)
+	}
+	return strings.Join(parts, "|")
+}
+
 func shouldResetCapabilityResults(existing *model.Channel, incoming *model.Channel) bool {
 	if existing == nil || incoming == nil {
 		return false
@@ -187,10 +215,11 @@ func shouldResetCapabilityResults(existing *model.Channel, incoming *model.Chann
 	if strings.TrimSpace(incoming.Config) != "" && strings.TrimSpace(existing.Config) != strings.TrimSpace(incoming.Config) {
 		return true
 	}
-	if incoming.ModelMapping != nil && !sameStringPointerValue(existing.ModelMapping, incoming.ModelMapping) {
+	if strings.TrimSpace(incoming.TestModel) != "" && strings.TrimSpace(existing.TestModel) != strings.TrimSpace(incoming.TestModel) {
 		return true
 	}
-	if strings.TrimSpace(incoming.TestModel) != "" && strings.TrimSpace(existing.TestModel) != strings.TrimSpace(incoming.TestModel) {
+	if incoming.ModelConfigsProvided &&
+		buildSelectedModelCapabilitySignature(existing) != buildSelectedModelCapabilitySignature(incoming) {
 		return true
 	}
 	if incoming.ModelsProvided &&
@@ -204,6 +233,7 @@ func Update(channel *model.Channel) error {
 	if strings.TrimSpace(channel.Protocol) != "" {
 		channel.NormalizeProtocol()
 	}
+	channel.NormalizeModelConfigState()
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		existing := model.Channel{}
 		if err := tx.First(&existing, "id = ?", channel.Id).Error; err != nil {
@@ -216,7 +246,14 @@ func Update(channel *model.Channel) error {
 		if err := tx.Model(&model.Channel{}).Where("id = ?", channel.Id).Updates(channel).Error; err != nil {
 			return err
 		}
-		if channel.ModelsProvided {
+		if channel.ModelConfigsProvided {
+			if err := model.ReplaceChannelModelConfigsWithDB(tx, channel.Id, channel.GetModelConfigs()); err != nil {
+				return err
+			}
+			if err := model.EnsureChannelTestModelWithDB(tx, channel.Id); err != nil {
+				return err
+			}
+		} else if channel.ModelsProvided {
 			if err := model.ReplaceChannelSelectedModelsWithDB(tx, channel.Id, channel.SelectedModelIDs()); err != nil {
 				return err
 			}
