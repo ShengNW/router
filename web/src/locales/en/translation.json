@@ -326,6 +326,7 @@
       "id": "Group ID",
       "name": "Display Name",
       "description": "Description",
+      "channels": "Channels",
       "billing_ratio": "Billing Ratio",
       "source": "Source",
       "status": "Status",

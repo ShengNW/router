@@ -11,14 +11,15 @@ import (
 )
 
 type GroupCatalog struct {
-	Id           string  `json:"id" gorm:"primaryKey;type:varchar(64)"`
-	Name         string  `json:"name" gorm:"type:varchar(64);default:''"`
-	Description  string  `json:"description" gorm:"type:varchar(255);default:''"`
-	Source       string  `json:"source" gorm:"type:varchar(32);default:'system'"`
-	BillingRatio float64 `json:"billing_ratio" gorm:"type:numeric(12,6);not null;default:1"`
-	Enabled      bool    `json:"enabled" gorm:"default:true;index"`
-	SortOrder    int     `json:"sort_order" gorm:"default:0;index"`
-	UpdatedAt    int64   `json:"updated_at" gorm:"bigint;index"`
+	Id           string                    `json:"id" gorm:"primaryKey;type:varchar(64)"`
+	Name         string                    `json:"name" gorm:"type:varchar(64);default:''"`
+	Description  string                    `json:"description" gorm:"type:varchar(255);default:''"`
+	Source       string                    `json:"source" gorm:"type:varchar(32);default:'system'"`
+	BillingRatio float64                   `json:"billing_ratio" gorm:"type:numeric(12,6);not null;default:1"`
+	Enabled      bool                      `json:"enabled" gorm:"default:true;index"`
+	SortOrder    int                       `json:"sort_order" gorm:"default:0;index"`
+	UpdatedAt    int64                     `json:"updated_at" gorm:"bigint;index"`
+	Channels     []GroupChannelBindingItem `json:"channels,omitempty" gorm:"-"`
 }
 
 func (GroupCatalog) TableName() string {
@@ -109,7 +110,99 @@ func listGroupCatalogWithDB(db *gorm.DB) ([]GroupCatalog, error) {
 	if err := db.Order("sort_order asc, id asc").Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	if err := hydrateGroupCatalogChannelsWithDB(db, rows); err != nil {
+		return nil, err
+	}
 	return rows, nil
+}
+
+func hydrateGroupCatalogChannelsWithDB(db *gorm.DB, rows []GroupCatalog) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	groupIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		groupID := strings.TrimSpace(row.Id)
+		if groupID == "" {
+			continue
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+	if len(groupIDs) == 0 {
+		return nil
+	}
+
+	type abilityRow struct {
+		Group     string `gorm:"column:group"`
+		ChannelId string `gorm:"column:channel_id"`
+	}
+
+	abilityRows := make([]abilityRow, 0)
+	groupCol := `"group"`
+	if err := db.Model(&Ability{}).
+		Select(groupCol+" as \"group\", channel_id").
+		Distinct().
+		Where(groupCol+" IN ?", groupIDs).
+		Where("channel_id <> ''").
+		Find(&abilityRows).Error; err != nil {
+		return err
+	}
+
+	groupChannelIDs := make(map[string][]string, len(groupIDs))
+	channelIDSet := make(map[string]struct{})
+	for _, item := range abilityRows {
+		groupID := strings.TrimSpace(item.Group)
+		channelID := strings.TrimSpace(item.ChannelId)
+		if groupID == "" || channelID == "" {
+			continue
+		}
+		groupChannelIDs[groupID] = append(groupChannelIDs[groupID], channelID)
+		channelIDSet[channelID] = struct{}{}
+	}
+	if len(channelIDSet) == 0 {
+		return nil
+	}
+
+	channelIDs := make([]string, 0, len(channelIDSet))
+	for channelID := range channelIDSet {
+		channelIDs = append(channelIDs, channelID)
+	}
+	sort.Strings(channelIDs)
+
+	channels := make([]Channel, 0, len(channelIDs))
+	if err := db.
+		Select("id", "name", "protocol", "status", "created_time").
+		Where("id IN ?", channelIDs).
+		Find(&channels).Error; err != nil {
+		return err
+	}
+
+	channelsByID := make(map[string]GroupChannelBindingItem, len(channels))
+	for _, channel := range channels {
+		channelsByID[channel.Id] = GroupChannelBindingItem{
+			Id:       channel.Id,
+			Name:     channel.DisplayName(),
+			Protocol: channel.GetProtocol(),
+			Status:   channel.Status,
+			Updated:  channel.CreatedTime,
+			Bound:    true,
+		}
+	}
+
+	for index := range rows {
+		channelIDs := normalizeChannelIDList(groupChannelIDs[rows[index].Id])
+		items := make([]GroupChannelBindingItem, 0, len(channelIDs))
+		for _, channelID := range channelIDs {
+			item, ok := channelsByID[channelID]
+			if !ok {
+				continue
+			}
+			items = append(items, item)
+		}
+		rows[index].Channels = items
+	}
+	return nil
 }
 
 func getGroupCatalogByIDWithDB(db *gorm.DB, id string) (GroupCatalog, error) {

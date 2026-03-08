@@ -326,6 +326,7 @@
       "id": "分组标识",
       "name": "展示名称",
       "description": "描述",
+      "channels": "渠道",
       "billing_ratio": "业务倍率",
       "source": "来源",
       "status": "状态",

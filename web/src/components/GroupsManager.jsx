@@ -49,6 +49,11 @@ const toBoundChannelIDs = (items) =>
 const toBoundChannelRows = (items) =>
   (Array.isArray(items) ? items : []).filter((item) => !!item.bound);
 
+const formatChannelDisplayName = (item) => {
+  if (!item) return '-';
+  return item.name || item.id || '-';
+};
+
 const actionBarStyle = {
   display: 'flex',
   alignItems: 'center',
@@ -105,7 +110,10 @@ const GroupsManager = () => {
       return rows;
     }
     return rows.filter((row) => {
-      const haystacks = [row.id, row.name, row.description];
+      const channelNames = Array.isArray(row.channels)
+        ? row.channels.map((item) => formatChannelDisplayName(item)).join(' ')
+        : '';
+      const haystacks = [row.id, row.name, row.description, channelNames];
       return haystacks.some((item) =>
         typeof item === 'string' ? item.toLowerCase().includes(keyword) : false
       );
@@ -252,7 +260,7 @@ const GroupsManager = () => {
         showError(message || t('group_manage.messages.create_failed'));
         return;
       }
-      setRows((prev) => sortCatalogRows([...prev, data]));
+      await loadCatalog();
       showSuccess(t('group_manage.messages.create_success'));
       resetToList();
     } catch (error) {
@@ -288,9 +296,7 @@ const GroupsManager = () => {
         showError(message || t('group_manage.messages.update_failed'));
         return;
       }
-      setRows((prev) =>
-        sortCatalogRows(prev.map((row) => (row.id === data.id ? data : row)))
-      );
+      await loadCatalog();
       setActiveGroup(data);
       showSuccess(t('group_manage.messages.update_success'));
       setMode(MODE_VIEW);
@@ -320,9 +326,7 @@ const GroupsManager = () => {
         showError(message || t('group_manage.messages.update_failed'));
         return;
       }
-      setRows((prev) =>
-        sortCatalogRows(prev.map((item) => (item.id === data.id ? data : item)))
-      );
+      await loadCatalog();
       if (activeGroup?.id === data.id) {
         setActiveGroup(data);
       }
@@ -351,7 +355,7 @@ const GroupsManager = () => {
         showError(message || t('group_manage.messages.delete_failed'));
         return;
       }
-      setRows((prev) => prev.filter((row) => row.id !== deleteTarget.id));
+      await loadCatalog();
       showSuccess(t('group_manage.messages.delete_success'));
       clearDeleteState();
       if (activeGroup?.id === deleteTarget.id) {
@@ -446,9 +450,9 @@ const GroupsManager = () => {
             <Table.HeaderCell>{t('group_manage.table.id')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.name')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.description')}</Table.HeaderCell>
+            <Table.HeaderCell>{t('group_manage.table.channels')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.billing_ratio')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.status')}</Table.HeaderCell>
-            <Table.HeaderCell>{t('group_manage.table.sort_order')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.updated_at')}</Table.HeaderCell>
             <Table.HeaderCell style={{ width: '220px' }}>
               {t('group_manage.table.actions')}
@@ -474,9 +478,28 @@ const GroupsManager = () => {
                 <Table.Cell>{row.id}</Table.Cell>
                 <Table.Cell>{row.name || '-'}</Table.Cell>
                 <Table.Cell>{row.description || '-'}</Table.Cell>
+                <Table.Cell>
+                  {Array.isArray(row.channels) && row.channels.length > 0 ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {row.channels.map((item) => (
+                        <Label key={item.id} size='tiny'>
+                          {formatChannelDisplayName(item)}
+                        </Label>
+                      ))}
+                    </div>
+                  ) : (
+                    '-'
+                  )}
+                </Table.Cell>
                 <Table.Cell>{Number(row.billing_ratio ?? 1).toFixed(2)}</Table.Cell>
                 <Table.Cell>{renderGroupStatus(row.enabled)}</Table.Cell>
-                <Table.Cell>{row.sort_order || 0}</Table.Cell>
                 <Table.Cell>{row.updated_at ? timestamp2string(row.updated_at) : '-'}</Table.Cell>
                 <Table.Cell>
                   <div
