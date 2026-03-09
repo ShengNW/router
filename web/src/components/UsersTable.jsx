@@ -10,7 +10,7 @@ import {
   Dropdown,
 } from 'semantic-ui-react';
 import { Link } from 'react-router-dom';
-import { API, copy, showError, showSuccess } from '../helpers';
+import { API, copy, isRoot, showError, showSuccess } from '../helpers';
 import { useTranslation } from 'react-i18next';
 
 import { ITEMS_PER_PAGE } from '../constants';
@@ -35,6 +35,11 @@ function renderRole(role, t) {
   }
 }
 
+const ROLE_OPTIONS = (t) => [
+  { key: 1, value: 1, text: t('user.table.role_types.normal') },
+  { key: 10, value: 10, text: t('user.table.role_types.admin') },
+];
+
 const maskWalletAddress = (walletAddress) => {
   if (typeof walletAddress !== 'string') return '';
   const trimmedWallet = walletAddress.trim();
@@ -50,6 +55,7 @@ const UsersTable = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
   const [orderBy, setOrderBy] = useState('');
+  const [roleUpdatingUsername, setRoleUpdatingUsername] = useState('');
 
   const loadUsers = useCallback(async (startIdx) => {
     const res = await API.get(`/api/v1/admin/user/?p=${startIdx}&order=${orderBy}`);
@@ -84,29 +90,28 @@ const UsersTable = () => {
       });
   }, [loadUsers]);
 
-  const manageUser = (username, action, idx) => {
-    (async () => {
-      const res = await API.post('/api/v1/admin/user/manage', {
-        username,
-        action,
-      });
-      const { success, message } = res.data;
-      if (success) {
-        showSuccess(t('user.messages.operation_success'));
-        let user = res.data.data;
-        let newUsers = [...users];
-        let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
-        if (action === 'delete') {
-          newUsers[realIdx].deleted = true;
-        } else {
-          newUsers[realIdx].status = user.status;
-          newUsers[realIdx].role = user.role;
-        }
-        setUsers(newUsers);
+  const manageUser = async (username, action, idx) => {
+    const res = await API.post('/api/v1/admin/user/manage', {
+      username,
+      action,
+    });
+    const { success, message } = res.data;
+    if (success) {
+      showSuccess(t('user.messages.operation_success'));
+      let user = res.data.data;
+      let newUsers = [...users];
+      let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
+      if (action === 'delete') {
+        newUsers[realIdx].deleted = true;
       } else {
-        showError(message);
+        newUsers[realIdx].status = user.status;
+        newUsers[realIdx].role = user.role;
       }
-    })();
+      setUsers(newUsers);
+      return user;
+    }
+    showError(message);
+    return null;
   };
 
   const renderStatus = (status) => {
@@ -186,6 +191,26 @@ const UsersTable = () => {
     setActivePage(1);
   };
 
+  const updateUserRole = async (user, idx, nextRole) => {
+    if (!user || user.role === nextRole) return;
+    if (user.role === 100 || nextRole === 100) return;
+
+    let action = '';
+    if (nextRole === 10) {
+      action = 'promote';
+    } else if (nextRole === 1) {
+      action = 'demote';
+    }
+    if (!action) return;
+
+    setRoleUpdatingUsername(user.username);
+    try {
+      await manageUser(user.username, action, idx);
+    } finally {
+      setRoleUpdatingUsername('');
+    }
+  };
+
   const quotaPerUnit = parseFloat(
     localStorage.getItem('quota_per_unit') || '1'
   );
@@ -228,17 +253,59 @@ const UsersTable = () => {
 
   return (
     <>
-      <Form onSubmit={searchUsers}>
-        <Form.Input
-          icon='search'
-          fluid
-          iconPosition='left'
-          placeholder={t('user.search')}
-          value={searchKeyword}
-          loading={searching}
-          onChange={handleKeywordChange}
-        />
-      </Form>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap',
+          marginBottom: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <Button size='small' as={Link} to='/user/add' loading={loading}>
+            {t('user.buttons.add')}
+          </Button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Dropdown
+            placeholder={t('user.table.sort_by')}
+            selection
+            options={[
+              { key: '', text: t('user.table.sort.default'), value: '' },
+              {
+                key: 'quota',
+                text: t('user.table.sort.by_quota'),
+                value: 'quota',
+              },
+              {
+                key: 'used_quota',
+                text: t('user.table.sort.by_used_quota'),
+                value: 'used_quota',
+              },
+              {
+                key: 'request_count',
+                text: t('user.table.sort.by_request_count'),
+                value: 'request_count',
+              },
+            ]}
+            value={orderBy}
+            onChange={handleOrderByChange}
+            style={{ minWidth: 170 }}
+          />
+          <Form onSubmit={searchUsers} style={{ width: '240px', maxWidth: '100%' }}>
+            <Form.Input
+              icon='search'
+              iconPosition='left'
+              placeholder={t('user.search')}
+              value={searchKeyword}
+              loading={searching}
+              onChange={handleKeywordChange}
+            />
+          </Form>
+        </div>
+      </div>
 
       <Table basic={'very'} compact size='small'>
         <Table.Header>
@@ -361,30 +428,24 @@ const UsersTable = () => {
                   <Table.Cell>{renderQuotaValue(user.quota)}</Table.Cell>
                   <Table.Cell>{renderQuotaValue(user.used_quota)}</Table.Cell>
                   <Table.Cell>{renderCountValue(user.request_count)}</Table.Cell>
-                  <Table.Cell>{renderRole(user.role, t)}</Table.Cell>
+                  <Table.Cell>
+                    {user.role === 100 ? (
+                      renderRole(user.role, t)
+                    ) : (
+                      <Dropdown
+                        selection
+                        compact
+                        options={ROLE_OPTIONS(t)}
+                        value={user.role}
+                        disabled={!isRoot() || roleUpdatingUsername === user.username}
+                        loading={roleUpdatingUsername === user.username}
+                        onChange={(e, { value }) => updateUserRole(user, idx, Number(value))}
+                      />
+                    )}
+                  </Table.Cell>
                   <Table.Cell>{renderStatus(user.status)}</Table.Cell>
                   <Table.Cell>
                     <div>
-                      <Button
-                        size={'tiny'}
-                        positive
-                        onClick={() => {
-                          manageUser(user.username, 'promote', idx);
-                        }}
-                        disabled={user.role === 100}
-                      >
-                        {t('user.buttons.promote')}
-                      </Button>
-                      <Button
-                        size={'tiny'}
-                        color={'yellow'}
-                        onClick={() => {
-                          manageUser(user.username, 'demote', idx);
-                        }}
-                        disabled={user.role === 100}
-                      >
-                        {t('user.buttons.demote')}
-                      </Button>
                       <Popup
                         trigger={
                           <Button
@@ -441,34 +502,6 @@ const UsersTable = () => {
         <Table.Footer>
           <Table.Row>
             <Table.HeaderCell colSpan='9'>
-              <Button size='small' as={Link} to='/user/add' loading={loading}>
-                {t('user.buttons.add')}
-              </Button>
-              <Dropdown
-                placeholder={t('user.table.sort_by')}
-                selection
-                options={[
-                  { key: '', text: t('user.table.sort.default'), value: '' },
-                  {
-                    key: 'quota',
-                    text: t('user.table.sort.by_quota'),
-                    value: 'quota',
-                  },
-                  {
-                    key: 'used_quota',
-                    text: t('user.table.sort.by_used_quota'),
-                    value: 'used_quota',
-                  },
-                  {
-                    key: 'request_count',
-                    text: t('user.table.sort.by_request_count'),
-                    value: 'request_count',
-                  },
-                ]}
-                value={orderBy}
-                onChange={handleOrderByChange}
-                style={{ marginLeft: '10px' }}
-              />
               <Pagination
                 floated='right'
                 activePage={activePage}

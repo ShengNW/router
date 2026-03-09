@@ -660,7 +660,7 @@
       "sort_by": "排序方式"
     },
     "buttons": {
-      "add": "添加新的用户",
+      "add": "新增用户",
       "delete": "删除",
       "delete_user": "删除用户",
       "enable": "启用",
