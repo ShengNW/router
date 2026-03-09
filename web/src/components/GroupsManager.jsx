@@ -43,7 +43,7 @@ const buildFormFromRow = (row) => ({
 const toChannelOptions = (items) =>
   (Array.isArray(items) ? items : []).map((item) => ({
     key: item.id,
-    text: `${item.name || item.id} (${item.id})`,
+    text: item.name || item.id,
     value: item.id,
   }));
 

@@ -12,10 +12,12 @@ const (
 	ProviderModelTypeText  = "text"
 	ProviderModelTypeImage = "image"
 	ProviderModelTypeAudio = "audio"
+	ProviderModelTypeVideo = "video"
 
 	ProviderPriceUnitPer1KTokens = "per_1k_tokens"
 	ProviderPriceUnitPer1KChars  = "per_1k_chars"
 	ProviderPriceUnitPerImage    = "per_image"
+	ProviderPriceUnitPerVideo    = "per_video"
 
 	ProviderPriceCurrencyUSD = "USD"
 )
@@ -255,12 +257,20 @@ func inferProviderByModel(modelName string, channelProtocol int, hasChannelProto
 func normalizeModelType(raw string, modelName string) string {
 	trimmed := strings.TrimSpace(strings.ToLower(raw))
 	switch trimmed {
-	case ProviderModelTypeText, ProviderModelTypeImage, ProviderModelTypeAudio:
+	case ProviderModelTypeText, ProviderModelTypeImage, ProviderModelTypeAudio, ProviderModelTypeVideo:
 		return trimmed
 	}
 	lower := strings.ToLower(strings.TrimSpace(modelName))
 	if lower == "" {
 		return ProviderModelTypeText
+	}
+	switch {
+	case strings.HasPrefix(lower, "veo"),
+		strings.Contains(lower, "text-to-video"),
+		strings.Contains(lower, "video-generation"),
+		strings.Contains(lower, "video_generation"),
+		strings.Contains(lower, "video"):
+		return ProviderModelTypeVideo
 	}
 	if isKnownImageModel(modelName) {
 		return ProviderModelTypeImage
@@ -306,6 +316,8 @@ func defaultPriceUnitByType(modelType string, modelName string) string {
 	switch t {
 	case ProviderModelTypeImage:
 		return ProviderPriceUnitPerImage
+	case ProviderModelTypeVideo:
+		return ProviderPriceUnitPerVideo
 	case ProviderModelTypeAudio:
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "tts-") {
 			return ProviderPriceUnitPer1KChars

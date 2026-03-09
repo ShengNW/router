@@ -159,6 +159,7 @@ func replaceGroupChannelBindingsWithDB(db *gorm.DB, groupID string, channelIDs [
 		channelAbilities := SyncGroupAbilitiesForChannel(groupID, &channel, existingByChannelID[id])
 		abilities = append(abilities, channelAbilities...)
 	}
+	abilities = normalizeAbilityRowsPreserveOrder(abilities)
 
 	if err := db.Where(groupCol+" = ?", groupID).Delete(&Ability{}).Error; err != nil {
 		return err

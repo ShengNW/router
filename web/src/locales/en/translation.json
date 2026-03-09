@@ -108,7 +108,8 @@
     "model_types": {
       "text": "Text",
       "image": "Image",
-      "audio": "Audio"
+      "audio": "Audio",
+      "video": "Video"
     },
     "providers": {
       "title": "Provider Catalog",
@@ -288,9 +289,9 @@
       },
       "capability_tester": {
         "title": "Capability Test",
-        "hint": "Run real probes against the current draft channel and selected models. The system automatically picks text / image / audio models by type for the corresponding capability checks, and skips a capability when no matching type is selected.",
+        "hint": "Run real probes against the current draft channel and selected models. The system automatically picks text / image / audio / video models by type for the corresponding capability checks, and skips a capability when no matching type is selected.",
         "button": "Run Tests",
-        "empty": "No test result yet. Click \"Run Tests\" to probe chat, responses, images, and audio by model type.",
+        "empty": "No test result yet. Click \"Run Tests\" to probe chat, responses, images, audio, and videos by model type.",
         "last_tested": "Last tested at: {{time}}",
         "test_success": "Capability tests completed",
         "test_failed": "Capability test failed",

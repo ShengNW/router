@@ -71,3 +71,13 @@ func TestBuildDefaultProviderCatalogSeeds_AssignsSortOrder(t *testing.T) {
 		prev = seed.SortOrder
 	}
 }
+
+func TestInferModelTypeAndPriceUnitForVideo(t *testing.T) {
+	modelName := "veo-3.0-generate-preview"
+	if got := InferModelType(modelName); got != ProviderModelTypeVideo {
+		t.Fatalf("InferModelType(%q)=%q, want %q", modelName, got, ProviderModelTypeVideo)
+	}
+	if got := defaultPriceUnitByType("", modelName); got != ProviderPriceUnitPerVideo {
+		t.Fatalf("defaultPriceUnitByType(%q)=%q, want %q", modelName, got, ProviderPriceUnitPerVideo)
+	}
+}

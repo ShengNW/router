@@ -24,6 +24,11 @@ func TestResolveProvider(t *testing.T) {
 			want:  "black-forest-labs",
 		},
 		{
+			name:  "veo prefix",
+			model: "veo-3.0-generate-preview",
+			want:  "google",
+		},
+		{
 			name:  "black forest labs prefixed model",
 			model: "black-forest-labs/flux-1.1-pro",
 			want:  "black-forest-labs",

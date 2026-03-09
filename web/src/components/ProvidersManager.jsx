@@ -69,6 +69,15 @@ const inferModelType = (model) => {
   if (typeof model !== 'string') return 'text';
   const lower = model.trim().toLowerCase();
   if (!lower) return 'text';
+  if (
+    lower.startsWith('veo') ||
+    lower.includes('text-to-video') ||
+    lower.includes('video-generation') ||
+    lower.includes('video_generation') ||
+    lower.includes('video')
+  ) {
+    return 'video';
+  }
   if (lower.includes('whisper') || lower.startsWith('tts-') || lower.includes('audio')) {
     return 'audio';
   }
@@ -87,6 +96,7 @@ const inferModelType = (model) => {
 
 const defaultPriceUnitByType = (type, modelName) => {
   if (type === 'image') return 'per_image';
+  if (type === 'video') return 'per_video';
   if (type === 'audio') {
     if (
       typeof modelName === 'string' &&
@@ -211,13 +221,19 @@ const MODEL_TYPE_OPTIONS = [
   { key: 'text', value: 'text', text: 'text' },
   { key: 'image', value: 'image', text: 'image' },
   { key: 'audio', value: 'audio', text: 'audio' },
+  { key: 'video', value: 'video', text: 'video' },
 ];
 
-const PROVIDER_CAPABILITY_ORDER = ['text', 'audio', 'image'];
+const PROVIDER_CAPABILITY_ORDER = ['text', 'image', 'audio', 'video'];
 
 const normalizeProviderCapabilityType = (value, model) => {
   const normalized = (value || '').toString().trim().toLowerCase();
-  if (normalized === 'text' || normalized === 'audio' || normalized === 'image') {
+  if (
+    normalized === 'text' ||
+    normalized === 'audio' ||
+    normalized === 'image' ||
+    normalized === 'video'
+  ) {
     return normalized;
   }
   return inferModelType(model);

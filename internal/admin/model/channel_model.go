@@ -538,6 +538,8 @@ func normalizeExplicitChannelModelType(raw string) string {
 		return ProviderModelTypeImage
 	case ProviderModelTypeAudio:
 		return ProviderModelTypeAudio
+	case ProviderModelTypeVideo:
+		return ProviderModelTypeVideo
 	default:
 		return ""
 	}

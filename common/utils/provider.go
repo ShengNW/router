@@ -65,7 +65,8 @@ func ResolveProvider(modelName string) string {
 		return "openai"
 	case strings.HasPrefix(lower, "claude-"):
 		return "anthropic"
-	case strings.HasPrefix(lower, "gemini-"):
+	case strings.HasPrefix(lower, "gemini-"),
+		strings.HasPrefix(lower, "veo"):
 		return "google"
 	case strings.HasPrefix(lower, "grok-"):
 		return "xai"

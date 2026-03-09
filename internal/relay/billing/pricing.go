@@ -87,7 +87,7 @@ func quotaFromPrice(price float64, priceUnit string, currency string, quantity f
 	switch normalizedUnit {
 	case "", model.ProviderPriceUnitPer1KTokens, model.ProviderPriceUnitPer1KChars:
 		return quantity * price * quotaPerCurrencyUnit(currency) / 1000 * groupRatio
-	case model.ProviderPriceUnitPerImage:
+	case model.ProviderPriceUnitPerImage, model.ProviderPriceUnitPerVideo:
 		return quantity * price * quotaPerCurrencyUnit(currency) * groupRatio
 	default:
 		return quantity * price * quotaPerCurrencyUnit(currency) / 1000 * groupRatio

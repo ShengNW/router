@@ -63,6 +63,7 @@ function normalizeChannelModelType(type) {
   switch (normalized) {
     case 'image':
     case 'audio':
+    case 'video':
       return normalized;
     default:
       return 'text';

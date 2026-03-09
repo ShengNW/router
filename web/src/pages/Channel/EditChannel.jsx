@@ -132,6 +132,7 @@ const normalizeChannelModelType = (value) => {
   switch (normalized) {
     case 'image':
     case 'audio':
+    case 'video':
       return normalized;
     default:
       return 'text';
@@ -142,6 +143,7 @@ const CHANNEL_MODEL_TYPE_OPTIONS = [
   { key: 'text', value: 'text', text: 'text' },
   { key: 'image', value: 'image', text: 'image' },
   { key: 'audio', value: 'audio', text: 'audio' },
+  { key: 'video', value: 'video', text: 'video' },
 ];
 
 const CHANNEL_DETAIL_MODEL_PAGE_SIZE = 20;
@@ -341,7 +343,7 @@ const resolveProviderIdentifierFromModelName = (modelName) => {
     return 'openai';
   }
   if (lower.startsWith('claude-')) return 'anthropic';
-  if (lower.startsWith('gemini-')) return 'google';
+  if (lower.startsWith('gemini-') || lower.startsWith('veo')) return 'google';
   if (lower.startsWith('grok-')) return 'xai';
   if (lower.startsWith('mistral-')) return 'mistral';
   if (lower.startsWith('command-r') || lower.startsWith('cohere-')) return 'cohere';
@@ -873,6 +875,7 @@ const EditChannel = () => {
       text: '',
       image: '',
       audio: '',
+      video: '',
     };
     visibleModelConfigs
       .filter((row) => row.selected)
@@ -2971,6 +2974,11 @@ const EditChannel = () => {
                     {t('channel.model_types.audio')}:
                     {' '}
                     {capabilityModelSummary.audio || '-'}
+                  </Label>
+                  <Label basic className='router-tag'>
+                    {t('channel.model_types.video')}:
+                    {' '}
+                    {capabilityModelSummary.video || '-'}
                   </Label>
                 </div>
                 <div

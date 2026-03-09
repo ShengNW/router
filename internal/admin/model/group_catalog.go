@@ -126,11 +126,11 @@ func UpdateGroupCatalogWithChannelBindings(item GroupCatalog, channelIDs []strin
 }
 
 func DeleteGroupCatalog(id string) error {
-	groupID, err := deleteGroupCatalogWithDB(DB, id)
+	groupRefValues, err := deleteGroupCatalogWithDB(DB, id)
 	if err != nil {
 		return err
 	}
-	RefreshAbilityCachesForGroups(groupID)
+	RefreshAbilityCachesForGroups(groupRefValues...)
 	return syncGroupBillingRatiosRuntimeWithDB(DB)
 }
 
@@ -386,48 +386,72 @@ func updateGroupCatalogWithDB(db *gorm.DB, item GroupCatalog) (GroupCatalog, err
 	return row, nil
 }
 
-func deleteGroupCatalogWithDB(db *gorm.DB, id string) (string, error) {
+func deleteGroupCatalogWithDB(db *gorm.DB, id string) ([]string, error) {
 	groupID := strings.TrimSpace(id)
 	if groupID == "" {
-		return "", fmt.Errorf("分组 ID 不能为空")
+		return nil, fmt.Errorf("分组 ID 不能为空")
 	}
 	row, err := getGroupCatalogByIDWithDB(db, groupID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	inUse, err := isGroupInUseWithDB(db, row.Id)
+	groupRefValues := buildGroupReferenceValues(row)
+	inUse, err := isGroupInUseWithDB(db, groupRefValues)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if inUse {
-		return "", fmt.Errorf("分组正在被用户或渠道使用，无法删除")
+		return nil, fmt.Errorf("分组正在被用户使用，无法删除")
 	}
-	return row.Id, db.Where("id = ?", groupID).Delete(&GroupCatalog{}).Error
+	groupCol := `"group"`
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where(groupCol+" IN ?", groupRefValues).Delete(&Ability{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", row.Id).Delete(&GroupCatalog{}).Error
+	}); err != nil {
+		return nil, err
+	}
+	return groupRefValues, nil
 }
 
-func isGroupInUseWithDB(db *gorm.DB, groupID string) (bool, error) {
+func isGroupInUseWithDB(db *gorm.DB, groupRefValues []string) (bool, error) {
+	if len(groupRefValues) == 0 {
+		return false, nil
+	}
+	groupRefSet := make(map[string]struct{}, len(groupRefValues))
+	for _, value := range groupRefValues {
+		normalized := strings.TrimSpace(value)
+		if normalized == "" {
+			continue
+		}
+		groupRefSet[normalized] = struct{}{}
+	}
+	if len(groupRefSet) == 0 {
+		return false, nil
+	}
+
 	users := make([]User, 0)
 	if err := db.Select("group").Find(&users).Error; err != nil {
 		return false, err
 	}
 	for _, user := range users {
 		for _, userGroupID := range parseGroupNamesFromCSV(user.Group) {
-			if userGroupID == groupID {
+			if _, ok := groupRefSet[userGroupID]; ok {
 				return true, nil
 			}
 		}
 	}
-
-	abilities := make([]Ability, 0)
-	if err := db.Select("group").Find(&abilities).Error; err != nil {
-		return false, err
-	}
-	for _, ability := range abilities {
-		if strings.TrimSpace(ability.Group) == groupID {
-			return true, nil
-		}
-	}
 	return false, nil
+}
+
+func buildGroupReferenceValues(row GroupCatalog) []string {
+	values := []string{strings.TrimSpace(row.Id)}
+	name := strings.TrimSpace(row.Name)
+	if name != "" && name != strings.TrimSpace(row.Id) {
+		values = append(values, name)
+	}
+	return normalizeGroupNames(values)
 }
 
 func parseGroupNamesFromCSV(raw string) []string {

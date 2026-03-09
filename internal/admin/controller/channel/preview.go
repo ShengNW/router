@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -95,10 +96,12 @@ type channelCapabilityModelSelection struct {
 	TextModel    string
 	ImageModel   string
 	AudioModel   string
+	VideoModel   string
 	RunChat      bool
 	RunResponses bool
 	RunImages    bool
 	RunAudio     bool
+	RunVideo     bool
 }
 
 func persistPreviewCapabilityResults(channelID string, results []previewCapabilityResult) error {
@@ -140,6 +143,11 @@ func normalizeUpstreamCapabilityModelType(raw string) string {
 	switch {
 	case lower == "":
 		return ""
+	case strings.Contains(lower, "text-to-video"),
+		strings.Contains(lower, "video_generation"),
+		strings.Contains(lower, "video-generation"),
+		strings.Contains(lower, "video"):
+		return model.ProviderModelTypeVideo
 	case strings.Contains(lower, "image"),
 		strings.Contains(lower, "vision"),
 		strings.Contains(lower, "diffusion"):
@@ -173,6 +181,7 @@ func inferUpstreamModelCardType(item openAIModelCard) string {
 		}
 	}
 
+	fallback := ""
 	multiValueCandidates := [][]string{
 		item.OutputModalities,
 		item.Architecture.OutputModalities,
@@ -184,27 +193,47 @@ func inferUpstreamModelCardType(item openAIModelCard) string {
 	for _, values := range multiValueCandidates {
 		for _, value := range values {
 			if normalized := normalizeUpstreamCapabilityModelType(value); normalized != "" {
-				if normalized == model.ProviderModelTypeImage || normalized == model.ProviderModelTypeAudio {
+				switch normalized {
+				case model.ProviderModelTypeVideo:
 					return normalized
-				}
-				if normalized == model.ProviderModelTypeText {
-					return normalized
+				case model.ProviderModelTypeImage, model.ProviderModelTypeAudio:
+					if fallback == "" || fallback == model.ProviderModelTypeText {
+						fallback = normalized
+					}
+				case model.ProviderModelTypeText:
+					if fallback == "" {
+						fallback = normalized
+					}
 				}
 			}
 		}
 	}
+	if fallback != "" {
+		return fallback
+	}
 
+	fallback = ""
 	for key, raw := range item.Capabilities {
 		enabled, ok := raw.(bool)
 		if !ok || !enabled {
 			continue
 		}
 		if normalized := normalizeUpstreamCapabilityModelType(key); normalized != "" {
-			return normalized
+			switch normalized {
+			case model.ProviderModelTypeVideo:
+				return normalized
+			case model.ProviderModelTypeImage, model.ProviderModelTypeAudio:
+				if fallback == "" || fallback == model.ProviderModelTypeText {
+					fallback = normalized
+				}
+			case model.ProviderModelTypeText:
+				if fallback == "" {
+					fallback = normalized
+				}
+			}
 		}
 	}
-
-	return ""
+	return fallback
 }
 
 func fetchModelsByConfiguredChannelDetailed(key, baseURL, providerFilter string) ([]model.ChannelModel, string, error) {
@@ -383,6 +412,18 @@ func selectedChannelModelConfigs(channel *model.Channel) []model.ChannelModel {
 	return selected
 }
 
+func resolveSelectionModelType(row model.ChannelModel) string {
+	resolved := strings.TrimSpace(row.Type)
+	if resolved != "" {
+		return resolved
+	}
+	referenceModel := strings.TrimSpace(row.UpstreamModel)
+	if referenceModel == "" {
+		referenceModel = strings.TrimSpace(row.Model)
+	}
+	return model.InferModelType(referenceModel)
+}
+
 func pickCapabilityModels(channel *model.Channel, mode string, requestedModel string) channelCapabilityModelSelection {
 	selection := channelCapabilityModelSelection{}
 	normalizedMode := normalizePreviewCapabilityTestMode(mode)
@@ -404,7 +445,7 @@ func pickCapabilityModels(channel *model.Channel, mode string, requestedModel st
 				continue
 			}
 			targetModel = row.Model
-			targetType = row.Type
+			targetType = resolveSelectionModelType(row)
 			break
 		}
 		switch targetType {
@@ -414,6 +455,9 @@ func pickCapabilityModels(channel *model.Channel, mode string, requestedModel st
 		case model.ProviderModelTypeAudio:
 			selection.AudioModel = targetModel
 			selection.RunAudio = true
+		case model.ProviderModelTypeVideo:
+			selection.VideoModel = targetModel
+			selection.RunVideo = true
 		default:
 			selection.TextModel = targetModel
 			selection.RunChat = true
@@ -426,8 +470,9 @@ func pickCapabilityModels(channel *model.Channel, mode string, requestedModel st
 	selection.RunResponses = true
 	selection.RunImages = true
 	selection.RunAudio = true
+	selection.RunVideo = true
 	for _, row := range selectedRows {
-		switch row.Type {
+		switch resolveSelectionModelType(row) {
 		case model.ProviderModelTypeImage:
 			if selection.ImageModel == "" {
 				selection.ImageModel = row.Model
@@ -435,6 +480,10 @@ func pickCapabilityModels(channel *model.Channel, mode string, requestedModel st
 		case model.ProviderModelTypeAudio:
 			if selection.AudioModel == "" {
 				selection.AudioModel = row.Model
+			}
+		case model.ProviderModelTypeVideo:
+			if selection.VideoModel == "" {
+				selection.VideoModel = row.Model
 			}
 		default:
 			if selection.TextModel == "" {
@@ -448,13 +497,14 @@ func pickCapabilityModels(channel *model.Channel, mode string, requestedModel st
 func runChannelCapabilityTests(channel *model.Channel, mode string, requestedModel string) ([]previewCapabilityResult, error) {
 	normalizedMode := normalizePreviewCapabilityTestMode(mode)
 	selection := pickCapabilityModels(channel, normalizedMode, requestedModel)
-	results := make([]previewCapabilityResult, 0, 4)
+	results := make([]previewCapabilityResult, 0, 5)
 
 	if normalizedMode == previewCapabilityTestModeModel &&
 		!selection.RunChat &&
 		!selection.RunResponses &&
 		!selection.RunImages &&
-		!selection.RunAudio {
+		!selection.RunAudio &&
+		!selection.RunVideo {
 		return nil, fmt.Errorf("未找到可用于模型测试的模型")
 	}
 
@@ -535,6 +585,21 @@ func runChannelCapabilityTests(channel *model.Channel, mode string, requestedMod
 		}
 	}
 
+	if selection.RunVideo {
+		if strings.TrimSpace(selection.VideoModel) == "" {
+			results = append(results, previewCapabilityResult{
+				Capability: "videos",
+				Label:      "Videos",
+				Endpoint:   "/v1/videos",
+				Status:     previewCapabilityStatusSkipped,
+				Message:    "未选择视频模型，已跳过视频能力测试",
+			})
+		} else {
+			latencyMs, message, execErr := executePreviewVideoCapability(channel, selection.VideoModel)
+			results = append(results, buildPreviewCapabilityResult("videos", "Videos", "/v1/videos", selection.VideoModel, latencyMs, message, execErr))
+		}
+	}
+
 	return results, nil
 }
 
@@ -571,6 +636,52 @@ func newPreviewRelayContext(path string, channel *model.Channel) (*gin.Context, 
 	c.Request.Header.Set("Content-Type", "application/json")
 	middleware.SetupContextForSelectedChannel(c, channel, "")
 	return c, meta.GetByContext(c), nil
+}
+
+func resolvePreviewEndpointURL(baseURL string, path string) string {
+	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	normalizedPath := "/" + strings.TrimLeft(strings.TrimSpace(path), "/")
+	if trimmedBaseURL == "" {
+		return normalizedPath
+	}
+	lowerBaseURL := strings.ToLower(trimmedBaseURL)
+	lowerPath := strings.ToLower(normalizedPath)
+	if strings.HasSuffix(lowerBaseURL, "/v1") && strings.HasPrefix(lowerPath, "/v1/") {
+		return trimmedBaseURL + normalizedPath[len("/v1"):]
+	}
+	if strings.HasSuffix(lowerBaseURL, "/openai") && strings.HasPrefix(lowerPath, "/v1/") {
+		return trimmedBaseURL + normalizedPath[len("/v1"):]
+	}
+	if strings.HasSuffix(lowerBaseURL, "/v1beta/openai") && strings.HasPrefix(lowerPath, "/v1/") {
+		return trimmedBaseURL + normalizedPath[len("/v1"):]
+	}
+	return trimmedBaseURL + normalizedPath
+}
+
+func parsePreviewUpstreamError(statusCode int, body []byte) error {
+	type upstreamErrorEnvelope struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+		Message string `json:"message,omitempty"`
+	}
+	message := ""
+	parsed := upstreamErrorEnvelope{}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if parsed.Error != nil {
+			message = strings.TrimSpace(parsed.Error.Message)
+		}
+		if message == "" {
+			message = strings.TrimSpace(parsed.Message)
+		}
+	}
+	if message == "" {
+		message = strings.TrimSpace(string(body))
+	}
+	if message == "" {
+		return fmt.Errorf("http status code: %d", statusCode)
+	}
+	return fmt.Errorf("http status code: %d, error message: %s", statusCode, message)
 }
 
 func executePreviewTextCapability(channel *model.Channel, path string, request *relaymodel.GeneralOpenAIRequest) (int64, string, error) {
@@ -742,6 +853,75 @@ func executePreviewAudioCapability(channel *model.Channel, modelName string) (in
 		return latencyMs, "", fmt.Errorf("响应为空")
 	}
 	return latencyMs, fmt.Sprintf("返回 %d bytes (%s)", len(body), contentType), nil
+}
+
+func executePreviewVideoCapability(channel *model.Channel, modelName string) (int64, string, error) {
+	actualModelName := resolvePreviewModelName(channel, modelName)
+	if actualModelName == "" {
+		return 0, "", fmt.Errorf("未找到可用于视频能力测试的模型")
+	}
+	if channel == nil {
+		return 0, "", fmt.Errorf("渠道不能为空")
+	}
+	baseURL := resolvePreviewBaseURL(channel.GetProtocol(), channel.GetBaseURL())
+	if strings.TrimSpace(baseURL) == "" {
+		return 0, "", fmt.Errorf("未找到可用于视频能力测试的 Base URL")
+	}
+
+	bodyBuffer := &bytes.Buffer{}
+	writer := multipart.NewWriter(bodyBuffer)
+	if err := writer.WriteField("model", actualModelName); err != nil {
+		return 0, "", err
+	}
+	if err := writer.WriteField("prompt", "A short blue sphere morphing into a cube."); err != nil {
+		return 0, "", err
+	}
+	if err := writer.Close(); err != nil {
+		return 0, "", err
+	}
+
+	requestURL := resolvePreviewEndpointURL(baseURL, "/v1/videos")
+	httpReq, err := http.NewRequest(http.MethodPost, requestURL, bodyBuffer)
+	if err != nil {
+		return 0, "", err
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(channel.Key))
+	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
+	httpReq.Header.Set("Accept", "application/json")
+
+	startedAt := time.Now()
+	resp, err := client.HTTPClient.Do(httpReq)
+	latencyMs := time.Since(startedAt).Milliseconds()
+	if err != nil {
+		return latencyMs, "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return latencyMs, "", err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return latencyMs, "", parsePreviewUpstreamError(resp.StatusCode, body)
+	}
+
+	type previewVideoResponse struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	parsed := previewVideoResponse{}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if strings.TrimSpace(parsed.ID) != "" && strings.TrimSpace(parsed.Status) != "" {
+			return latencyMs, fmt.Sprintf("返回任务 %s（%s）", strings.TrimSpace(parsed.ID), strings.TrimSpace(parsed.Status)), nil
+		}
+		if strings.TrimSpace(parsed.ID) != "" {
+			return latencyMs, fmt.Sprintf("返回任务 %s", strings.TrimSpace(parsed.ID)), nil
+		}
+		if strings.TrimSpace(parsed.Status) != "" {
+			return latencyMs, fmt.Sprintf("视频任务状态：%s", strings.TrimSpace(parsed.Status)), nil
+		}
+	}
+	return latencyMs, "视频接口返回成功", nil
 }
 
 func buildPreviewCapabilityResult(capability string, label string, endpoint string, modelName string, latencyMs int64, message string, err error) previewCapabilityResult {

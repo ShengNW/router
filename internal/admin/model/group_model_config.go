@@ -271,6 +271,7 @@ func replaceGroupModelConfigsWithDB(db *gorm.DB, groupID string, channelIDs []st
 		}
 		abilities = append(abilities, buildDefaultAbilitiesForGroupChannel(groupID, channelsByID[channelID])...)
 	}
+	abilities = normalizeAbilityRowsPreserveOrder(abilities)
 
 	if err := db.Where(groupCol+" = ?", groupID).Delete(&Ability{}).Error; err != nil {
 		return err

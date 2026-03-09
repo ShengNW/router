@@ -108,7 +108,8 @@
     "model_types": {
       "text": "文本",
       "image": "图片",
-      "audio": "音频"
+      "audio": "音频",
+      "video": "视频"
     },
     "providers": {
       "title": "供应商管理",
@@ -288,9 +289,9 @@
       },
       "capability_tester": {
         "title": "能力测试",
-        "hint": "使用当前草稿渠道和已选模型做真实探测。系统会按模型类型自动选择文本 / 图片 / 音频模型分别测试对应能力；未匹配到某类型模型时，会自动跳过对应能力测试。",
+        "hint": "使用当前草稿渠道和已选模型做真实探测。系统会按模型类型自动选择文本 / 图片 / 音频 / 视频模型分别测试对应能力；未匹配到某类型模型时，会自动跳过对应能力测试。",
         "button": "开始测试",
-        "empty": "还没有测试结果，点击“开始测试”后会按模型类型依次探测 chat、responses、images、audio。",
+        "empty": "还没有测试结果，点击“开始测试”后会按模型类型依次探测 chat、responses、images、audio、videos。",
         "last_tested": "最近测试时间：{{time}}",
         "test_success": "能力测试已完成",
         "test_failed": "能力测试失败",
