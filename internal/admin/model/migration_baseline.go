@@ -44,6 +44,9 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 	if err := syncModelProviderCatalogWithDB(tx); err != nil {
 		return err
 	}
+	if err := syncCanonicalProviderModelNamesWithDB(tx); err != nil {
+		return err
+	}
 	if err := syncChannelModelTypesWithDB(tx); err != nil {
 		return err
 	}

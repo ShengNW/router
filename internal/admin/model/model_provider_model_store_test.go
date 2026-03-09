@@ -27,6 +27,12 @@ func TestCanonicalizeModelNameForProvider(t *testing.T) {
 			model:    "gpt-4o-mini",
 			want:     "gpt-4o-mini",
 		},
+		{
+			name:     "strip black-forest-labs self prefix",
+			provider: "black-forest-labs",
+			model:    "black-forest-labs/flux-1.1-pro",
+			want:     "flux-1.1-pro",
+		},
 	}
 
 	for _, tt := range tests {

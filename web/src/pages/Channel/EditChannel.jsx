@@ -309,6 +309,10 @@ const normalizeProviderIdentifier = (value) => {
     case 'minimax':
     case 'abab':
       return 'minimax';
+    case 'black-forest-labs':
+    case 'blackforestlabs':
+    case 'bfl':
+      return 'black-forest-labs';
     default:
       return normalized;
   }
@@ -357,6 +361,7 @@ const resolveProviderIdentifierFromModelName = (modelName) => {
   if (lower.startsWith('spark-')) return 'xunfei';
   if (lower.startsWith('moonshot-') || lower.startsWith('kimi-')) return 'moonshot';
   if (lower.startsWith('llama')) return 'meta-llama';
+  if (lower.startsWith('flux')) return 'black-forest-labs';
   if (lower.startsWith('baichuan-')) return 'baichuan';
   if (lower.startsWith('yi-')) return 'lingyiwanwu';
   if (lower.startsWith('step-')) return 'stepfun';

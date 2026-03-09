@@ -634,7 +634,7 @@
     "SortOrder": 120,
     "ModelDetails": [
       {
-        "model": "black-forest-labs/flux-1.1-pro",
+        "model": "flux-1.1-pro",
         "type": "image",
         "input_price": 0.04,
         "price_unit": "per_image",
@@ -642,7 +642,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-1.1-pro-ultra",
+        "model": "flux-1.1-pro-ultra",
         "type": "image",
         "input_price": 0.06,
         "price_unit": "per_image",
@@ -650,7 +650,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-canny-dev",
+        "model": "flux-canny-dev",
         "type": "image",
         "input_price": 0.025,
         "price_unit": "per_image",
@@ -658,7 +658,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-canny-pro",
+        "model": "flux-canny-pro",
         "type": "image",
         "input_price": 0.05,
         "price_unit": "per_image",
@@ -666,7 +666,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-depth-dev",
+        "model": "flux-depth-dev",
         "type": "image",
         "input_price": 0.025,
         "price_unit": "per_image",
@@ -674,7 +674,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-depth-pro",
+        "model": "flux-depth-pro",
         "type": "image",
         "input_price": 0.05,
         "price_unit": "per_image",
@@ -682,7 +682,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-dev",
+        "model": "flux-dev",
         "type": "image",
         "input_price": 0.025,
         "price_unit": "per_image",
@@ -690,7 +690,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-dev-lora",
+        "model": "flux-dev-lora",
         "type": "image",
         "input_price": 0.032,
         "price_unit": "per_image",
@@ -698,7 +698,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-fill-dev",
+        "model": "flux-fill-dev",
         "type": "image",
         "input_price": 0.04,
         "price_unit": "per_image",
@@ -706,7 +706,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-fill-pro",
+        "model": "flux-fill-pro",
         "type": "image",
         "input_price": 0.05,
         "price_unit": "per_image",
@@ -714,7 +714,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-pro",
+        "model": "flux-pro",
         "type": "image",
         "input_price": 0.055,
         "price_unit": "per_image",
@@ -722,7 +722,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-redux-dev",
+        "model": "flux-redux-dev",
         "type": "image",
         "input_price": 0.025,
         "price_unit": "per_image",
@@ -730,7 +730,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-redux-schnell",
+        "model": "flux-redux-schnell",
         "type": "image",
         "input_price": 0.003,
         "price_unit": "per_image",
@@ -738,7 +738,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-schnell",
+        "model": "flux-schnell",
         "type": "image",
         "input_price": 0.003,
         "price_unit": "per_image",
@@ -746,7 +746,7 @@
         "source": "default"
       },
       {
-        "model": "black-forest-labs/flux-schnell-lora",
+        "model": "flux-schnell-lora",
         "type": "image",
         "input_price": 0.02,
         "price_unit": "per_image",

@@ -34,6 +34,8 @@ func NormalizeModelProvider(provider string) string {
 		return "volcengine"
 	case "minimax", "abab":
 		return "minimax"
+	case "black-forest-labs", "blackforestlabs", "bfl":
+		return "black-forest-labs"
 	default:
 		return lower
 	}
@@ -74,7 +76,7 @@ func ResolveModelProvider(modelName string) string {
 		return "cohere"
 	case strings.HasPrefix(lower, "deepseek-"):
 		return "deepseek"
-	case strings.HasPrefix(lower, "qwen-"),
+	case strings.HasPrefix(lower, "qwen"),
 		strings.HasPrefix(lower, "qwq-"),
 		strings.HasPrefix(lower, "qvq-"):
 		return "qwen"
@@ -91,6 +93,10 @@ func ResolveModelProvider(modelName string) string {
 		return "minimax"
 	case strings.HasPrefix(lower, "ernie-"):
 		return "baidu"
+	case strings.HasPrefix(lower, "llama"):
+		return "meta-llama"
+	case strings.HasPrefix(lower, "flux"):
+		return "black-forest-labs"
 	default:
 		return "unknown"
 	}
@@ -144,6 +150,10 @@ func ResolveOwnedByProvider(ownedBy string) string {
 	case strings.Contains(value, "minimax"),
 		strings.Contains(value, "abab"):
 		return "minimax"
+	case strings.Contains(value, "black-forest-labs"),
+		strings.Contains(value, "black forest labs"),
+		strings.Contains(value, "blackforestlabs"):
+		return "black-forest-labs"
 	default:
 		return value
 	}

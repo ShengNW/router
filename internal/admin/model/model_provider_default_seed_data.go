@@ -39,7 +39,7 @@ func mustLoadDefaultProviderSeedTemplates() []ModelProviderCatalogSeed {
 			Name:         name,
 			BaseURL:      strings.TrimSpace(row.BaseURL),
 			SortOrder:    row.SortOrder,
-			ModelDetails: normalizeDefaultProviderSeedModelDetails(row.ModelDetails, 0),
+			ModelDetails: normalizeDefaultProviderSeedModelDetails(provider, row.ModelDetails, 0),
 		})
 	}
 
@@ -72,7 +72,7 @@ func mustLoadDefaultProviderSeedTemplates() []ModelProviderCatalogSeed {
 func BuildDefaultModelProviderCatalogSeeds(now int64) []ModelProviderCatalogSeed {
 	seeds := make([]ModelProviderCatalogSeed, 0, len(defaultProviderSeedTemplates))
 	for _, template := range defaultProviderSeedTemplates {
-		details := normalizeDefaultProviderSeedModelDetails(template.ModelDetails, now)
+		details := normalizeDefaultProviderSeedModelDetails(template.Provider, template.ModelDetails, now)
 		seeds = append(seeds, ModelProviderCatalogSeed{
 			Provider:     template.Provider,
 			Name:         template.Name,
@@ -84,10 +84,18 @@ func BuildDefaultModelProviderCatalogSeeds(now int64) []ModelProviderCatalogSeed
 	return seeds
 }
 
-func normalizeDefaultProviderSeedModelDetails(details []ModelProviderModelDetail, now int64) []ModelProviderModelDetail {
+func normalizeDefaultProviderSeedModelDetails(provider string, details []ModelProviderModelDetail, now int64) []ModelProviderModelDetail {
+	normalizedProvider := commonutils.NormalizeModelProvider(provider)
+	if normalizedProvider == "" || normalizedProvider == "unknown" {
+		normalizedProvider = strings.TrimSpace(strings.ToLower(provider))
+	}
 	cloned := make([]ModelProviderModelDetail, 0, len(details))
 	for _, detail := range details {
 		next := detail
+		next.Model = canonicalizeModelNameForProvider(normalizedProvider, next.Model)
+		if strings.TrimSpace(next.Model) == "" {
+			continue
+		}
 		if next.UpdatedAt <= 0 {
 			next.UpdatedAt = now
 		}
