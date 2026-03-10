@@ -47,6 +47,47 @@ type appendProviderModelRequest struct {
 	Source      string  `json:"source,omitempty"`
 }
 
+func providerModelNames(details []model.ProviderModelDetail) []string {
+	normalized := model.NormalizeProviderModelDetails(details)
+	names := make([]string, 0, len(normalized))
+	for _, item := range normalized {
+		if strings.TrimSpace(item.Model) == "" {
+			continue
+		}
+		names = append(names, item.Model)
+	}
+	return names
+}
+
+func mergeProviderDetailInputs(current []model.ProviderModelDetail, fallbackModels []string, now int64) []model.ProviderModelDetail {
+	merged := make([]model.ProviderModelDetail, 0, len(current)+len(fallbackModels))
+	merged = append(merged, current...)
+	seen := make(map[string]struct{}, len(current))
+	for _, detail := range current {
+		modelName := strings.TrimSpace(detail.Model)
+		if modelName == "" {
+			continue
+		}
+		seen[modelName] = struct{}{}
+	}
+	for _, modelName := range fallbackModels {
+		name := strings.TrimSpace(modelName)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		merged = append(merged, model.ProviderModelDetail{
+			Model:     name,
+			Source:    "manual",
+			UpdatedAt: now,
+		})
+	}
+	return model.NormalizeProviderModelDetails(merged)
+}
+
 func normalizeProviderCatalogID(item providerCatalogItem) string {
 	id := commonutils.NormalizeProvider(item.ID)
 	if id == "" {
@@ -101,17 +142,16 @@ func buildProviderCatalogItems(rows []model.Provider) ([]providerCatalogItem, er
 		return nil, err
 	}
 	items := make([]providerCatalogItem, 0, len(rows))
-	now := helper.GetTimestamp()
 	for _, row := range rows {
 		provider := commonutils.NormalizeProvider(row.Id)
 		if provider == "" {
 			continue
 		}
-		details := model.MergeProviderDetails(provider, detailsByProvider[provider], nil, false, now)
+		details := model.NormalizeProviderModelDetails(detailsByProvider[provider])
 		items = append(items, providerCatalogItem{
 			ID:           provider,
 			Name:         strings.TrimSpace(row.Name),
-			Models:       model.ProviderModelNames(details),
+			Models:       providerModelNames(details),
 			ModelDetails: details,
 			BaseURL:      strings.TrimSpace(row.BaseURL),
 			SortOrder:    normalizeCatalogSortOrder(row.SortOrder),
@@ -237,9 +277,9 @@ func normalizeProviderUpsertItem(providerID string, item providerCatalogItem, ex
 		detailInput = append(detailInput, model.ProviderModelDetail{Model: strings.TrimSpace(modelName)})
 	}
 
-	details := model.MergeProviderDetails(provider, detailInput, item.Models, false, now)
+	details := mergeProviderDetailInputs(detailInput, item.Models, now)
 	if len(details) == 0 && existing != nil {
-		details = model.MergeProviderDetails(provider, existing.ModelDetails, existing.Models, false, now)
+		details = mergeProviderDetailInputs(existing.ModelDetails, existing.Models, now)
 	}
 
 	sortOrder := normalizeCatalogSortOrder(item.SortOrder)
@@ -256,7 +296,7 @@ func normalizeProviderUpsertItem(providerID string, item providerCatalogItem, ex
 	return providerCatalogItem{
 		ID:           provider,
 		Name:         name,
-		Models:       model.ProviderModelNames(details),
+		Models:       providerModelNames(details),
 		ModelDetails: details,
 		BaseURL:      baseURL,
 		SortOrder:    sortOrder,
@@ -409,13 +449,7 @@ func appendModelToProviderItem(id string, req appendProviderModelRequest) (provi
 		detail.Source = "manual"
 	}
 
-	existing.ModelDetails = model.MergeProviderDetails(
-		existing.ID,
-		append(existing.ModelDetails, detail),
-		nil,
-		false,
-		now,
-	)
+	existing.ModelDetails = mergeProviderDetailInputs(append(existing.ModelDetails, detail), nil, now)
 	existing.UpdatedAt = now
 	return saveProviderCatalogItem(existing, false)
 }
