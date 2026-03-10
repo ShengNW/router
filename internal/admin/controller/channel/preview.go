@@ -1210,7 +1210,7 @@ func RefreshChannelModels(c *gin.Context) {
 // @Param body body docs.ChannelModelTestsRequest true "Channel model test payload"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/models/tests [post]
+// @Router /api/v1/admin/channel/{id}/tests [post]
 func TestChannelModels(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {

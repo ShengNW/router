@@ -35,8 +35,28 @@ const EditUser = () => {
   };
   const fetchGroups = useCallback(async () => {
     try {
-      let res = await API.get(`/api/v1/admin/group/catalog`);
-      const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+      const rows = [];
+      let page = 1;
+      while (page <= 50) {
+        const res = await API.get('/api/v1/admin/groups', {
+          params: {
+            page,
+            page_size: 100,
+          },
+        });
+        const { success, message, data } = res.data || {};
+        if (!success) {
+          showError(message || t('group_manage.messages.load_failed'));
+          return;
+        }
+        const pageItems = Array.isArray(data?.items) ? data.items : [];
+        rows.push(...pageItems);
+        const total = Number(data?.total || pageItems.length || 0);
+        if (pageItems.length === 0 || rows.length >= total || pageItems.length < 100) {
+          break;
+        }
+        page += 1;
+      }
       setGroupOptions(
         rows
           .filter((group) => group?.enabled)
@@ -49,7 +69,7 @@ const EditUser = () => {
     } catch (error) {
       showError(error.message);
     }
-  }, []);
+  }, [t]);
   const navigate = useNavigate();
   const handleCancel = () => {
     navigate('/setting');

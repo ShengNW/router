@@ -75,8 +75,28 @@ const UsersTable = () => {
 
   const loadGroups = useCallback(async () => {
     try {
-      const res = await API.get('/api/v1/admin/group/catalog');
-      const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+      const rows = [];
+      let page = 1;
+      while (page <= 50) {
+        const res = await API.get('/api/v1/admin/groups', {
+          params: {
+            page,
+            page_size: 100,
+          },
+        });
+        const { success, message, data } = res.data || {};
+        if (!success) {
+          showError(message || t('user.messages.operation_failed'));
+          return;
+        }
+        const pageItems = Array.isArray(data?.items) ? data.items : [];
+        rows.push(...pageItems);
+        const total = Number(data?.total || pageItems.length || 0);
+        if (pageItems.length === 0 || rows.length >= total || pageItems.length < 100) {
+          break;
+        }
+        page += 1;
+      }
       const nextMap = {};
       rows.forEach((group) => {
         const id = (group?.id || '').toString().trim();
@@ -89,7 +109,7 @@ const UsersTable = () => {
     } catch (error) {
       showError(error?.message || error);
     }
-  }, []);
+  }, [t]);
 
   const onPaginationChange = (e, { activePage }) => {
     (async () => {

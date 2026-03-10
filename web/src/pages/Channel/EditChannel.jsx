@@ -2204,7 +2204,7 @@ const EditChannel = () => {
       setModelTestingTargets(normalizedTargets);
       try {
         const res = await API.post(
-          `/api/v1/admin/channel/${targetChannelId}/models/tests`,
+          `/api/v1/admin/channel/${targetChannelId}/tests`,
           {
             test_model: inputs.test_model || '',
             target_models: normalizedTargets,

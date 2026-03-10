@@ -1787,7 +1787,7 @@ paths:
       summary: Refresh channel models from upstream (admin)
       tags:
       - admin
-  /api/v1/admin/channel/{id}/models/tests:
+  /api/v1/admin/channel/{id}/tests:
     post:
       consumes:
       - application/json
@@ -2245,24 +2245,6 @@ paths:
       summary: List group model summaries (admin)
       tags:
       - admin
-  /api/v1/admin/group/catalog:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/docs.StandardResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/docs.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List groups catalog (admin)
-      tags:
-      - admin
   /api/v1/admin/group/channel-options:
     get:
       produces:
@@ -2279,6 +2261,37 @@ paths:
       security:
       - BearerAuth: []
       summary: List group channel candidates (admin)
+      tags:
+      - admin
+  /api/v1/admin/groups:
+    get:
+      parameters:
+      - description: Page (1-based)
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Keyword
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List groups with pagination (admin)
       tags:
       - admin
   /api/v1/admin/log:

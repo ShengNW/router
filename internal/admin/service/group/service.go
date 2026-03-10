@@ -6,6 +6,10 @@ func ListCatalog() ([]model.GroupCatalog, error) {
 	return model.ListGroupCatalog()
 }
 
+func ListPage(page int, pageSize int, keyword string) ([]model.GroupCatalog, int64, error) {
+	return model.ListGroupCatalogPage(page, pageSize, keyword)
+}
+
 func Get(id string) (model.GroupCatalog, error) {
 	return model.GetGroupCatalogByID(id)
 }

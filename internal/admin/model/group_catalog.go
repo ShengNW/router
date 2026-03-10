@@ -55,6 +55,10 @@ func ListGroupCatalog() ([]GroupCatalog, error) {
 	return listGroupCatalogWithDB(DB)
 }
 
+func ListGroupCatalogPage(page int, pageSize int, keyword string) ([]GroupCatalog, int64, error) {
+	return listGroupCatalogPageWithDB(DB, page, pageSize, keyword)
+}
+
 func GetGroupCatalogByID(id string) (GroupCatalog, error) {
 	return getGroupCatalogByIDWithDB(DB, id)
 }
@@ -197,6 +201,47 @@ func listGroupCatalogWithDB(db *gorm.DB) ([]GroupCatalog, error) {
 		return nil, err
 	}
 	return rows, nil
+}
+
+func listGroupCatalogPageWithDB(db *gorm.DB, page int, pageSize int, keyword string) ([]GroupCatalog, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	total := int64(0)
+	query := buildGroupCatalogListQueryWithDB(db, keyword)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	rows := make([]GroupCatalog, 0, pageSize)
+	if err := query.
+		Order("sort_order asc, name asc").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := hydrateGroupCatalogChannelsWithDB(db, rows); err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+func buildGroupCatalogListQueryWithDB(db *gorm.DB, keyword string) *gorm.DB {
+	query := db.Model(&GroupCatalog{})
+	normalizedKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	if normalizedKeyword == "" {
+		return query
+	}
+	likeKeyword := "%" + normalizedKeyword + "%"
+	return query.Where(
+		"LOWER(id) LIKE ? OR LOWER(name) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?",
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+	)
 }
 
 func hydrateGroupCatalogChannelsWithDB(db *gorm.DB, rows []GroupCatalog) error {

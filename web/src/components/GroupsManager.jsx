@@ -168,22 +168,42 @@ const GroupsManager = () => {
     [formModelChannels, formChannelIDs]
   );
 
+  const fetchAllGroups = useCallback(async () => {
+    const items = [];
+    let page = 1;
+    while (page <= 50) {
+      const res = await API.get('/api/v1/admin/groups', {
+        params: {
+          page,
+          page_size: 100,
+        },
+      });
+      const { success, message, data } = res.data || {};
+      if (!success) {
+        throw new Error(message || t('group_manage.messages.load_failed'));
+      }
+      const pageItems = Array.isArray(data?.items) ? data.items : [];
+      items.push(...pageItems);
+      const total = Number(data?.total || pageItems.length || 0);
+      if (pageItems.length === 0 || items.length >= total || pageItems.length < 100) {
+        break;
+      }
+      page += 1;
+    }
+    return items;
+  }, [t]);
+
   const loadCatalog = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await API.get('/api/v1/admin/group/catalog');
-      const { success, message, data } = res.data || {};
-      if (!success) {
-        showError(message || t('group_manage.messages.load_failed'));
-        return;
-      }
-      setRows(sortCatalogRows(Array.isArray(data) ? data : []));
+      const items = await fetchAllGroups();
+      setRows(sortCatalogRows(Array.isArray(items) ? items : []));
     } catch (error) {
       showError(error);
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [fetchAllGroups]);
 
   useEffect(() => {
     loadCatalog().then();
