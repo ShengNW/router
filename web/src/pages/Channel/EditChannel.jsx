@@ -755,6 +755,32 @@ const resolveProtocolFromChannelPayload = (payload) => {
   return 'openai';
 };
 
+const inferDraftCreateStepFromChannelPayload = (payload) => {
+  const protocol = resolveProtocolFromChannelPayload(payload);
+  if (protocol === 'proxy') {
+    return 1;
+  }
+  const selectedModels = Array.isArray(payload?.model_configs)
+    ? payload.model_configs
+        .filter((row) => row && row.selected !== false)
+        .map((row) => (row.model || '').toString().trim())
+        .filter((row) => row !== '')
+    : (payload?.models || '')
+        .toString()
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item !== '');
+  if (selectedModels.length === 0) {
+    return 2;
+  }
+  const testedAt = Number(payload?.channel_tests_last_tested_at || 0);
+  const results = Array.isArray(payload?.channel_tests) ? payload.channel_tests : [];
+  if (testedAt > 0 || results.length > 0) {
+    return 4;
+  }
+  return 3;
+};
+
 const EditChannel = () => {
   const { t } = useTranslation();
   const params = useParams();
@@ -776,7 +802,9 @@ const EditChannel = () => {
     const query = new URLSearchParams(location.search);
     return (query.get('draft_id') || '').trim();
   }, [hasChannelID, location.search]);
-  const [loading, setLoading] = useState(hasChannelID || copyFromId !== '');
+  const [loading, setLoading] = useState(
+    hasChannelID || copyFromId !== '' || draftIdFromQuery !== '',
+  );
   const [createStep, setCreateStep] = useState(() => {
     const query = new URLSearchParams(location.search);
     return parseCreateStep(query.get('step'));
@@ -825,6 +853,7 @@ const EditChannel = () => {
   const [detailModelPage, setDetailModelPage] = useState(1);
   const fetchingModelsRef = useRef(false);
   const draftChannelIdRef = useRef(draftIdFromQuery);
+  const draftStepProvidedRef = useRef(false);
   const currentProtocolOption = useMemo(() => {
     const normalizedProtocol = (inputs.protocol || '').toString().trim().toLowerCase();
     if (normalizedProtocol === '') {
@@ -1687,6 +1716,9 @@ const EditChannel = () => {
         } else {
           setChannelKeySet(false);
         }
+        if (fromDraft && !draftStepProvidedRef.current) {
+          setCreateStep(inferDraftCreateStepFromChannelPayload(data));
+        }
       } else {
         showError(message);
       }
@@ -2211,6 +2243,15 @@ const EditChannel = () => {
       test_model: selectedModels[0] || '',
     }));
   }, [inputs.test_model, visibleModelConfigs]);
+
+  useEffect(() => {
+    if (hasChannelID) {
+      draftStepProvidedRef.current = false;
+      return;
+    }
+    const query = new URLSearchParams(location.search);
+    draftStepProvidedRef.current = query.get('step') !== null;
+  }, [hasChannelID, location.search]);
 
   useEffect(() => {
     if (hasChannelID) {

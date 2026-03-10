@@ -119,6 +119,49 @@ const selectionModeTest = 'test';
 const selectionModeDelete = 'delete';
 const selectionModeDisable = 'disable';
 const channelStatusCreating = 4;
+const CHANNEL_CREATE_DRAFT_KEY = 'router.channel.create.draft.v2';
+const CREATE_CHANNEL_STEP_MIN = 1;
+const CREATE_CHANNEL_STEP_MAX = 4;
+
+function parseCreateStep(rawStep) {
+  const step = Number(rawStep);
+  if (!Number.isInteger(step)) {
+    return CREATE_CHANNEL_STEP_MIN;
+  }
+  if (step < CREATE_CHANNEL_STEP_MIN) {
+    return CREATE_CHANNEL_STEP_MIN;
+  }
+  if (step > CREATE_CHANNEL_STEP_MAX) {
+    return CREATE_CHANNEL_STEP_MAX;
+  }
+  return step;
+}
+
+function readStoredDraftStep(channelId) {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+  const targetChannelId = (channelId || '').toString().trim();
+  if (targetChannelId === '') {
+    return 0;
+  }
+  try {
+    const raw = localStorage.getItem(CHANNEL_CREATE_DRAFT_KEY);
+    if (!raw) {
+      return 0;
+    }
+    const draft = JSON.parse(raw);
+    if (!draft || typeof draft !== 'object') {
+      return 0;
+    }
+    if ((draft.draft_channel_id || '').toString().trim() !== targetChannelId) {
+      return 0;
+    }
+    return parseCreateStep(draft.step);
+  } catch {
+    return 0;
+  }
+}
 
 const ChannelsTable = () => {
   const { t } = useTranslation();
@@ -624,10 +667,30 @@ const ChannelsTable = () => {
     if (!channel) {
       return 1;
     }
+    const storedStep = readStoredDraftStep(channel.id);
+    if (storedStep > 0) {
+      return storedStep;
+    }
     if (channel.protocol === 'proxy') {
       return 1;
     }
-    const models = Array.isArray(channel.models) ? channel.models : [];
+    const models = Array.isArray(channel.models)
+      ? channel.models
+      : (channel.models || '')
+          .toString()
+          .split(',')
+          .map((item) => item.trim())
+          .filter((item) => item !== '');
+    if (models.length === 0) {
+      return 2;
+    }
+    const testedAt = Number(channel.channel_tests_last_tested_at || 0);
+    const testResults = Array.isArray(channel.channel_tests)
+      ? channel.channel_tests
+      : [];
+    if (testedAt > 0 || testResults.length > 0) {
+      return 4;
+    }
     if (models.length > 0) {
       return 3;
     }
