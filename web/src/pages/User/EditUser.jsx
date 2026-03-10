@@ -100,10 +100,11 @@ const EditUser = () => {
   const submit = async () => {
     let res = undefined;
     if (userId) {
-      let data = { ...inputs, id: parseInt(userId) };
+      let data = { ...inputs, id: (userId || '').toString().trim() };
       if (typeof data.quota === 'string') {
         data.quota = parseInt(data.quota);
       }
+      data.group = (data.group || '').toString().trim();
       res = await API.put(`/api/v1/admin/user/`, data);
     } else {
       res = await API.put(`/api/v1/public/user/self`, inputs);
