@@ -819,6 +819,16 @@
       "other": "Other Settings"
     },
     "personal": {
+      "tokens": {
+        "title": "Tokens & Invites"
+      },
+      "password": {
+        "title": "Change Password"
+      },
+      "delete": {
+        "title": "Delete Account",
+        "confirm": "Confirm Delete"
+      },
       "general": {
         "title": "General Settings",
         "system_token_notice": "Note: The token generated here is for system management, not for requesting OpenAI related services.",
