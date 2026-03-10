@@ -102,30 +102,6 @@ func GetGroups(c *gin.Context) {
 	})
 }
 
-// GetGroupChannelOptions godoc
-// @Summary List group channel candidates (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/channel-options [get]
-func GetGroupChannelOptions(c *gin.Context) {
-	rows, err := groupsvc.ListChannelBindingCandidates()
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    rows,
-	})
-}
-
 // CreateGroup godoc
 // @Summary Create group (admin)
 // @Tags admin

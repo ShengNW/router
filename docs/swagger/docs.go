@@ -700,6 +700,12 @@ const docTemplate = `{
                         "description": "Keyword",
                         "name": "keyword",
                         "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Compact mode (1=true)",
+                        "name": "compact",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -766,36 +772,6 @@ const docTemplate = `{
                     "admin"
                 ],
                 "summary": "Create group (admin)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/docs.StandardResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/docs.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/admin/group/channel-options": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "List group channel candidates (admin)",
                 "responses": {
                     "200": {
                         "description": "OK",

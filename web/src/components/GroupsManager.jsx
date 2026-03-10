@@ -266,13 +266,30 @@ const GroupsManager = () => {
   const fetchCreateChannelOptions = useCallback(async () => {
     setFormChannelLoading(true);
     try {
-      const res = await API.get('/api/v1/admin/group/channel-options');
-      const { success, message, data } = res.data || {};
-      if (!success) {
-        showError(message || t('group_manage.messages.bind_load_failed'));
-        return;
+      const rows = [];
+      let page = 1;
+      while (page <= 50) {
+        const res = await API.get('/api/v1/admin/channels', {
+          params: {
+            page,
+            page_size: 100,
+            compact: 1,
+          },
+        });
+        const { success, message, data } = res.data || {};
+        if (!success) {
+          showError(message || t('group_manage.messages.bind_load_failed'));
+          return;
+        }
+        const pageItems = Array.isArray(data?.items) ? data.items : [];
+        rows.push(...pageItems);
+        const total = Number(data?.total || pageItems.length || 0);
+        if (pageItems.length === 0 || rows.length >= total || pageItems.length < 100) {
+          break;
+        }
+        page += 1;
       }
-      setFormChannelOptions(toChannelOptions(data));
+      setFormChannelOptions(toChannelOptions(rows));
       setFormChannelIDs([]);
     } catch (error) {
       showError(error);

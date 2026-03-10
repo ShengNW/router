@@ -46,10 +46,6 @@ func ListChannelBindings(id string) ([]model.GroupChannelBindingItem, error) {
 	return model.ListGroupChannelBindings(id)
 }
 
-func ListChannelBindingCandidates() ([]model.GroupChannelBindingItem, error) {
-	return model.ListGroupChannelBindingCandidates()
-}
-
 func ListModelSummaries(id string) ([]model.GroupModelSummaryItem, error) {
 	return model.ListGroupModelSummaries(id)
 }

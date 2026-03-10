@@ -18,10 +18,6 @@ type GroupChannelBindingItem struct {
 	Updated  int64  `json:"updated_at"`
 }
 
-func ListGroupChannelBindingCandidates() ([]GroupChannelBindingItem, error) {
-	return listGroupChannelBindingsWithDB(DB, "", true)
-}
-
 func ListGroupChannelBindings(groupID string) ([]GroupChannelBindingItem, error) {
 	if strings.TrimSpace(groupID) == "" {
 		return nil, fmt.Errorf("分组 ID 不能为空")

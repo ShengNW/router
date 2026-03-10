@@ -53,6 +53,20 @@ type channelListPageData struct {
 	PageSize int               `json:"page_size"`
 }
 
+type channelListCompactItem struct {
+	ID       string `json:"id"`
+	Protocol string `json:"protocol"`
+	Status   int    `json:"status"`
+	Name     string `json:"name"`
+}
+
+type channelListCompactPageData struct {
+	Items    []channelListCompactItem `json:"items"`
+	Total    int64                    `json:"total"`
+	Page     int                      `json:"page"`
+	PageSize int                      `json:"page_size"`
+}
+
 func sanitizeChannelForResponse(channel *model.Channel) {
 	if channel == nil {
 		return
@@ -125,6 +139,11 @@ func parseChannelListPageParams(c *gin.Context) (page int, pageSize int, keyword
 	return page, pageSize, keyword
 }
 
+func parseCompactMode(c *gin.Context) bool {
+	raw := strings.TrimSpace(c.Query("compact"))
+	return raw == "1" || strings.EqualFold(raw, "true")
+}
+
 func listChannelsPage(page int, pageSize int, keyword string) (channelListPageData, error) {
 	rows, total, err := channelsvc.ListPage(page, pageSize, keyword)
 	if err != nil {
@@ -163,6 +182,7 @@ func isModelInChannelModels(testModel string, models string) bool {
 // @Param page query int false "Page (1-based)"
 // @Param page_size query int false "Page size"
 // @Param keyword query string false "Keyword"
+// @Param compact query int false "Compact mode (1=true)"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
 // @Router /api/v1/admin/channels [get]
@@ -173,6 +193,28 @@ func GetChannels(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
+		})
+		return
+	}
+	if parseCompactMode(c) {
+		compactItems := make([]channelListCompactItem, 0, len(data.Items))
+		for _, item := range data.Items {
+			compactItems = append(compactItems, channelListCompactItem{
+				ID:       strings.TrimSpace(item.ID),
+				Protocol: strings.TrimSpace(item.Protocol),
+				Status:   item.Status,
+				Name:     strings.TrimSpace(item.Name),
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+			"data": channelListCompactPageData{
+				Items:    compactItems,
+				Total:    data.Total,
+				Page:     data.Page,
+				PageSize: data.PageSize,
+			},
 		})
 		return
 	}
