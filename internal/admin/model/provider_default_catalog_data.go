@@ -31,6 +31,7 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 			{Model: "o3", Type: ProviderModelTypeText, InputPrice: 0.002, OutputPrice: 0.008, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "o4-mini", Type: ProviderModelTypeText, InputPrice: 0.0011, OutputPrice: 0.0044, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-image-1", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPerImage, Currency: ProviderPriceCurrencyUSD, Source: "default"},
+			{Model: "dall-e-3", Type: ProviderModelTypeImage, InputPrice: 0.04, PriceUnit: ProviderPriceUnitPerImage, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-realtime", Type: ProviderModelTypeAudio, InputPrice: 0.004, OutputPrice: 0.016, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-realtime-mini", Type: ProviderModelTypeAudio, InputPrice: 0.0006, OutputPrice: 0.0024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-audio", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},

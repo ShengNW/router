@@ -5,6 +5,35 @@ import (
 	"testing"
 )
 
+func TestBuildDefaultProviderCatalogSeeds_OpenAIIncludesDALLE3(t *testing.T) {
+	seeds := BuildDefaultProviderCatalogSeeds(1700000000)
+	for _, seed := range seeds {
+		if seed.Provider != "openai" {
+			continue
+		}
+		for _, detail := range seed.ModelDetails {
+			if detail.Model != "dall-e-3" {
+				continue
+			}
+			if detail.Type != ProviderModelTypeImage {
+				t.Fatalf("dall-e-3 type=%q, want %q", detail.Type, ProviderModelTypeImage)
+			}
+			if detail.InputPrice != 0.04 {
+				t.Fatalf("dall-e-3 input_price=%v, want 0.04", detail.InputPrice)
+			}
+			if detail.PriceUnit != ProviderPriceUnitPerImage {
+				t.Fatalf("dall-e-3 price_unit=%q, want %q", detail.PriceUnit, ProviderPriceUnitPerImage)
+			}
+			if detail.Currency != ProviderPriceCurrencyUSD {
+				t.Fatalf("dall-e-3 currency=%q, want %q", detail.Currency, ProviderPriceCurrencyUSD)
+			}
+			return
+		}
+		t.Fatalf("expected openai seed to include dall-e-3")
+	}
+	t.Fatalf("expected openai provider to exist")
+}
+
 func TestBuildDefaultProviderCatalogSeeds_ModelDetailsMeta(t *testing.T) {
 	seeds := BuildDefaultProviderCatalogSeeds(1700000000)
 	if len(seeds) == 0 {
