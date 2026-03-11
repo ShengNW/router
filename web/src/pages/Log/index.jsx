@@ -10,7 +10,7 @@ const Log = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header'>{t('log.title')}</Card.Header>
+          <Card.Header className='header router-page-title'>{t('log.title')}</Card.Header>
           <LogsTable />
         </Card.Content>
       </Card>

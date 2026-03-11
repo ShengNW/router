@@ -21,13 +21,18 @@ type GroupModelSummaryItem struct {
 func ListGroupModelSummaries(groupID string) ([]GroupModelSummaryItem, error) {
 	groupID = strings.TrimSpace(groupID)
 	if groupID == "" {
-		return nil, fmt.Errorf("分组标识不能为空")
+		return nil, fmt.Errorf("分组 ID 不能为空")
+	}
+	groupCatalog, err := getGroupCatalogByIDWithDB(DB, groupID)
+	if err != nil {
+		return nil, err
 	}
 
 	abilities := make([]Ability, 0)
 	groupCol := `"group"`
 	if err := DB.
-		Where(groupCol+" = ?", groupID).
+		Where(groupCol+" = ?", groupCatalog.Id).
+		Where("enabled = ?", true).
 		Order("model asc, priority desc, channel_id asc").
 		Find(&abilities).Error; err != nil {
 		return nil, err
@@ -56,6 +61,7 @@ func ListGroupModelSummaries(groupID string) ([]GroupModelSummaryItem, error) {
 		if err := DB.
 			Select("id", "name", "protocol", "status").
 			Where("id IN ?", channelIDs).
+			Where("status = ?", ChannelStatusEnabled).
 			Find(&channels).Error; err != nil {
 			return nil, err
 		}
@@ -63,8 +69,13 @@ func ListGroupModelSummaries(groupID string) ([]GroupModelSummaryItem, error) {
 
 	channelsByID := make(map[string]GroupModelSummaryChannel, len(channels))
 	for _, channel := range channels {
-		channelsByID[channel.Id] = GroupModelSummaryChannel{
-			Id:       channel.Id,
+		channel.NormalizeIdentity()
+		channelID := strings.TrimSpace(channel.Id)
+		if channelID == "" {
+			continue
+		}
+		channelsByID[channelID] = GroupModelSummaryChannel{
+			Id:       channelID,
 			Name:     channel.DisplayName(),
 			Protocol: channel.GetProtocol(),
 			Status:   channel.Status,

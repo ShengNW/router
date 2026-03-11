@@ -14,18 +14,57 @@ import (
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
 )
 
+const maxChannelListPageSize = 100
+
 type updateChannelTestModelRequest struct {
 	ID        string `json:"id"`
 	TestModel string `json:"test_model"`
 }
 
-type createChannelDraftRequest struct {
-	ID       string `json:"id"`
+type createChannelRequest struct {
 	Name     string `json:"name"`
 	Protocol string `json:"protocol"`
 	Key      string `json:"key"`
 	BaseURL  string `json:"base_url"`
 	Config   string `json:"config"`
+}
+
+type channelListItem struct {
+	ID                 string   `json:"id"`
+	Protocol           string   `json:"protocol"`
+	Status             int      `json:"status"`
+	Name               string   `json:"name"`
+	Weight             *uint    `json:"weight,omitempty"`
+	CreatedTime        int64    `json:"created_time"`
+	TestTime           int64    `json:"test_time"`
+	Capabilities       []string `json:"capabilities"`
+	BaseURL            string   `json:"base_url,omitempty"`
+	Other              string   `json:"other,omitempty"`
+	Balance            float64  `json:"balance"`
+	BalanceUpdatedTime int64    `json:"balance_updated_time"`
+	UsedQuota          int64    `json:"used_quota"`
+	Priority           int64    `json:"priority"`
+}
+
+type channelListPageData struct {
+	Items    []channelListItem `json:"items"`
+	Total    int64             `json:"total"`
+	Page     int               `json:"page"`
+	PageSize int               `json:"page_size"`
+}
+
+type channelListCompactItem struct {
+	ID       string `json:"id"`
+	Protocol string `json:"protocol"`
+	Status   int    `json:"status"`
+	Name     string `json:"name"`
+}
+
+type channelListCompactPageData struct {
+	Items    []channelListCompactItem `json:"items"`
+	Total    int64                    `json:"total"`
+	Page     int                      `json:"page"`
+	PageSize int                      `json:"page_size"`
 }
 
 func sanitizeChannelForResponse(channel *model.Channel) {
@@ -38,9 +77,110 @@ func sanitizeChannelForResponse(channel *model.Channel) {
 	channel.Models = strings.TrimSpace(channel.Models)
 	channel.AvailableModels = model.NormalizeChannelModelIDsPreserveOrder(channel.AvailableModels)
 	channel.ModelConfigs = model.NormalizeChannelModelConfigsPreserveOrder(channel.ModelConfigs)
-	channel.SetCapabilityResults(channel.CapabilityResults)
+	channel.SetChannelTests(channel.Tests)
 	channel.KeySet = strings.TrimSpace(channel.Key) != ""
 	channel.Key = ""
+}
+
+func buildChannelListItem(channel *model.Channel) channelListItem {
+	if channel == nil {
+		return channelListItem{}
+	}
+	channel.NormalizeProtocol()
+	capabilities := collectChannelCapabilities(channel)
+	baseURL := ""
+	if channel.BaseURL != nil {
+		baseURL = strings.TrimSpace(*channel.BaseURL)
+	}
+	other := ""
+	if channel.Other != nil {
+		other = strings.TrimSpace(*channel.Other)
+	}
+	return channelListItem{
+		ID:                 strings.TrimSpace(channel.Id),
+		Protocol:           strings.TrimSpace(channel.Protocol),
+		Status:             channel.Status,
+		Name:               strings.TrimSpace(channel.Name),
+		Weight:             channel.Weight,
+		CreatedTime:        channel.CreatedTime,
+		TestTime:           channel.TestTime,
+		Capabilities:       capabilities,
+		BaseURL:            baseURL,
+		Other:              other,
+		Balance:            channel.Balance,
+		BalanceUpdatedTime: channel.BalanceUpdatedTime,
+		UsedQuota:          channel.UsedQuota,
+		Priority:           channel.GetPriority(),
+	}
+}
+
+func collectChannelCapabilities(channel *model.Channel) []string {
+	if channel == nil {
+		return []string{}
+	}
+	selectedTypes := map[string]struct{}{}
+	for _, row := range channel.GetModelConfigs() {
+		if !row.Selected || row.Inactive {
+			continue
+		}
+		modelType := strings.TrimSpace(strings.ToLower(row.Type))
+		switch modelType {
+		case "image", "audio", "video":
+			selectedTypes[modelType] = struct{}{}
+		default:
+			selectedTypes["text"] = struct{}{}
+		}
+	}
+	order := []string{"text", "image", "audio", "video"}
+	result := make([]string, 0, len(order))
+	for _, item := range order {
+		if _, ok := selectedTypes[item]; ok {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func parseChannelListPageParams(c *gin.Context) (page int, pageSize int, keyword string) {
+	page = 1
+	if raw := strings.TrimSpace(c.Query("page")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	pageSize = config.ItemsPerPage
+	if raw := strings.TrimSpace(c.Query("page_size")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			pageSize = parsed
+		}
+	}
+	if pageSize > maxChannelListPageSize {
+		pageSize = maxChannelListPageSize
+	}
+	keyword = strings.TrimSpace(c.Query("keyword"))
+	return page, pageSize, keyword
+}
+
+func parseCompactMode(c *gin.Context) bool {
+	raw := strings.TrimSpace(c.Query("compact"))
+	return raw == "1" || strings.EqualFold(raw, "true")
+}
+
+func listChannelsPage(page int, pageSize int, keyword string) (channelListPageData, error) {
+	rows, total, err := channelsvc.ListPage(page, pageSize, keyword)
+	if err != nil {
+		return channelListPageData{}, err
+	}
+	items := make([]channelListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, buildChannelListItem(row))
+	}
+	return channelListPageData{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func isModelInChannelModels(testModel string, models string) bool {
@@ -56,51 +196,21 @@ func isModelInChannelModels(testModel string, models string) bool {
 	return false
 }
 
-// GetAllChannels godoc
-// @Summary List channels (admin)
+// GetChannels godoc
+// @Summary List channels with pagination (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
-// @Param p query int false "Page index"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel [get]
-func GetAllChannels(c *gin.Context) {
-	p, _ := strconv.Atoi(c.Query("p"))
-	if p < 0 {
-		p = 0
-	}
-	channels, err := channelsvc.GetAll(p*config.ItemsPerPage, config.ItemsPerPage, "limited")
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
-	}
-	for _, channel := range channels {
-		sanitizeChannelForResponse(channel)
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    channels,
-	})
-	return
-}
-
-// SearchChannels godoc
-// @Summary Search channels (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
+// @Param page query int false "Page (1-based)"
+// @Param page_size query int false "Page size"
 // @Param keyword query string false "Keyword"
+// @Param compact query int false "Compact mode (1=true)"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/search [get]
-func SearchChannels(c *gin.Context) {
-	keyword := c.Query("keyword")
-	channels, err := channelsvc.Search(keyword)
+// @Router /api/v1/admin/channels [get]
+func GetChannels(c *gin.Context) {
+	page, pageSize, keyword := parseChannelListPageParams(c)
+	data, err := listChannelsPage(page, pageSize, keyword)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -108,15 +218,33 @@ func SearchChannels(c *gin.Context) {
 		})
 		return
 	}
-	for _, channel := range channels {
-		sanitizeChannelForResponse(channel)
+	if parseCompactMode(c) {
+		compactItems := make([]channelListCompactItem, 0, len(data.Items))
+		for _, item := range data.Items {
+			compactItems = append(compactItems, channelListCompactItem{
+				ID:       strings.TrimSpace(item.ID),
+				Protocol: strings.TrimSpace(item.Protocol),
+				Status:   item.Status,
+				Name:     strings.TrimSpace(item.Name),
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+			"data": channelListCompactPageData{
+				Items:    compactItems,
+				Total:    data.Total,
+				Page:     data.Page,
+				PageSize: data.PageSize,
+			},
+		})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    channels,
+		"data":    data,
 	})
-	return
 }
 
 // GetChannel godoc
@@ -137,13 +265,8 @@ func GetChannel(c *gin.Context) {
 		})
 		return
 	}
-	selectAll := false
-	selectAllRaw := strings.TrimSpace(c.Query("select_all"))
-	if selectAllRaw == "1" || strings.EqualFold(selectAllRaw, "true") {
-		selectAll = true
-	}
 	var err error
-	channel, err := channelsvc.GetByID(id, selectAll)
+	channel, err := channelsvc.GetByID(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -201,30 +324,30 @@ func AddChannel(c *gin.Context) {
 	return
 }
 
-// CreateChannelDraft godoc
-// @Summary Create channel draft (admin)
+// CreateChannel godoc
+// @Summary Create channel record (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param body body docs.ChannelCreateRecordRequest true "Channel create payload"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/draft [post]
-func CreateChannelDraft(c *gin.Context) {
-	req := createChannelDraftRequest{}
+// @Router /api/v1/admin/channel/create [post]
+func CreateChannel(c *gin.Context) {
+	req := createChannelRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		logChannelAdminWarn(c, "create_draft", stringField("reason", err.Error()))
+		logChannelAdminWarn(c, "create_record", stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
 		return
 	}
-	id := model.NormalizeChannelIdentifier(req.ID)
-	name := strings.TrimSpace(req.Name)
+	name := model.NormalizeChannelIdentifier(req.Name)
 	key := strings.TrimSpace(req.Key)
-	if err := model.ValidateChannelIdentifier(id); err != nil {
-		logChannelAdminWarn(c, "create_draft", stringField("channel_id", id), stringField("protocol", req.Protocol), stringField("reason", err.Error()))
+	if err := model.ValidateChannelIdentifier(name); err != nil {
+		logChannelAdminWarn(c, "create_record", stringField("name", name), stringField("protocol", req.Protocol), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -232,7 +355,7 @@ func CreateChannelDraft(c *gin.Context) {
 		return
 	}
 	if key == "" {
-		logChannelAdminWarn(c, "create_draft", stringField("channel_id", id), stringField("protocol", req.Protocol), stringField("reason", "渠道密钥不能为空"))
+		logChannelAdminWarn(c, "create_record", stringField("name", name), stringField("protocol", req.Protocol), stringField("reason", "渠道密钥不能为空"))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "渠道密钥不能为空",
@@ -241,7 +364,6 @@ func CreateChannelDraft(c *gin.Context) {
 	}
 	baseURL := strings.TrimSpace(req.BaseURL)
 	channel := model.Channel{
-		Id:          id,
 		Name:        name,
 		Protocol:    strings.TrimSpace(req.Protocol),
 		Key:         key,
@@ -252,14 +374,14 @@ func CreateChannelDraft(c *gin.Context) {
 		CreatedTime: helper.GetTimestamp(),
 	}
 	if err := channelsvc.Insert(&channel); err != nil {
-		logChannelAdminWarn(c, "create_draft", stringField("channel_id", id), stringField("name", channel.DisplayName()), stringField("protocol", channel.GetProtocol()), stringField("reason", err.Error()))
+		logChannelAdminWarn(c, "create_record", stringField("name", channel.DisplayName()), stringField("protocol", channel.GetProtocol()), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
 		return
 	}
-	logChannelAdminInfo(c, "create_draft", stringField("channel_id", channel.Id), stringField("name", channel.DisplayName()), stringField("protocol", channel.GetProtocol()))
+	logChannelAdminInfo(c, "create_record", stringField("channel_id", channel.Id), stringField("name", channel.DisplayName()), stringField("protocol", channel.GetProtocol()))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -422,7 +544,7 @@ func UpdateChannelTestModel(c *gin.Context) {
 		})
 		return
 	}
-	channel, err := channelsvc.GetByID(req.ID, true)
+	channel, err := channelsvc.GetByID(req.ID)
 	if err != nil {
 		logChannelAdminWarn(c, "update_test_model", stringField("channel_id", req.ID), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{

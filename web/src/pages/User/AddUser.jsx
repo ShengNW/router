@@ -40,10 +40,11 @@ const AddUser = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header'>{t('user.add.title')}</Card.Header>
+          <Card.Header className='header router-page-title'>{t('user.add.title')}</Card.Header>
           <Form autoComplete='off'>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.username')}
                 name='username'
                 placeholder={t('user.edit.username_placeholder')}
@@ -55,6 +56,7 @@ const AddUser = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.display_name')}
                 name='display_name'
                 placeholder={t('user.edit.display_name_placeholder')}
@@ -65,6 +67,7 @@ const AddUser = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.password')}
                 name='password'
                 type='password'
@@ -75,9 +78,11 @@ const AddUser = () => {
                 required
               />
             </Form.Field>
-            <Button positive type='submit' onClick={submit}>
-              {t('user.edit.buttons.submit')}
-            </Button>
+            <div className='router-toolbar-start router-block-gap-sm'>
+              <Button className='router-page-button' positive type='submit' onClick={submit}>
+                {t('user.edit.buttons.submit')}
+              </Button>
+            </div>
           </Form>
         </Card.Content>
       </Card>

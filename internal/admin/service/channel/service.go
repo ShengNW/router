@@ -9,12 +9,20 @@ func GetAll(start, num int, status string) ([]*model.Channel, error) {
 	return channelrepo.GetAll(start, num, status)
 }
 
-func Search(keyword string) ([]*model.Channel, error) {
-	return channelrepo.Search(keyword)
+func GetAllBasic(start, num int, status string, selectAll bool) ([]*model.Channel, error) {
+	return channelrepo.GetAllBasic(start, num, status, selectAll)
 }
 
-func GetByID(id string, selectAll bool) (*model.Channel, error) {
-	return channelrepo.GetByID(id, selectAll)
+func ListPage(page int, pageSize int, keyword string) ([]*model.Channel, int64, error) {
+	return channelrepo.ListPage(page, pageSize, keyword)
+}
+
+func GetByID(id string) (*model.Channel, error) {
+	return channelrepo.GetByID(id)
+}
+
+func GetBasicByID(id string) (*model.Channel, error) {
+	return channelrepo.GetBasicByID(id)
 }
 
 func Insert(channel *model.Channel) error {

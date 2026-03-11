@@ -11,7 +11,7 @@ const (
 type Redemption struct {
 	Id           string `json:"id" gorm:"type:char(36);primaryKey"`
 	UserId       string `json:"user_id" gorm:"type:char(36);index"`
-	Key          string `json:"key" gorm:"type:char(32);uniqueIndex"`
+	Code         string `json:"code" gorm:"column:code;type:char(32);uniqueIndex"`
 	Status       int    `json:"status" gorm:"default:1"`
 	Name         string `json:"name" gorm:"index"`
 	Quota        int64  `json:"quota" gorm:"bigint;default:100"`
@@ -32,8 +32,8 @@ func GetRedemptionById(id string) (*Redemption, error) {
 	return mustRedemptionRepo().GetRedemptionById(id)
 }
 
-func Redeem(ctx context.Context, key string, userId string) (int64, error) {
-	return mustRedemptionRepo().Redeem(ctx, key, userId)
+func Redeem(ctx context.Context, code string, userId string) (int64, error) {
+	return mustRedemptionRepo().Redeem(ctx, code, userId)
 }
 
 func (redemption *Redemption) Insert() error {

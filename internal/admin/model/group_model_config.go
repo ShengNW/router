@@ -40,7 +40,7 @@ type GroupModelConfigPayload struct {
 func ListGroupModelConfigPayload(groupID string) (GroupModelConfigPayload, error) {
 	groupID = strings.TrimSpace(groupID)
 	if groupID == "" {
-		return GroupModelConfigPayload{}, fmt.Errorf("分组标识不能为空")
+		return GroupModelConfigPayload{}, fmt.Errorf("分组 ID 不能为空")
 	}
 	items, err := listGroupModelConfigItemsWithDB(DB, groupID)
 	if err != nil {
@@ -57,12 +57,16 @@ func ListGroupModelConfigPayload(groupID string) (GroupModelConfigPayload, error
 }
 
 func ReplaceGroupModelConfigs(groupID string, channelIDs []string, items []GroupModelConfigItem, explicitChannels bool) error {
+	groupCatalog, err := getGroupCatalogByIDWithDB(DB, groupID)
+	if err != nil {
+		return err
+	}
 	if err := DB.Transaction(func(tx *gorm.DB) error {
 		return replaceGroupModelConfigsWithDB(tx, groupID, channelIDs, items, explicitChannels)
 	}); err != nil {
 		return err
 	}
-	RefreshAbilityCachesForGroups(groupID)
+	RefreshAbilityCachesForGroups(groupCatalog.Id)
 	return nil
 }
 
@@ -70,10 +74,15 @@ func listGroupModelConfigItemsWithDB(db *gorm.DB, groupID string) ([]GroupModelC
 	if db == nil {
 		return nil, fmt.Errorf("database handle is nil")
 	}
+	groupCatalog, err := getGroupCatalogByIDWithDB(db, groupID)
+	if err != nil {
+		return nil, err
+	}
 	abilities := make([]Ability, 0)
 	groupCol := `"group"`
 	if err := db.
-		Where(groupCol+" = ?", groupID).
+		Where(groupCol+" = ?", groupCatalog.Id).
+		Where("enabled = ?", true).
 		Order("model asc, channel_id asc").
 		Find(&abilities).Error; err != nil {
 		return nil, err
@@ -106,7 +115,15 @@ func listGroupModelConfigItemsWithDB(db *gorm.DB, groupID string) ([]GroupModelC
 	}
 	channelByID := make(map[string]Channel, len(channels))
 	for _, channel := range channels {
-		channelByID[channel.Id] = channel
+		channel.NormalizeIdentity()
+		channelID := strings.TrimSpace(channel.Id)
+		if channelID == "" {
+			continue
+		}
+		if channel.Status != ChannelStatusEnabled {
+			continue
+		}
+		channelByID[channelID] = channel
 	}
 
 	items := make([]GroupModelConfigItem, 0, len(abilities))
@@ -159,6 +176,7 @@ func listGroupModelConfigChannelsWithDB(db *gorm.DB, groupID string) ([]GroupMod
 	channels := make([]Channel, 0)
 	if err := db.
 		Select("id", "name", "protocol", "status", "created_time").
+		Where("status = ?", ChannelStatusEnabled).
 		Order("created_time desc").
 		Find(&channels).Error; err != nil {
 		return nil, err
@@ -173,9 +191,14 @@ func listGroupModelConfigChannelsWithDB(db *gorm.DB, groupID string) ([]GroupMod
 
 	items := make([]GroupModelConfigChannel, 0, len(channels))
 	for _, channel := range channels {
-		_, bound := boundSet[channel.Id]
+		channel.NormalizeIdentity()
+		channelID := strings.TrimSpace(channel.Id)
+		if channelID == "" {
+			continue
+		}
+		_, bound := boundSet[channelID]
 		items = append(items, GroupModelConfigChannel{
-			Id:       channel.Id,
+			Id:       channelID,
 			Name:     channel.DisplayName(),
 			Protocol: channel.GetProtocol(),
 			Status:   channel.Status,
@@ -192,12 +215,13 @@ func replaceGroupModelConfigsWithDB(db *gorm.DB, groupID string, channelIDs []st
 	}
 	groupID = strings.TrimSpace(groupID)
 	if groupID == "" {
-		return fmt.Errorf("分组标识不能为空")
+		return fmt.Errorf("分组 ID 不能为空")
 	}
-	groupCatalog := GroupCatalog{}
-	if err := db.Where("id = ?", groupID).First(&groupCatalog).Error; err != nil {
+	groupCatalog, err := getGroupCatalogByIDWithDB(db, groupID)
+	if err != nil {
 		return err
 	}
+	groupID = groupCatalog.Id
 
 	normalizedItems, err := normalizeGroupModelConfigItems(items)
 	if err != nil {
@@ -262,6 +286,7 @@ func replaceGroupModelConfigsWithDB(db *gorm.DB, groupID string, channelIDs []st
 		}
 		abilities = append(abilities, buildDefaultAbilitiesForGroupChannel(groupID, channelsByID[channelID])...)
 	}
+	abilities = normalizeAbilityRowsPreserveOrder(abilities)
 
 	if err := db.Where(groupCol+" = ?", groupID).Delete(&Ability{}).Error; err != nil {
 		return err
@@ -276,11 +301,16 @@ func listGroupBoundChannelIDsWithDB(db *gorm.DB, groupID string) ([]string, erro
 	if db == nil {
 		return nil, fmt.Errorf("database handle is nil")
 	}
+	groupCatalog, err := getGroupCatalogByIDWithDB(db, groupID)
+	if err != nil {
+		return nil, err
+	}
 	boundIDs := make([]string, 0)
 	groupCol := `"group"`
 	if err := db.Model(&Ability{}).
 		Distinct("channel_id").
-		Where(groupCol+" = ?", strings.TrimSpace(groupID)).
+		Where(groupCol+" = ?", groupCatalog.Id).
+		Where("enabled = ?", true).
 		Pluck("channel_id", &boundIDs).Error; err != nil {
 		return nil, err
 	}
@@ -325,35 +355,9 @@ func loadGroupModelConfigChannelsByIDWithDB(db *gorm.DB, groupID string, channel
 		return []string{}, map[string]*Channel{}, nil
 	}
 
-	channels := make([]Channel, 0)
-	if err := db.
-		Select("id", "name", "protocol", "status", "priority", "created_time").
-		Where("id IN ?", allowedChannelIDs).
-		Find(&channels).Error; err != nil {
+	channelsByID, err := loadEnabledChannelsByIDWithDB(db, allowedChannelIDs)
+	if err != nil {
 		return nil, nil, err
-	}
-	channelRefs := make([]*Channel, 0, len(channels))
-	for i := range channels {
-		channelRefs = append(channelRefs, &channels[i])
-	}
-	if err := HydrateChannelsWithModels(db, channelRefs); err != nil {
-		return nil, nil, err
-	}
-
-	channelsByID := make(map[string]*Channel, len(channels))
-	for i := range channels {
-		channel := &channels[i]
-		channelsByID[channel.Id] = channel
-	}
-	if len(channelsByID) != len(allowedChannelIDs) {
-		missing := make([]string, 0)
-		for _, channelID := range allowedChannelIDs {
-			if _, ok := channelsByID[channelID]; !ok {
-				missing = append(missing, channelID)
-			}
-		}
-		sort.Strings(missing)
-		return nil, nil, fmt.Errorf("渠道不存在: %s", strings.Join(missing, ", "))
 	}
 	return allowedChannelIDs, channelsByID, nil
 }

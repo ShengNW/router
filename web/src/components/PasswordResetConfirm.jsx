@@ -70,26 +70,23 @@ const PasswordResetConfirm = () => {
   }
 
   return (
-    <Grid textAlign='center' style={{ marginTop: '48px' }}>
-      <Grid.Column style={{ maxWidth: 450 }}>
-        <Card
-          fluid
-          className='chart-card'
-          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
-        >
+    <Grid textAlign='center' className='router-auth-shell'>
+      <Grid.Column>
+        <Card fluid className='chart-card router-auth-card'>
           <Card.Content>
             <Card.Header>
               <Header
                 as='h2'
                 textAlign='center'
-                style={{ marginBottom: '1.5em' }}
+                className='router-auth-title router-auth-header'
               >
-                <Image src={logo} style={{ marginBottom: '10px' }} />
+                <Image src={logo} className='router-auth-logo' />
                 <Header.Content>{t('auth.reset.confirm.title')}</Header.Content>
               </Header>
             </Card.Header>
-            <Form size='large'>
+            <Form className='router-auth-form'>
               <Form.Input
+                className='router-auth-input'
                 fluid
                 icon='mail'
                 iconPosition='left'
@@ -97,10 +94,10 @@ const PasswordResetConfirm = () => {
                 name='email'
                 value={email}
                 readOnly
-                style={{ marginBottom: '1em' }}
               />
               {newPassword && (
                 <Form.Input
+                  className='router-auth-input router-auth-input-clickable'
                   fluid
                   icon='lock'
                   iconPosition='left'
@@ -108,11 +105,6 @@ const PasswordResetConfirm = () => {
                   name='newPassword'
                   value={newPassword}
                   readOnly
-                  style={{
-                    marginBottom: '1em',
-                    cursor: 'pointer',
-                    backgroundColor: '#f8f9fa',
-                  }}
                   onClick={(e) => {
                     e.target.select();
                     navigator.clipboard.writeText(newPassword);
@@ -121,16 +113,11 @@ const PasswordResetConfirm = () => {
                 />
               )}
               <Button
+                className='router-auth-button router-auth-primary'
                 fluid
-                size='large'
                 onClick={handleSubmit}
                 loading={loading}
                 disabled={disableButton}
-                style={{
-                  background: '#2F73FF',
-                  color: 'white',
-                  marginBottom: '1.5em',
-                }}
               >
                 {disableButton
                   ? t('auth.reset.confirm.button_disabled')
@@ -138,8 +125,8 @@ const PasswordResetConfirm = () => {
               </Button>
             </Form>
             {newPassword && (
-              <Message style={{ background: 'transparent', boxShadow: 'none' }}>
-                <p style={{ fontSize: '0.9em', color: '#666' }}>
+              <Message className='router-auth-message'>
+                <p className='router-auth-secondary-text'>
                   {t('auth.reset.confirm.notice')}
                 </p>
               </Message>

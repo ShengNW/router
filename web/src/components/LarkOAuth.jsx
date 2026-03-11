@@ -47,9 +47,9 @@ const LarkOAuth = () => {
   }, []);
 
   return (
-    <Segment style={{ minHeight: '300px' }}>
+    <Segment className='router-loading-segment-md'>
       <Dimmer active inverted>
-        <Loader size='large'>{prompt}</Loader>
+        <Loader>{prompt}</Loader>
       </Dimmer>
     </Segment>
   );

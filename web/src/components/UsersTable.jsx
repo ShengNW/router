@@ -9,8 +9,8 @@ import {
   Table,
   Dropdown,
 } from 'semantic-ui-react';
-import { Link } from 'react-router-dom';
-import { API, copy, showError, showSuccess } from '../helpers';
+import { Link, useNavigate } from 'react-router-dom';
+import { API, copy, isRoot, showError, showSuccess } from '../helpers';
 import { useTranslation } from 'react-i18next';
 
 import { ITEMS_PER_PAGE } from '../constants';
@@ -23,17 +23,22 @@ import {
 function renderRole(role, t) {
   switch (role) {
     case 1:
-      return <Label>{t('user.table.role_types.normal')}</Label>;
+      return <Label className='router-tag'>{t('user.table.role_types.normal')}</Label>;
     case 10:
-      return <Label color='yellow'>{t('user.table.role_types.admin')}</Label>;
+      return <Label color='yellow' className='router-tag'>{t('user.table.role_types.admin')}</Label>;
     case 100:
       return (
-        <Label color='orange'>{t('user.table.role_types.super_admin')}</Label>
+        <Label color='orange' className='router-tag'>{t('user.table.role_types.super_admin')}</Label>
       );
     default:
-      return <Label color='red'>{t('user.table.role_types.unknown')}</Label>;
+      return <Label color='red' className='router-tag'>{t('user.table.role_types.unknown')}</Label>;
   }
 }
+
+const ROLE_OPTIONS = (t) => [
+  { key: 1, value: 1, text: t('user.table.role_types.normal') },
+  { key: 10, value: 10, text: t('user.table.role_types.admin') },
+];
 
 const maskWalletAddress = (walletAddress) => {
   if (typeof walletAddress !== 'string') return '';
@@ -44,18 +49,22 @@ const maskWalletAddress = (walletAddress) => {
 
 const UsersTable = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
+  const [groupMap, setGroupMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
   const [orderBy, setOrderBy] = useState('');
+  const [roleUpdatingUsername, setRoleUpdatingUsername] = useState('');
 
-  const loadUsers = useCallback(async (startIdx) => {
-    const res = await API.get(`/api/v1/admin/user/?p=${startIdx}&order=${orderBy}`);
+  const loadUsers = useCallback(async (page) => {
+    const normalizedPage = Number(page) > 0 ? Number(page) : 1;
+    const res = await API.get(`/api/v1/admin/user/?page=${normalizedPage}&order=${orderBy}`);
     const { success, message, data } = res.data;
     if (success) {
-      if (startIdx === 0) {
+      if (normalizedPage === 1) {
         setUsers(data);
       } else {
         setUsers((prev) => [...prev, ...data]);
@@ -66,62 +75,122 @@ const UsersTable = () => {
     setLoading(false);
   }, [orderBy]);
 
+  const refresh = async () => {
+    setLoading(true);
+    await loadUsers(activePage);
+  };
+
+  const loadGroups = useCallback(async () => {
+    try {
+      const rows = [];
+      let page = 1;
+      while (page <= 50) {
+        const res = await API.get('/api/v1/admin/groups', {
+          params: {
+            page,
+            page_size: 100,
+          },
+        });
+        const { success, message, data } = res.data || {};
+        if (!success) {
+          showError(message || t('user.messages.operation_failed'));
+          return;
+        }
+        const pageItems = Array.isArray(data?.items) ? data.items : [];
+        rows.push(...pageItems);
+        const total = Number(data?.total || pageItems.length || 0);
+        if (pageItems.length === 0 || rows.length >= total || pageItems.length < 100) {
+          break;
+        }
+        page += 1;
+      }
+      const nextMap = {};
+      rows.forEach((group) => {
+        const id = (group?.id || '').toString().trim();
+        if (id === '') {
+          return;
+        }
+        nextMap[id] = (group?.name || '').toString().trim() || id;
+      });
+      setGroupMap(nextMap);
+    } catch (error) {
+      showError(error?.message || error);
+    }
+  }, [t]);
+
   const onPaginationChange = (e, { activePage }) => {
     (async () => {
       if (activePage === Math.ceil(users.length / ITEMS_PER_PAGE) + 1) {
         // In this case we have to load more data and then append them.
-        await loadUsers(activePage - 1, orderBy);
+        await loadUsers(activePage);
       }
       setActivePage(activePage);
     })();
   };
 
   useEffect(() => {
-    loadUsers(0)
+    loadUsers(1)
       .then()
       .catch((reason) => {
         showError(reason);
       });
-  }, [loadUsers]);
+    loadGroups().then();
+  }, [loadGroups, loadUsers]);
 
-  const manageUser = (username, action, idx) => {
-    (async () => {
-      const res = await API.post('/api/v1/admin/user/manage', {
-        username,
-        action,
-      });
-      const { success, message } = res.data;
-      if (success) {
-        showSuccess(t('user.messages.operation_success'));
-        let user = res.data.data;
-        let newUsers = [...users];
-        let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
-        if (action === 'delete') {
-          newUsers[realIdx].deleted = true;
-        } else {
-          newUsers[realIdx].status = user.status;
-          newUsers[realIdx].role = user.role;
-        }
-        setUsers(newUsers);
-      } else {
-        showError(message);
+  const renderUserGroup = useCallback(
+    (value) => {
+      const raw = (value || '').toString().trim();
+      if (raw === '') {
+        return renderGroup(raw);
       }
-    })();
+      const mapped = raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item !== '')
+        .map((item) => groupMap[item] || item)
+        .join(',');
+      return renderGroup(mapped);
+    },
+    [groupMap],
+  );
+
+  const manageUser = async (username, action, idx) => {
+    const res = await API.post('/api/v1/admin/user/manage', {
+      username,
+      action,
+    });
+    const { success, message } = res.data;
+    if (success) {
+      showSuccess(t('user.messages.operation_success'));
+      let user = res.data.data;
+      let newUsers = [...users];
+      let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
+      if (action === 'delete') {
+        newUsers[realIdx].deleted = true;
+      } else {
+        newUsers[realIdx].status = user.status;
+        newUsers[realIdx].role = user.role;
+      }
+      setUsers(newUsers);
+      return user;
+    }
+    showError(message);
+    return null;
   };
 
   const renderStatus = (status) => {
     switch (status) {
       case 1:
-        return <Label basic>{t('user.table.status_types.activated')}</Label>;
+        return <Label basic className='router-tag'>{t('user.table.status_types.activated')}</Label>;
       case 2:
         return (
-          <Label basic color='red'>
+          <Label basic color='red' className='router-tag'>
             {t('user.table.status_types.banned')}
           </Label>
         );
       default:
         return (
-          <Label basic color='grey'>
+          <Label basic color='grey' className='router-tag'>
             {t('user.table.status_types.unknown')}
           </Label>
         );
@@ -140,7 +209,7 @@ const UsersTable = () => {
   const searchUsers = async () => {
     if (searchKeyword === '') {
       // if keyword is blank, load files instead.
-      await loadUsers(0);
+      await loadUsers(1);
       setActivePage(1);
       setOrderBy('');
       return;
@@ -159,6 +228,10 @@ const UsersTable = () => {
 
   const handleKeywordChange = async (e, { value }) => {
     setSearchKeyword(value.trim());
+  };
+
+  const stopRowClick = (event) => {
+    event.stopPropagation();
   };
 
   const sortUser = (key) => {
@@ -184,6 +257,26 @@ const UsersTable = () => {
   const handleOrderByChange = (e, { value }) => {
     setOrderBy(value);
     setActivePage(1);
+  };
+
+  const updateUserRole = async (user, idx, nextRole) => {
+    if (!user || user.role === nextRole) return;
+    if (user.role === 100 || nextRole === 100) return;
+
+    let action = '';
+    if (nextRole === 10) {
+      action = 'promote';
+    } else if (nextRole === 1) {
+      action = 'demote';
+    }
+    if (!action) return;
+
+    setRoleUpdatingUsername(user.username);
+    try {
+      await manageUser(user.username, action, idx);
+    } finally {
+      setRoleUpdatingUsername('');
+    }
   };
 
   const quotaPerUnit = parseFloat(
@@ -228,23 +321,67 @@ const UsersTable = () => {
 
   return (
     <>
-      <Form onSubmit={searchUsers}>
-        <Form.Input
-          icon='search'
-          fluid
-          iconPosition='left'
-          placeholder={t('user.search')}
-          value={searchKeyword}
-          loading={searching}
-          onChange={handleKeywordChange}
-        />
-      </Form>
+      <div
+        className='router-toolbar router-block-gap-sm'
+      >
+        <div className='router-toolbar-start'>
+          <Button className='router-page-button' as={Link} to='/user/add' loading={loading}>
+            {t('user.buttons.add')}
+          </Button>
+          <Button
+            className='router-page-button'
+            loading={loading}
+            disabled={loading}
+            onClick={refresh}
+          >
+            {t('user.buttons.refresh')}
+          </Button>
+        </div>
+        <div className='router-toolbar-end'>
+          <Dropdown
+            className='router-section-dropdown router-dropdown-min-170'
+            placeholder={t('user.table.sort_by')}
+            selection
+            options={[
+              { key: '', text: t('user.table.sort.default'), value: '' },
+              {
+                key: 'quota',
+                text: t('user.table.sort.by_quota'),
+                value: 'quota',
+              },
+              {
+                key: 'used_quota',
+                text: t('user.table.sort.by_used_quota'),
+                value: 'used_quota',
+              },
+              {
+                key: 'request_count',
+                text: t('user.table.sort.by_request_count'),
+                value: 'request_count',
+              },
+            ]}
+            value={orderBy}
+            onChange={handleOrderByChange}
+          />
+          <Form onSubmit={searchUsers} className='router-search-form-xs'>
+            <Form.Input
+              className='router-section-input'
+              icon='search'
+              iconPosition='left'
+              placeholder={t('user.search')}
+              value={searchKeyword}
+              loading={searching}
+              onChange={handleKeywordChange}
+            />
+          </Form>
+        </div>
+      </div>
 
-      <Table basic={'very'} compact size='small'>
+      <Table basic={'very'} compact className='router-hover-table router-list-table'>
         <Table.Header>
           <Table.Row>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('username');
               }}
@@ -253,7 +390,7 @@ const UsersTable = () => {
             </Table.HeaderCell>
             <Table.HeaderCell>{t('user.table.wallet')}</Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('group');
               }}
@@ -261,29 +398,29 @@ const UsersTable = () => {
               {t('user.table.group')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('quota');
               }}
             >
               {t('user.table.remaining_quota')}
-              <span style={{ fontSize: '0.75em', opacity: 0.7, marginLeft: 4 }}>
+              <span className='router-inline-unit'>
                 $
               </span>
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('used_quota');
               }}
             >
               {t('user.table.used_quota')}
-              <span style={{ fontSize: '0.75em', opacity: 0.7, marginLeft: 4 }}>
+              <span className='router-inline-unit'>
                 $
               </span>
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('request_count');
               }}
@@ -291,7 +428,7 @@ const UsersTable = () => {
               {t('user.table.request_count')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('role');
               }}
@@ -299,7 +436,7 @@ const UsersTable = () => {
               {t('user.table.role_text')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortUser('status');
               }}
@@ -319,7 +456,11 @@ const UsersTable = () => {
             .map((user, idx) => {
               if (user.deleted) return <></>;
               return (
-                <Table.Row key={user.id}>
+                <Table.Row
+                  key={user.id}
+                  className='router-row-clickable'
+                  onClick={() => navigate(`/user/edit/${user.id}`)}
+                >
                   <Table.Cell>
                     <Popup
                       content={user.email ? user.email : '未绑定邮箱地址'}
@@ -331,15 +472,9 @@ const UsersTable = () => {
                       hoverable
                     />
                   </Table.Cell>
-                  <Table.Cell>
+                  <Table.Cell onClick={stopRowClick}>
                     {user.wallet_address ? (
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
+                      <span className='router-action-group'>
                         <Popup
                           content={user.wallet_address}
                           trigger={<span>{maskWalletAddress(user.wallet_address)}</span>}
@@ -354,41 +489,36 @@ const UsersTable = () => {
                       '-'
                     )}
                   </Table.Cell>
-                  <Table.Cell>{renderGroup(user.group)}</Table.Cell>
+                  <Table.Cell>{renderUserGroup(user.group)}</Table.Cell>
                   {/*<Table.Cell>*/}
                   {/*  {user.email ? <Popup hoverable content={user.email} trigger={<span>{renderText(user.email, 24)}</span>} /> : '无'}*/}
                   {/*</Table.Cell>*/}
                   <Table.Cell>{renderQuotaValue(user.quota)}</Table.Cell>
                   <Table.Cell>{renderQuotaValue(user.used_quota)}</Table.Cell>
                   <Table.Cell>{renderCountValue(user.request_count)}</Table.Cell>
-                  <Table.Cell>{renderRole(user.role, t)}</Table.Cell>
-                  <Table.Cell>{renderStatus(user.status)}</Table.Cell>
                   <Table.Cell>
-                    <div>
-                      <Button
-                        size={'tiny'}
-                        positive
-                        onClick={() => {
-                          manageUser(user.username, 'promote', idx);
-                        }}
-                        disabled={user.role === 100}
-                      >
-                        {t('user.buttons.promote')}
-                      </Button>
-                      <Button
-                        size={'tiny'}
-                        color={'yellow'}
-                        onClick={() => {
-                          manageUser(user.username, 'demote', idx);
-                        }}
-                        disabled={user.role === 100}
-                      >
-                        {t('user.buttons.demote')}
-                      </Button>
+                    {user.role === 100 ? (
+                      renderRole(user.role, t)
+                    ) : (
+                      <Dropdown
+                        className='router-inline-dropdown router-role-dropdown'
+                        selection
+                        compact
+                        options={ROLE_OPTIONS(t)}
+                        value={user.role}
+                        disabled={!isRoot() || roleUpdatingUsername === user.username}
+                        loading={roleUpdatingUsername === user.username}
+                        onChange={(e, { value }) => updateUserRole(user, idx, Number(value))}
+                      />
+                    )}
+                  </Table.Cell>
+                  <Table.Cell>{renderStatus(user.status)}</Table.Cell>
+                  <Table.Cell onClick={stopRowClick}>
+                    <div className='router-action-group'>
                       <Popup
                         trigger={
                           <Button
-                            size='tiny'
+                            className='router-inline-button'
                             negative
                             disabled={user.role === 100}
                           >
@@ -400,8 +530,8 @@ const UsersTable = () => {
                         hoverable
                       >
                         <Button
+                          className='router-inline-button'
                           negative
-                          size={'tiny'}
                           onClick={() => {
                             manageUser(user.username, 'delete', idx);
                           }}
@@ -410,7 +540,7 @@ const UsersTable = () => {
                         </Button>
                       </Popup>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         onClick={() => {
                           manageUser(
                             user.username,
@@ -425,7 +555,7 @@ const UsersTable = () => {
                           : t('user.buttons.enable')}
                       </Button>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         as={Link}
                         to={'/user/edit/' + user.id}
                       >
@@ -441,39 +571,11 @@ const UsersTable = () => {
         <Table.Footer>
           <Table.Row>
             <Table.HeaderCell colSpan='9'>
-              <Button size='small' as={Link} to='/user/add' loading={loading}>
-                {t('user.buttons.add')}
-              </Button>
-              <Dropdown
-                placeholder={t('user.table.sort_by')}
-                selection
-                options={[
-                  { key: '', text: t('user.table.sort.default'), value: '' },
-                  {
-                    key: 'quota',
-                    text: t('user.table.sort.by_quota'),
-                    value: 'quota',
-                  },
-                  {
-                    key: 'used_quota',
-                    text: t('user.table.sort.by_used_quota'),
-                    value: 'used_quota',
-                  },
-                  {
-                    key: 'request_count',
-                    text: t('user.table.sort.by_request_count'),
-                    value: 'request_count',
-                  },
-                ]}
-                value={orderBy}
-                onChange={handleOrderByChange}
-                style={{ marginLeft: '10px' }}
-              />
               <Pagination
+                className='router-page-pagination'
                 floated='right'
                 activePage={activePage}
                 onPageChange={onPaginationChange}
-                size='small'
                 siblingRange={1}
                 totalPages={
                   Math.ceil(users.length / ITEMS_PER_PAGE) +

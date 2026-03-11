@@ -30,13 +30,20 @@ func init() {
 
 func GetAll(startIdx int, num int) ([]*model.Redemption, error) {
 	var redemptions []*model.Redemption
-	err := model.DB.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
+	err := model.DB.Order("created_time desc, id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
 	return redemptions, err
 }
 
 func Search(keyword string) ([]*model.Redemption, error) {
 	var redemptions []*model.Redemption
-	err := model.DB.Where("id = ? or name LIKE ?", keyword, keyword+"%").Find(&redemptions).Error
+	trimmed := strings.TrimSpace(keyword)
+	if trimmed == "" {
+		return redemptions, nil
+	}
+	err := model.DB.
+		Where("code LIKE ? OR name LIKE ?", trimmed+"%", trimmed+"%").
+		Order("created_time desc, id desc").
+		Find(&redemptions).Error
 	return redemptions, err
 }
 
@@ -49,18 +56,18 @@ func GetByID(id string) (*model.Redemption, error) {
 	return &redemption, err
 }
 
-func Redeem(ctx context.Context, key string, userId string) (int64, error) {
-	if key == "" {
+func Redeem(ctx context.Context, code string, userId string) (int64, error) {
+	if code == "" {
 		return 0, errors.New("未提供兑换码")
 	}
 	if strings.TrimSpace(userId) == "" {
 		return 0, errors.New("无效的 user id")
 	}
 	redemption := &model.Redemption{}
-	keyCol := `"key"`
+	codeCol := `"code"`
 
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(keyCol+" = ?", key).First(redemption).Error
+		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(codeCol+" = ?", code).First(redemption).Error
 		if err != nil {
 			return errors.New("无效的兑换码")
 		}

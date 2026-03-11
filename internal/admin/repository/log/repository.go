@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/yeying-community/router/common/config"
@@ -10,6 +11,49 @@ import (
 	"github.com/yeying-community/router/common/random"
 	"github.com/yeying-community/router/internal/admin/model"
 )
+
+func hydrateLogsWithChannelNames(logs []*model.Log) error {
+	if len(logs) == 0 {
+		return nil
+	}
+	channelIDs := make([]string, 0, len(logs))
+	seen := make(map[string]struct{}, len(logs))
+	for _, log := range logs {
+		if log == nil {
+			continue
+		}
+		channelID := strings.TrimSpace(log.ChannelId)
+		if channelID == "" {
+			continue
+		}
+		if _, ok := seen[channelID]; ok {
+			continue
+		}
+		seen[channelID] = struct{}{}
+		channelIDs = append(channelIDs, channelID)
+	}
+	if len(channelIDs) == 0 {
+		return nil
+	}
+	var channels []*model.Channel
+	if err := model.DB.Select("id", "name").Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
+		return err
+	}
+	channelNameByID := make(map[string]string, len(channels))
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		channelNameByID[channel.Id] = channel.DisplayName()
+	}
+	for _, log := range logs {
+		if log == nil {
+			continue
+		}
+		log.ChannelName = channelNameByID[log.ChannelId]
+	}
+	return nil
+}
 
 func init() {
 	model.BindLogRepository(model.LogRepository{
@@ -110,6 +154,12 @@ func GetAll(logType int, startTimestamp int64, endTimestamp int64, modelName str
 	}
 	var logs []*model.Log
 	err := tx.Order("created_at desc").Limit(num).Offset(startIdx).Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+	if err := hydrateLogsWithChannelNames(logs); err != nil {
+		return nil, err
+	}
 	return logs, err
 }
 
@@ -140,7 +190,13 @@ func GetUser(userId string, logType int, startTimestamp int64, endTimestamp int6
 func SearchAll(keyword string) ([]*model.Log, error) {
 	var logs []*model.Log
 	err := model.LOG_DB.Where("type = ? or content LIKE ?", keyword, keyword+"%").Order("created_at desc").Limit(config.MaxRecentItems).Find(&logs).Error
-	return logs, err
+	if err != nil {
+		return nil, err
+	}
+	if err := hydrateLogsWithChannelNames(logs); err != nil {
+		return nil, err
+	}
+	return logs, nil
 }
 
 func SearchUser(userId string, keyword string) ([]*model.Log, error) {
@@ -150,7 +206,7 @@ func SearchUser(userId string, keyword string) ([]*model.Log, error) {
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel string) int64 {
-	tx := model.LOG_DB.Table("logs").Select("COALESCE(sum(quota),0)")
+	tx := model.LOG_DB.Table(model.EventLogsTableName).Select("COALESCE(sum(quota),0)")
 	if username != "" {
 		tx = tx.Where("username = ?", username)
 	}
@@ -175,7 +231,7 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) int {
-	tx := model.LOG_DB.Table("logs").Select("COALESCE(sum(prompt_tokens),0) + COALESCE(sum(completion_tokens),0)")
+	tx := model.LOG_DB.Table(model.EventLogsTableName).Select("COALESCE(sum(prompt_tokens),0) + COALESCE(sum(completion_tokens),0)")
 	if username != "" {
 		tx = tx.Where("username = ?", username)
 	}
@@ -197,7 +253,7 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 }
 
 func SumUsedQuotaByUserId(logType int, userId string, startTimestamp int64, endTimestamp int64) (int64, error) {
-	tx := model.LOG_DB.Table("logs").Select("COALESCE(sum(quota),0)")
+	tx := model.LOG_DB.Table(model.EventLogsTableName).Select("COALESCE(sum(quota),0)")
 	tx = tx.Where("user_id = ?", userId)
 	if startTimestamp != 0 {
 		tx = tx.Where("created_at >= ?", startTimestamp)
@@ -211,7 +267,7 @@ func SumUsedQuotaByUserId(logType int, userId string, startTimestamp int64, endT
 }
 
 func MinLogTimestampByUserId(userId string, logTypes []int) (int64, error) {
-	tx := model.LOG_DB.Table("logs").Select("COALESCE(min(created_at),0)").
+	tx := model.LOG_DB.Table(model.EventLogsTableName).Select("COALESCE(min(created_at),0)").
 		Where("user_id = ?", userId)
 	if len(logTypes) > 0 {
 		tx = tx.Where("type IN ?", logTypes)
@@ -243,17 +299,17 @@ func selectGroupByGranularity(granularity string) string {
 
 func SearchLogsByPeriodAndModel(userId string, start, end int, granularity string, models []string) ([]*model.LogStatistic, error) {
 	groupSelect := selectGroupByGranularity(granularity)
-	query := `
-		SELECT ` + groupSelect + `,
+	query := fmt.Sprintf(`
+		SELECT `+groupSelect+`,
 		model_name, count(1) as request_count,
 		sum(quota) as quota,
 		sum(prompt_tokens) as prompt_tokens,
 		sum(completion_tokens) as completion_tokens
-		FROM logs
+		FROM %s
 		WHERE type=2
 		AND user_id= ?
 		AND created_at BETWEEN ? AND ?
-	`
+	`, model.EventLogsTableName)
 	args := []interface{}{userId, start, end}
 	if len(models) > 0 {
 		query += " AND model_name IN ?"
@@ -270,7 +326,7 @@ func SearchLogsByPeriodAndModel(userId string, start, end int, granularity strin
 
 func SearchLogModelsByPeriod(userId string, start, end int) ([]string, error) {
 	var models []string
-	err := model.LOG_DB.Table("logs").
+	err := model.LOG_DB.Table(model.EventLogsTableName).
 		Where("type = ? AND user_id = ? AND created_at BETWEEN ? AND ?", model.LogTypeConsume, userId, start, end).
 		Distinct("model_name").
 		Order("model_name").

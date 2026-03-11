@@ -22,7 +22,7 @@ const ADMIN_HEADER_BUTTONS = [
     icon: 'chart bar',
   },
   {
-    name: 'header.model_providers',
+    name: 'header.providers',
     to: '/admin/provider',
     icon: 'cubes',
   },
@@ -50,6 +50,11 @@ const ADMIN_HEADER_BUTTONS = [
     name: 'header.log',
     to: '/admin/log',
     icon: 'book',
+  },
+  {
+    name: 'header.task',
+    to: '/admin/task',
+    icon: 'tasks',
   },
   {
     name: 'header.setting',
@@ -172,7 +177,7 @@ const Header = ({ workspace = 'user' }) => {
               navigate(button.to);
               setShowSidebar(false);
             }}
-            style={{ fontSize: '15px' }}
+            className='router-header-item-mobile'
             active={isActive(button.to)}
           >
             {t(button.name)}
@@ -184,17 +189,10 @@ const Header = ({ workspace = 'user' }) => {
           key={button.name}
           as={Link}
           to={button.to}
-          style={{
-            fontSize: '15px',
-            fontWeight: '400',
-            color: '#666',
-          }}
+          className='router-header-item'
           active={isActive(button.to)}
         >
-          <Icon
-            name={button.icon}
-            style={{ marginRight: '4px' }}
-          />
+          <Icon name={button.icon} />
           {t(button.name)}
         </Menu.Item>
       );
@@ -215,26 +213,14 @@ const Header = ({ workspace = 'user' }) => {
       <>
         <Menu
           borderless
-          size='large'
-          className={shouldFixHeader ? 'router-fixed-header' : ''}
-          style={
-            showSidebar
-              ? {
-                  borderBottom: 'none',
-                  marginBottom: '0',
-                  borderTop: 'none',
-                  height: '51px',
-                }
-              : { borderTop: 'none', height: '52px' }
-          }
+          className={[
+            'router-header-menu',
+            'router-header-menu-mobile',
+            shouldFixHeader ? 'router-fixed-header' : '',
+            showSidebar ? 'router-header-menu-mobile-open' : '',
+          ].filter(Boolean).join(' ')}
         >
-          <Container
-            style={{
-              width: '100%',
-              maxWidth: isMobile() ? '100%' : '1200px',
-              padding: isMobile() ? '0 10px' : '0 20px',
-            }}
-          >
+          <Container className='router-header-container'>
             <Menu.Item
               as='a'
               href='https://www.yeying.pub'
@@ -254,20 +240,18 @@ const Header = ({ workspace = 'user' }) => {
           </Container>
         </Menu>
         {showSidebar ? (
-          <Segment style={{ marginTop: 0, borderTop: '0' }}>
+          <Segment className='router-header-mobile-segment'>
             <Menu
               secondary
               vertical
-              style={{ width: '100%', margin: 0 }}
+              className='router-header-mobile-list'
             >
               {renderButtons(true)}
               {hasAdminAccess && (
                 <Menu.Item>
-                  <Button.Group
-                    fluid
-                    size='small'
-                  >
+                  <Button.Group fluid>
                     <Button
+                      className='router-page-button'
                       basic={currentWorkspace !== 'admin'}
                       primary={currentWorkspace === 'admin'}
                       onClick={() => goToWorkspace('admin')}
@@ -275,6 +259,7 @@ const Header = ({ workspace = 'user' }) => {
                       {t('header.admin_workspace')}
                     </Button>
                     <Button
+                      className='router-page-button'
                       basic={currentWorkspace !== 'user'}
                       primary={currentWorkspace === 'user'}
                       onClick={() => goToWorkspace('user')}
@@ -285,30 +270,29 @@ const Header = ({ workspace = 'user' }) => {
                 </Menu.Item>
               )}
               <Menu.Item>
-                <Dropdown
-                  selection
-                  trigger={
-                    <Icon
-                      name='language'
-                      style={{ margin: 0, fontSize: '18px' }}
-                    />
-                  }
-                  options={languageOptions}
-                  value={i18n.language}
-                  onChange={(_, { value }) => changeLanguage(value)}
-                />
+                  <Dropdown
+                    className='router-header-dropdown'
+                    selection
+                    trigger={
+                      <Icon name='language' className='router-header-trigger-icon' />
+                    }
+                    options={languageOptions}
+                    value={i18n.language}
+                    onChange={(_, { value }) => changeLanguage(value)}
+                  />
               </Menu.Item>
               <Menu.Item>
                 {userState.user ? (
                   <Button
+                    className='router-page-button router-header-mobile-actions'
                     onClick={logout}
-                    style={{ color: '#666666' }}
                   >
                     {t('header.logout')}
                   </Button>
                 ) : (
                   <>
                     <Button
+                      className='router-page-button'
                       onClick={() => {
                         setShowSidebar(false);
                         navigate('/login');
@@ -317,6 +301,7 @@ const Header = ({ workspace = 'user' }) => {
                       {t('header.login')}
                     </Button>
                     <Button
+                      className='router-page-button'
                       onClick={() => {
                         setShowSidebar(false);
                         navigate('/register');
@@ -340,20 +325,12 @@ const Header = ({ workspace = 'user' }) => {
     <>
       <Menu
         borderless
-        className={shouldFixHeader ? 'router-fixed-header' : ''}
-        style={{
-          borderTop: 'none',
-          boxShadow: 'rgba(0, 0, 0, 0.04) 0px 2px 12px 0px',
-          border: 'none',
-        }}
+        className={[
+          'router-header-menu',
+          shouldFixHeader ? 'router-fixed-header' : '',
+        ].filter(Boolean).join(' ')}
       >
-        <Container
-          style={{
-            width: '100%',
-            maxWidth: isMobile() ? '100%' : '1200px',
-            padding: isMobile() ? '0 10px' : '0 20px',
-          }}
-        >
+        <Container className='router-header-container'>
           <Menu.Item
             as='a'
             href='https://www.yeying.pub'
@@ -370,6 +347,7 @@ const Header = ({ workspace = 'user' }) => {
           <Menu.Menu position='right'>
             {hasAdminAccess && (
               <Dropdown
+                className='link item router-header-dropdown router-header-trigger'
                 item
                 text={
                   currentWorkspace === 'admin'
@@ -377,33 +355,19 @@ const Header = ({ workspace = 'user' }) => {
                     : t('header.user_workspace')
                 }
                 pointing
-                className='link item'
-                style={{
-                  fontSize: '15px',
-                  fontWeight: '400',
-                  color: '#666',
-                }}
               >
                 <Dropdown.Menu>
                   <Dropdown.Item
                     active={currentWorkspace === 'admin'}
                     onClick={() => goToWorkspace('admin')}
-                    style={{
-                      fontSize: '15px',
-                      fontWeight: '400',
-                      color: '#666',
-                    }}
+                    className='router-header-item'
                   >
                     {t('header.admin_workspace')}
                   </Dropdown.Item>
                   <Dropdown.Item
                     active={currentWorkspace === 'user'}
                     onClick={() => goToWorkspace('user')}
-                    style={{
-                      fontSize: '15px',
-                      fontWeight: '400',
-                      color: '#666',
-                    }}
+                    className='router-header-item'
                   >
                     {t('header.user_workspace')}
                   </Dropdown.Item>
@@ -411,42 +375,25 @@ const Header = ({ workspace = 'user' }) => {
               </Dropdown>
             )}
             <Dropdown
+              className='router-header-dropdown router-header-trigger'
               item
               trigger={
-                <Icon
-                  name='language'
-                  style={{ margin: 0, fontSize: '18px' }}
-                />
+                <Icon name='language' className='router-header-trigger-icon' />
               }
               options={languageOptions}
               value={i18n.language}
               onChange={(_, { value }) => changeLanguage(value)}
-              style={{
-                fontSize: '16px',
-                fontWeight: '400',
-                color: '#666',
-                padding: '0 10px',
-              }}
             />
             {userState.user ? (
               <Dropdown
+                className='link item router-header-dropdown router-header-trigger'
                 text={userState.user.username}
                 pointing
-                className='link item'
-                style={{
-                  fontSize: '15px',
-                  fontWeight: '400',
-                  color: '#666',
-                }}
               >
                 <Dropdown.Menu>
                   <Dropdown.Item
                     onClick={logout}
-                    style={{
-                      fontSize: '15px',
-                      fontWeight: '400',
-                      color: '#666',
-                    }}
+                    className='router-header-item'
                   >
                     {t('header.logout')}
                   </Dropdown.Item>
@@ -457,12 +404,7 @@ const Header = ({ workspace = 'user' }) => {
                 name={t('header.login')}
                 as={Link}
                 to='/login'
-                className='btn btn-link'
-                style={{
-                  fontSize: '15px',
-                  fontWeight: '400',
-                  color: '#666',
-                }}
+                className='btn btn-link router-header-user-link'
               />
             )}
           </Menu.Menu>

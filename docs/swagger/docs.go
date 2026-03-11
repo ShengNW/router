@@ -16,42 +16,6 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/api/v1/admin/channel": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "List channels (admin)",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Page index",
-                        "name": "p",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/docs.StandardResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/docs.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "put": {
                 "security": [
                     {
@@ -137,6 +101,50 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/channel/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create channel record (admin)",
+                "parameters": [
+                    {
+                        "description": "Channel create payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/docs.ChannelCreateRecordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/channel/disabled": {
             "delete": {
                 "security": [
@@ -151,127 +159,6 @@ const docTemplate = `{
                     "admin"
                 ],
                 "summary": "Delete disabled channels (admin)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/docs.StandardResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/docs.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/admin/channel/draft": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Create channel draft (admin)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/docs.StandardResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/docs.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/admin/channel/preview/capabilities": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Preview channel capabilities (admin)",
-                "parameters": [
-                    {
-                        "description": "Preview payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/docs.ChannelPreviewCapabilitiesRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/docs.StandardResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/docs.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/admin/channel/preview/models": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Preview models for channel protocol (admin)",
-                "parameters": [
-                    {
-                        "description": "Preview payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/docs.ChannelPreviewModelsRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -420,6 +307,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Model name",
                         "name": "model",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Test mode (batch|model)",
+                        "name": "mode",
                         "in": "query"
                     }
                 ],
@@ -628,6 +521,209 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/channel/{id}/models": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List channel models (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Channel ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page index",
+                        "name": "p",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keyword",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/channel/{id}/models/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Refresh channel models from upstream (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Channel ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/channel/{id}/tests": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Test channel models (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Channel ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Channel model test payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/docs.ChannelModelTestsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/channels": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List channels with pagination (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page (1-based)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keyword",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Compact mode (1=true)",
+                        "name": "compact",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/group": {
             "put": {
                 "security": [
@@ -676,36 +772,6 @@ const docTemplate = `{
                     "admin"
                 ],
                 "summary": "Create group (admin)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/docs.StandardResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/docs.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/admin/group/catalog": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "List groups catalog (admin)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -822,6 +888,174 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/group/{id}/model-configs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List group model configs (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update group model configs (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/group/{id}/models": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List group model summaries (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List groups with pagination (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page (1-based)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keyword",
+                        "name": "keyword",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1154,12 +1388,82 @@ const docTemplate = `{
                 "tags": [
                     "admin"
                 ],
-                "summary": "Get model provider catalog (admin)",
+                "summary": "Get paged provider catalog (admin)",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/docs.ModelProviderCatalogResponse"
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create provider (admin)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/provider/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get provider detail (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
                         }
                     },
                     "401": {
@@ -1185,23 +1489,100 @@ const docTemplate = `{
                 "tags": [
                     "admin"
                 ],
-                "summary": "Update model provider catalog (admin)",
+                "summary": "Update provider (admin)",
                 "parameters": [
                     {
-                        "description": "Model provider catalog payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/docs.ModelProviderCatalogUpdateRequest"
-                        }
+                        "type": "string",
+                        "description": "Provider ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/docs.ModelProviderCatalogResponse"
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Delete provider (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/provider/{id}/model": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Append one model detail into provider catalog (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
                         }
                     },
                     "401": {
@@ -1395,7 +1776,7 @@ const docTemplate = `{
                 "summary": "Get redemption by ID (admin)",
                 "parameters": [
                     {
-                        "type": "integer",
+                        "type": "string",
                         "description": "Redemption ID",
                         "name": "id",
                         "in": "path",
@@ -1432,7 +1813,7 @@ const docTemplate = `{
                 "summary": "Delete redemption (admin)",
                 "parameters": [
                     {
-                        "type": "integer",
+                        "type": "string",
                         "description": "Redemption ID",
                         "name": "id",
                         "in": "path",
@@ -2317,7 +2698,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "When provider is specified, the response shape becomes docs.ChannelModelsProviderResponse (data is string[] and meta is an object). model_provider filters by model naming rules.",
+                "description": "When channel is specified, the response shape becomes docs.ChannelModelsProviderResponse (data is string[] and meta is an object). provider filters by model naming rules.",
                 "produces": [
                     "application/json"
                 ],
@@ -2328,14 +2709,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Provider name",
-                        "name": "provider",
+                        "description": "Channel name",
+                        "name": "channel",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Model provider filter (gpt/gemini/claude/deepseek/qwen)",
-                        "name": "model_provider",
+                        "description": "Provider filter (gpt/gemini/claude/deepseek/qwen)",
+                        "name": "provider",
                         "in": "query"
                     }
                 ],
@@ -4951,6 +5332,28 @@ const docTemplate = `{
                 }
             }
         },
+        "docs.ChannelCreateRecordRequest": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string",
+                    "example": "https://api.openai.com"
+                },
+                "config": {},
+                "key": {
+                    "type": "string",
+                    "example": "sk-***"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "openai-main"
+                },
+                "protocol": {
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
         "docs.ChannelCreateRequest": {
             "type": "object",
             "properties": {
@@ -5047,6 +5450,24 @@ const docTemplate = `{
                 }
             }
         },
+        "docs.ChannelModelTestsRequest": {
+            "type": "object",
+            "properties": {
+                "target_models": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "gpt-4o-mini"
+                    ]
+                },
+                "test_model": {
+                    "type": "string",
+                    "example": "gpt-4o-mini"
+                }
+            }
+        },
         "docs.ChannelModelsMeta": {
             "type": "object",
             "properties": {
@@ -5091,63 +5512,6 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
-                }
-            }
-        },
-        "docs.ChannelPreviewCapabilitiesRequest": {
-            "type": "object",
-            "properties": {
-                "base_url": {
-                    "type": "string",
-                    "example": "https://api.openai.com"
-                },
-                "config": {},
-                "draft_id": {
-                    "type": "string",
-                    "example": "cad8bd65524a4d0c8f345a8c86ea9685"
-                },
-                "key": {
-                    "type": "string",
-                    "example": "sk-***"
-                },
-                "models": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "gpt-4o-mini"
-                    ]
-                },
-                "protocol": {
-                    "type": "string",
-                    "example": "openai"
-                },
-                "test_model": {
-                    "type": "string",
-                    "example": "gpt-4o-mini"
-                }
-            }
-        },
-        "docs.ChannelPreviewModelsRequest": {
-            "type": "object",
-            "properties": {
-                "base_url": {
-                    "type": "string",
-                    "example": "https://api.openai.com"
-                },
-                "config": {},
-                "draft_id": {
-                    "type": "string",
-                    "example": "cad8bd65524a4d0c8f345a8c86ea9685"
-                },
-                "key": {
-                    "type": "string",
-                    "example": "sk-***"
-                },
-                "protocol": {
-                    "type": "string",
-                    "example": "openai"
                 }
             }
         },
@@ -5224,114 +5588,6 @@ const docTemplate = `{
                 },
                 "timestamp": {
                     "type": "integer"
-                }
-            }
-        },
-        "docs.ModelProviderCatalogItem": {
-            "type": "object",
-            "properties": {
-                "base_url": {
-                    "type": "string",
-                    "example": "https://api.openai.com"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "openai"
-                },
-                "model_details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/docs.ModelProviderModelDetail"
-                    }
-                },
-                "models": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "type": "string",
-                    "example": "OpenAI"
-                },
-                "sort_order": {
-                    "type": "integer",
-                    "example": 10
-                },
-                "source": {
-                    "type": "string",
-                    "example": "manual"
-                },
-                "updated_at": {
-                    "type": "integer",
-                    "example": 1710000000
-                }
-            }
-        },
-        "docs.ModelProviderCatalogResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/docs.ModelProviderCatalogItem"
-                    }
-                },
-                "message": {
-                    "type": "string",
-                    "example": ""
-                },
-                "success": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
-        "docs.ModelProviderCatalogUpdateRequest": {
-            "type": "object",
-            "properties": {
-                "providers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/docs.ModelProviderCatalogItem"
-                    }
-                }
-            }
-        },
-        "docs.ModelProviderModelDetail": {
-            "type": "object",
-            "properties": {
-                "currency": {
-                    "type": "string",
-                    "example": "USD"
-                },
-                "input_price": {
-                    "type": "number",
-                    "example": 0.00015
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-4o-mini"
-                },
-                "output_price": {
-                    "type": "number",
-                    "example": 0.0006
-                },
-                "price_unit": {
-                    "type": "string",
-                    "example": "per_1k_tokens"
-                },
-                "source": {
-                    "type": "string",
-                    "example": "default"
-                },
-                "type": {
-                    "type": "string",
-                    "example": "text"
-                },
-                "updated_at": {
-                    "type": "integer",
-                    "example": 1710000000
                 }
             }
         },
@@ -6554,8 +6810,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "id": {
-                    "type": "integer",
-                    "example": 1
+                    "type": "string",
+                    "example": "2d66a0b2d8c44efda9c7f5f21a4e2c4d"
                 },
                 "name": {
                     "type": "string",
@@ -7206,7 +7462,7 @@ const docTemplate = `{
         "docs.UserTopUpRequest": {
             "type": "object",
             "properties": {
-                "key": {
+                "code": {
                     "type": "string",
                     "example": "redeem-xxxx-xxxx"
                 }

@@ -125,42 +125,43 @@ const WalletPage = () => {
   };
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px' }}>
-      <Header as='h2'>钱包工具</Header>
+    <div className='router-page-panel'>
+      <Header as='h2' className='router-page-title'>钱包工具</Header>
       {!hasWallet && (
-        <Message warning>
+        <Message warning className='router-section-message'>
           未检测到 `window.ethereum`，请安装 MetaMask 或打开浏览器钱包后刷新。
         </Message>
       )}
       <Segment>
-        <Button primary onClick={connect} disabled={!hasWallet}>
+        <Button className='router-section-button' primary onClick={connect} disabled={!hasWallet}>
           <Icon name='plug' />
           连接钱包
         </Button>
-        <div style={{ marginTop: '12px' }}>
+        <div className='router-section-copy router-section-stack'>
           <div>地址：{address || '-'}</div>
           <div>链 ID：{chainId || '-'}</div>
           <div>余额：{balance ? `${balance} ETH` : '-'}</div>
         </div>
-        <Button basic style={{ marginTop: '8px' }} onClick={() => refreshBalance()}>
+        <Button className='router-section-button' basic onClick={() => refreshBalance()}>
           刷新余额
         </Button>
       </Segment>
 
       <Card fluid>
         <Card.Content>
-          <Card.Header>签名测试</Card.Header>
+          <Card.Header className='router-card-header router-section-title'>签名测试</Card.Header>
           <Form>
             <Form.TextArea
+              className='router-section-textarea'
               label='待签名消息'
               value={messageToSign}
               onChange={(e) => setMessageToSign(e.target.value)}
             />
-            <Button color='orange' onClick={signMessage}>
+            <Button className='router-section-button' color='orange' onClick={signMessage}>
               personal_sign
             </Button>
             {signResult && (
-              <Message success style={{ wordBreak: 'break-all', marginTop: '8px' }}>
+              <Message success className='router-section-message router-break-all'>
                 {signResult}
               </Message>
             )}
@@ -170,22 +171,24 @@ const WalletPage = () => {
 
       <Card fluid>
         <Card.Content>
-          <Card.Header>发送 ETH</Card.Header>
+          <Card.Header className='router-card-header router-section-title'>发送 ETH</Card.Header>
           <Form>
             <Form.Input
+              className='router-section-input'
               label='收款地址'
               placeholder='0x...'
               value={tx.to}
               onChange={(e) => setTx({ ...tx, to: e.target.value })}
             />
             <Form.Input
+              className='router-section-input'
               label='金额（ETH）'
               type='number'
               placeholder='0.01'
               value={tx.value}
               onChange={(e) => setTx({ ...tx, value: e.target.value })}
             />
-            <Button color='green' loading={loading} onClick={sendTx}>
+            <Button className='router-section-button' color='green' loading={loading} onClick={sendTx}>
               发送
             </Button>
           </Form>

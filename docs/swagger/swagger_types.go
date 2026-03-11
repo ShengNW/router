@@ -90,7 +90,7 @@ type AdminManageUserRequest struct {
 }
 
 type UserTopUpRequest struct {
-	Key string `json:"key" example:"redeem-xxxx-xxxx"`
+	Code string `json:"code" example:"redeem-xxxx-xxxx"`
 }
 
 // --- User/public responses ---
@@ -348,22 +348,17 @@ type ChannelUpdateRequest struct {
 	TestModel    string                      `json:"test_model,omitempty" example:"gpt-4o-mini"`
 }
 
-type ChannelPreviewModelsRequest struct {
+type ChannelCreateRecordRequest struct {
+	Name     string `json:"name" example:"openai-main"`
 	Protocol string `json:"protocol" example:"openai"`
 	Key      string `json:"key" example:"sk-***"`
 	BaseURL  string `json:"base_url,omitempty" example:"https://api.openai.com"`
-	DraftID  string `json:"draft_id,omitempty" example:"cad8bd65524a4d0c8f345a8c86ea9685"`
-	Config   any    `json:"config,omitempty"`
+	Config    any    `json:"config,omitempty"`
 }
 
-type ChannelPreviewCapabilitiesRequest struct {
-	Protocol  string   `json:"protocol" example:"openai"`
-	Key       string   `json:"key" example:"sk-***"`
-	BaseURL   string   `json:"base_url,omitempty" example:"https://api.openai.com"`
-	DraftID   string   `json:"draft_id,omitempty" example:"cad8bd65524a4d0c8f345a8c86ea9685"`
-	Config    any      `json:"config,omitempty"`
-	Models    []string `json:"models,omitempty" example:"gpt-4o-mini"`
-	TestModel string   `json:"test_model,omitempty" example:"gpt-4o-mini"`
+type ChannelModelTestsRequest struct {
+	TargetModels []string `json:"target_models,omitempty" example:"gpt-4o-mini"`
+	TestModel    string   `json:"test_model,omitempty" example:"gpt-4o-mini"`
 }
 
 type ModelProviderCatalogItem struct {
@@ -405,7 +400,7 @@ type RedemptionCreateRequest struct {
 }
 
 type RedemptionUpdateRequest struct {
-	ID     int    `json:"id" example:"1"`
+	ID     string `json:"id" example:"2d66a0b2d8c44efda9c7f5f21a4e2c4d"`
 	Name   string `json:"name,omitempty" example:"InviteBonus"`
 	Quota  int64  `json:"quota,omitempty" example:"100000"`
 	Status int    `json:"status,omitempty" example:"1"`

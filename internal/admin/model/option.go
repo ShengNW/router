@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -10,22 +9,15 @@ import (
 	"github.com/yeying-community/router/common/logger"
 )
 
+const SystemSettingsTableName = "system_settings"
+
 type Option struct {
 	Key   string `json:"key" gorm:"primaryKey"`
 	Value string `json:"value"`
 }
 
-func IsLegacyPricingOptionKey(key string) bool {
-	switch strings.TrimSpace(key) {
-	case "ModelRatio", "CompletionRatio", "GroupRatio":
-		return true
-	default:
-		return false
-	}
-}
-
-func legacyPricingOptionError(key string) error {
-	return fmt.Errorf("%s 已废弃，请在模型、渠道、分组页面维护定价", strings.TrimSpace(key))
+func (Option) TableName() string {
+	return SystemSettingsTableName
 }
 
 func AllOption() ([]*Option, error) {
@@ -76,9 +68,6 @@ func InitOptionMap() {
 func loadOptionsFromDatabase() {
 	options, _ := AllOption()
 	for _, option := range options {
-		if IsLegacyPricingOptionKey(option.Key) {
-			continue
-		}
 		err := UpdateOptionMap(option.Key, option.Value)
 		if err != nil {
 			logger.SysError("failed to update option map: " + err.Error())
@@ -89,7 +78,7 @@ func loadOptionsFromDatabase() {
 func SyncOptions(frequency int) {
 	for {
 		time.Sleep(time.Duration(frequency) * time.Second)
-		logger.SysLog("syncing options from database")
+		logger.SysLog("syncing system settings from database")
 		loadOptionsFromDatabase()
 		if err := syncGroupBillingRatiosRuntimeWithDB(DB); err != nil {
 			logger.SysError("failed to sync group billing ratios from groups table: " + err.Error())
@@ -102,9 +91,6 @@ func UpdateOption(key string, value string) error {
 }
 
 func UpdateOptionMap(key string, value string) (err error) {
-	if IsLegacyPricingOptionKey(key) {
-		return legacyPricingOptionError(key)
-	}
 	config.OptionMapRWMutex.Lock()
 	defer config.OptionMapRWMutex.Unlock()
 	switch key {

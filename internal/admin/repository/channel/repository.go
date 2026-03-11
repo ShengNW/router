@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/yeying-community/router/common/config"
@@ -12,8 +13,6 @@ import (
 
 func init() {
 	model.BindChannelRepository(model.ChannelRepository{
-		GetAllChannels:               GetAll,
-		SearchChannels:               Search,
 		GetChannelById:               GetByID,
 		Insert:                       Insert,
 		Update:                       Update,
@@ -27,6 +26,48 @@ func init() {
 		DeleteChannelByStatus:        DeleteByStatus,
 		DeleteDisabledChannel:        DeleteDisabled,
 	})
+}
+
+func buildChannelListQuery(db *gorm.DB, keyword string) *gorm.DB {
+	query := db.Model(&model.Channel{})
+	normalizedKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	if normalizedKeyword == "" {
+		return query
+	}
+	likeKeyword := "%" + normalizedKeyword + "%"
+	return query.Where(
+		"LOWER(name) LIKE ? OR LOWER(protocol) LIKE ? OR LOWER(COALESCE(base_url, '')) LIKE ?",
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+	)
+}
+
+func ListPage(page int, pageSize int, keyword string) ([]*model.Channel, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = config.ItemsPerPage
+	}
+	total := int64(0)
+	query := buildChannelListQuery(model.DB, keyword)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	channels := make([]*model.Channel, 0, pageSize)
+	if err := query.
+		Order("created_time desc").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Omit("key").
+		Find(&channels).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := model.HydrateChannelsWithModels(model.DB, channels); err != nil {
+		return nil, 0, err
+	}
+	return channels, total, nil
 }
 
 func GetAll(startIdx int, num int, status string) ([]*model.Channel, error) {
@@ -46,45 +87,52 @@ func GetAll(startIdx int, num int, status string) ([]*model.Channel, error) {
 	if err := model.HydrateChannelsWithModels(model.DB, channels); err != nil {
 		return nil, err
 	}
-	return channels, model.HydrateChannelsWithCapabilityResults(model.DB, channels)
+	return channels, nil
 }
 
-func Search(keyword string) ([]*model.Channel, error) {
-	var channels []*model.Channel
-	trimmed := strings.TrimSpace(keyword)
-	if trimmed == "" {
-		return channels, nil
-	}
-	normalizedID := model.NormalizeChannelIdentifier(trimmed)
-	likeKeyword := trimmed + "%"
-	err := model.DB.Omit("key").
-		Where("id LIKE ? OR name LIKE ?", normalizedID+"%", likeKeyword).
-		Find(&channels).Error
-	if err != nil {
-		return nil, err
-	}
-	if err := model.HydrateChannelsWithModels(model.DB, channels); err != nil {
-		return nil, err
-	}
-	return channels, model.HydrateChannelsWithCapabilityResults(model.DB, channels)
-}
-
-func GetByID(id string, selectAll bool) (*model.Channel, error) {
+func GetByID(id string) (*model.Channel, error) {
 	id = strings.TrimSpace(id)
 	channel := model.Channel{Id: id}
-	var err error
-	if selectAll {
-		err = model.DB.First(&channel, "id = ?", id).Error
-	} else {
-		err = model.DB.Omit("key").First(&channel, "id = ?", id).Error
-	}
-	if err != nil {
+	if err := model.DB.First(&channel, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 	if err := model.HydrateChannelWithModels(model.DB, &channel); err != nil {
 		return nil, err
 	}
-	return &channel, model.HydrateChannelWithCapabilityResults(model.DB, &channel)
+	return &channel, model.HydrateChannelWithTests(model.DB, &channel)
+}
+
+func GetBasicByID(id string) (*model.Channel, error) {
+	id = strings.TrimSpace(id)
+	channel := model.Channel{Id: id}
+	if err := model.DB.Omit("key").First(&channel, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &channel, nil
+}
+
+func GetAllBasic(startIdx int, num int, status string, selectAll bool) ([]*model.Channel, error) {
+	var channels []*model.Channel
+	query := model.DB.Order("created_time desc")
+	if !selectAll {
+		query = query.Omit("key")
+	}
+	switch status {
+	case "all":
+	case "disabled":
+		query = query.Where("status = ? or status = ?", model.ChannelStatusAutoDisabled, model.ChannelStatusManuallyDisabled)
+	default:
+		if num > 0 {
+			query = query.Limit(num).Offset(startIdx)
+		}
+		if !selectAll {
+			query = query.Omit("key")
+		}
+	}
+	if err := query.Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	return channels, nil
 }
 
 func prepareChannelForCreate(channel *model.Channel) error {
@@ -92,6 +140,7 @@ func prepareChannelForCreate(channel *model.Channel) error {
 		return gorm.ErrInvalidData
 	}
 	channel.NormalizeIdentity()
+	channel.EnsureID()
 	if err := channel.ValidateIdentifier(); err != nil {
 		return err
 	}
@@ -103,11 +152,35 @@ func prepareChannelForCreate(channel *model.Channel) error {
 	return nil
 }
 
+func ensureChannelIdentifierUniqueWithDB(db *gorm.DB, channel *model.Channel) error {
+	if db == nil || channel == nil {
+		return nil
+	}
+	identifier := model.NormalizeChannelIdentifier(channel.Name)
+	if identifier == "" {
+		return nil
+	}
+	existing := model.Channel{}
+	if err := db.Select("id", "name").Where("name = ?", identifier).First(&existing).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	if strings.TrimSpace(existing.Id) == strings.TrimSpace(channel.Id) {
+		return nil
+	}
+	return errors.New("渠道标识已存在")
+}
+
 func Insert(channel *model.Channel) error {
 	if err := prepareChannelForCreate(channel); err != nil {
 		return err
 	}
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := ensureChannelIdentifierUniqueWithDB(tx, channel); err != nil {
+			return err
+		}
 		if err := tx.Create(channel).Error; err != nil {
 			return err
 		}
@@ -122,7 +195,7 @@ func Insert(channel *model.Channel) error {
 	if err := model.HydrateChannelWithModels(model.DB, channel); err != nil {
 		return err
 	}
-	if err := model.HydrateChannelWithCapabilityResults(model.DB, channel); err != nil {
+	if err := model.HydrateChannelWithTests(model.DB, channel); err != nil {
 		return err
 	}
 	return channel.AddAbilities()
@@ -140,7 +213,7 @@ func sameStringPointerValue(left *string, right *string) bool {
 	return leftValue == rightValue
 }
 
-func buildSelectedModelCapabilitySignature(channel *model.Channel) string {
+func buildSelectedModelTestSignature(channel *model.Channel) string {
 	if channel == nil {
 		return ""
 	}
@@ -155,23 +228,22 @@ func buildSelectedModelCapabilitySignature(channel *model.Channel) string {
 		}
 		modelID := strings.TrimSpace(row.Model)
 		upstreamModel := strings.TrimSpace(row.UpstreamModel)
+		modelType := strings.TrimSpace(row.Type)
 		if modelID == "" {
 			continue
 		}
 		if upstreamModel == "" {
 			upstreamModel = modelID
 		}
-		parts = append(parts, modelID+"=>"+upstreamModel)
+		endpoint := strings.TrimSpace(row.Endpoint)
+		parts = append(parts, modelID+"=>"+upstreamModel+"#"+modelType+"@"+endpoint)
 	}
 	return strings.Join(parts, "|")
 }
 
-func shouldResetCapabilityResults(existing *model.Channel, incoming *model.Channel) bool {
+func shouldResetChannelTests(existing *model.Channel, incoming *model.Channel) bool {
 	if existing == nil || incoming == nil {
 		return false
-	}
-	if incoming.CapabilityResultsStale {
-		return true
 	}
 	if strings.TrimSpace(incoming.Protocol) != "" && existing.GetProtocol() != incoming.GetProtocol() {
 		return true
@@ -189,7 +261,7 @@ func shouldResetCapabilityResults(existing *model.Channel, incoming *model.Chann
 		return true
 	}
 	if incoming.ModelConfigsProvided &&
-		buildSelectedModelCapabilitySignature(existing) != buildSelectedModelCapabilitySignature(incoming) {
+		buildSelectedModelTestSignature(existing) != buildSelectedModelTestSignature(incoming) {
 		return true
 	}
 	if incoming.ModelsProvided &&
@@ -201,8 +273,9 @@ func shouldResetCapabilityResults(existing *model.Channel, incoming *model.Chann
 
 func Update(channel *model.Channel) error {
 	channel.NormalizeIdentity()
-	if err := channel.ValidateIdentifier(); err != nil {
-		return err
+	channel.Id = strings.TrimSpace(channel.Id)
+	if channel.Id == "" {
+		return errors.New("渠道 ID 不能为空")
 	}
 	if strings.TrimSpace(channel.Protocol) != "" {
 		channel.NormalizeProtocol()
@@ -216,9 +289,18 @@ func Update(channel *model.Channel) error {
 		if err := model.HydrateChannelWithModels(tx, &existing); err != nil {
 			return err
 		}
-		resetCapabilityResults := shouldResetCapabilityResults(&existing, channel)
+		if !channel.NameProvided || strings.TrimSpace(channel.Name) == "" {
+			channel.Name = existing.Name
+		}
+		if err := channel.ValidateIdentifier(); err != nil {
+			return err
+		}
+		if err := ensureChannelIdentifierUniqueWithDB(tx, channel); err != nil {
+			return err
+		}
+		resetChannelTests := shouldResetChannelTests(&existing, channel)
 		if channel.NameProvided {
-			if err := tx.Model(&model.Channel{}).Where("id = ?", channel.Id).Update("name", strings.TrimSpace(channel.Name)).Error; err != nil {
+			if err := tx.Model(&model.Channel{}).Where("id = ?", channel.Id).Update("name", model.NormalizeChannelIdentifier(channel.Name)).Error; err != nil {
 				return err
 			}
 		}
@@ -240,8 +322,8 @@ func Update(channel *model.Channel) error {
 				return err
 			}
 		}
-		if resetCapabilityResults {
-			if err := model.DeleteChannelCapabilityResultsByChannelIDWithDB(tx, channel.Id); err != nil {
+		if resetChannelTests {
+			if err := model.DeleteChannelTestsByChannelIDWithDB(tx, channel.Id); err != nil {
 				return err
 			}
 		}
@@ -256,7 +338,7 @@ func Update(channel *model.Channel) error {
 	if err := model.HydrateChannelWithModels(model.DB, channel); err != nil {
 		return err
 	}
-	if err := model.HydrateChannelWithCapabilityResults(model.DB, channel); err != nil {
+	if err := model.HydrateChannelWithTests(model.DB, channel); err != nil {
 		return err
 	}
 	return channel.UpdateAbilities()
@@ -287,7 +369,7 @@ func Delete(channel *model.Channel) error {
 		if err := model.DeleteChannelModelsByChannelIDWithDB(tx, channel.Id); err != nil {
 			return err
 		}
-		if err := model.DeleteChannelCapabilityResultsByChannelIDWithDB(tx, channel.Id); err != nil {
+		if err := model.DeleteChannelTestsByChannelIDWithDB(tx, channel.Id); err != nil {
 			return err
 		}
 		if err := tx.Where("channel_id = ?", strings.TrimSpace(channel.Id)).Delete(&model.Ability{}).Error; err != nil {
@@ -341,7 +423,7 @@ func UpdateTestModelByID(id string, testModel string) error {
 		if err := tx.Model(&model.Channel{}).Where("id = ?", id).Update("test_model", testModel).Error; err != nil {
 			return err
 		}
-		return model.DeleteChannelCapabilityResultsByChannelIDWithDB(tx, id)
+		return model.DeleteChannelTestsByChannelIDWithDB(tx, id)
 	})
 }
 
@@ -362,7 +444,7 @@ func deleteChannelsByQuery(query *gorm.DB) (int64, error) {
 		if err := model.DeleteChannelModelsByChannelIDsWithDB(tx, channelIDs); err != nil {
 			return err
 		}
-		if err := model.DeleteChannelCapabilityResultsByChannelIDsWithDB(tx, channelIDs); err != nil {
+		if err := model.DeleteChannelTestsByChannelIDsWithDB(tx, channelIDs); err != nil {
 			return err
 		}
 		if err := tx.Where("channel_id IN ?", channelIDs).Delete(&model.Ability{}).Error; err != nil {

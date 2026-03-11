@@ -10,6 +10,7 @@ import (
 	group "github.com/yeying-community/router/internal/admin/controller/group"
 	log "github.com/yeying-community/router/internal/admin/controller/log"
 	option "github.com/yeying-community/router/internal/admin/controller/option"
+	task "github.com/yeying-community/router/internal/admin/controller/task"
 	token "github.com/yeying-community/router/internal/admin/controller/token"
 	user "github.com/yeying-community/router/internal/admin/controller/user"
 	"github.com/yeying-community/router/internal/transport/http/middleware"
@@ -192,22 +193,40 @@ func SetApiRouter(engine *gin.Engine) {
 		adminChannelRoute := adminRouter.Group("/channel")
 		adminChannelRoute.Use(middleware.AdminAuth())
 		{
-			adminChannelRoute.GET("/", channel.GetAllChannels)
-			adminChannelRoute.GET("/search", channel.SearchChannels)
 			adminChannelRoute.GET("/protocols", channel.GetChannelProtocols)
+			adminChannelRoute.POST("/create", channel.CreateChannel)
 			adminChannelRoute.GET("/:id", channel.GetChannel)
+			adminChannelRoute.GET("/:id/models", channel.GetChannelModels)
+			adminChannelRoute.GET("/:id/tests", channel.GetChannelTests)
+			adminChannelRoute.POST("/:id/refresh", channel.RefreshChannelModels)
+			adminChannelRoute.POST("/:id/tests", channel.TestChannelModels)
 			adminChannelRoute.GET("/test", channel.TestChannels)
 			adminChannelRoute.GET("/test/:id", channel.TestChannel)
 			adminChannelRoute.GET("/update_balance", channel.UpdateAllChannelsBalance)
 			adminChannelRoute.GET("/update_balance/:id", channel.UpdateChannelBalance)
-			adminChannelRoute.POST("/preview/models", channel.PreviewChannelModels)
-			adminChannelRoute.POST("/preview/capabilities", channel.PreviewChannelCapabilities)
-			adminChannelRoute.POST("/draft", channel.CreateChannelDraft)
 			adminChannelRoute.POST("/", channel.AddChannel)
 			adminChannelRoute.PUT("/", channel.UpdateChannel)
 			adminChannelRoute.PUT("/test_model", channel.UpdateChannelTestModel)
 			adminChannelRoute.DELETE("/disabled", channel.DeleteDisabledChannel)
 			adminChannelRoute.DELETE("/:id", channel.DeleteChannel)
+		}
+		adminChannelsRoute := adminRouter.Group("/channels")
+		adminChannelsRoute.Use(middleware.AdminAuth())
+		{
+			adminChannelsRoute.GET("/", channel.GetChannels)
+		}
+		adminTasksRoute := adminRouter.Group("/tasks")
+		adminTasksRoute.Use(middleware.AdminAuth())
+		{
+			adminTasksRoute.GET("/", task.GetTasks)
+			adminTasksRoute.GET("/:id", task.GetTask)
+			adminTasksRoute.POST("/:id/cancel", task.CancelTask)
+			adminTasksRoute.POST("/:id/retry", task.RetryTask)
+		}
+		adminGroupsRoute := adminRouter.Group("/groups")
+		adminGroupsRoute.Use(middleware.AdminAuth())
+		{
+			adminGroupsRoute.GET("/", group.GetGroups)
 		}
 
 		adminRedemptionRoute := adminRouter.Group("/redemption")
@@ -233,8 +252,6 @@ func SetApiRouter(engine *gin.Engine) {
 		adminGroupRoute := adminRouter.Group("/group")
 		adminGroupRoute.Use(middleware.AdminAuth())
 		{
-			adminGroupRoute.GET("/catalog", group.GetGroupCatalog)
-			adminGroupRoute.GET("/channel-options", group.GetGroupChannelOptions)
 			adminGroupRoute.POST("/", group.CreateGroup)
 			adminGroupRoute.PUT("/", group.UpdateGroup)
 			adminGroupRoute.DELETE("/:id", group.DeleteGroup)
@@ -245,11 +262,15 @@ func SetApiRouter(engine *gin.Engine) {
 			adminGroupRoute.PUT("/:id/model-configs", group.UpdateGroupModelConfigs)
 		}
 
-		adminProviderRoute := adminRouter.Group("/provider")
+		adminProviderRoute := adminRouter.Group("/providers")
 		adminProviderRoute.Use(middleware.AdminAuth())
 		{
-			adminProviderRoute.GET("/", channel.GetModelProviders)
-			adminProviderRoute.PUT("/", channel.UpdateModelProviders)
+			adminProviderRoute.GET("/", channel.GetProviders)
+			adminProviderRoute.POST("/", channel.CreateProvider)
+			adminProviderRoute.POST("/:id/model", channel.AppendProviderModel)
+			adminProviderRoute.GET("/:id", channel.GetProvider)
+			adminProviderRoute.PUT("/:id", channel.UpdateProvider)
+			adminProviderRoute.DELETE("/:id", channel.DeleteProvider)
 		}
 	}
 

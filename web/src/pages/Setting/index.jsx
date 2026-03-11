@@ -52,12 +52,12 @@ const Setting = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header'>{t('setting.title')}</Card.Header>
+          <Card.Header className='header router-page-title'>{t('setting.title')}</Card.Header>
           <Tab
             menu={{
               secondary: true,
               pointing: true,
-              className: 'settings-tab',
+              className: 'router-tab-menu',
             }}
             panes={panes}
           />

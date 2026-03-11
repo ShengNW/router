@@ -15,6 +15,7 @@ import (
 	"github.com/yeying-community/router/common/i18n"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/admin/controller/channel"
+	task "github.com/yeying-community/router/internal/admin/controller/task"
 	"github.com/yeying-community/router/internal/admin/model"
 	_ "github.com/yeying-community/router/internal/admin/repository/bootstrap"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
@@ -75,6 +76,9 @@ func Run() {
 	}
 	if config.EnableMetric {
 		logger.SysLog("metric enabled, will disable channel if too much request failed")
+	}
+	if config.IsMasterNode {
+		task.StartAsyncTaskWorkers()
 	}
 	openai.InitTokenEncoders()
 	client.Init()

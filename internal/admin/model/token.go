@@ -14,6 +14,8 @@ const (
 	TokenStatusDisabled  = 2 // also don't use 0
 	TokenStatusExpired   = 3
 	TokenStatusExhausted = 4
+
+	APITokensTableName = "api_tokens"
 )
 
 type Token struct {
@@ -30,6 +32,10 @@ type Token struct {
 	UsedQuota      int64   `json:"used_quota" gorm:"bigint;default:0"`
 	Models         *string `json:"models" gorm:"type:text"`
 	Subnet         *string `json:"subnet" gorm:"default:''"`
+}
+
+func (Token) TableName() string {
+	return APITokensTableName
 }
 
 func GetAllUserTokens(userId string, startIdx int, num int, order string) ([]*Token, error) {

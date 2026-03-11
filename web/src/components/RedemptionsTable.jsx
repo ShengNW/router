@@ -8,7 +8,7 @@ import {
   Pagination,
   Table,
 } from 'semantic-ui-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   API,
   copy,
@@ -29,25 +29,25 @@ function renderStatus(status, t) {
   switch (status) {
     case 1:
       return (
-        <Label basic color='green'>
+        <Label basic color='green' className='router-tag'>
           {t('redemption.status.unused')}
         </Label>
       );
     case 2:
       return (
-        <Label basic color='red'>
+        <Label basic color='red' className='router-tag'>
           {t('redemption.status.disabled')}
         </Label>
       );
     case 3:
       return (
-        <Label basic color='grey'>
+        <Label basic color='grey' className='router-tag'>
           {t('redemption.status.used')}
         </Label>
       );
     default:
       return (
-        <Label basic color='black'>
+        <Label basic color='black' className='router-tag'>
           {t('redemption.status.unknown')}
         </Label>
       );
@@ -56,17 +56,19 @@ function renderStatus(status, t) {
 
 const RedemptionsTable = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [redemptions, setRedemptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
 
-  const loadRedemptions = useCallback(async (startIdx) => {
-    const res = await API.get(`/api/v1/admin/redemption/?p=${startIdx}`);
+  const loadRedemptions = useCallback(async (page) => {
+    const normalizedPage = Number(page) > 0 ? Number(page) : 1;
+    const res = await API.get(`/api/v1/admin/redemption/?page=${normalizedPage}`);
     const { success, message, data } = res.data;
     if (success) {
-      if (startIdx === 0) {
+      if (normalizedPage === 1) {
         setRedemptions(data);
       } else {
         setRedemptions((prev) => [...prev, ...data]);
@@ -81,14 +83,14 @@ const RedemptionsTable = () => {
     (async () => {
       if (activePage === Math.ceil(redemptions.length / ITEMS_PER_PAGE) + 1) {
         // In this case we have to load more data and then append them.
-        await loadRedemptions(activePage - 1);
+        await loadRedemptions(activePage);
       }
       setActivePage(activePage);
     })();
   };
 
   useEffect(() => {
-    loadRedemptions(0)
+    loadRedemptions(1)
       .then()
       .catch((reason) => {
         showError(reason);
@@ -133,7 +135,7 @@ const RedemptionsTable = () => {
   const searchRedemptions = async () => {
     if (searchKeyword === '') {
       // if keyword is blank, load files instead.
-      await loadRedemptions(0);
+      await loadRedemptions(1);
       setActivePage(1);
       return;
     }
@@ -177,37 +179,45 @@ const RedemptionsTable = () => {
 
   const refresh = async () => {
     setLoading(true);
-    await loadRedemptions(0);
+    await loadRedemptions(1);
     setActivePage(1);
   };
 
   return (
     <>
-      <Form onSubmit={searchRedemptions}>
-        <Form.Input
-          icon='search'
-          fluid
-          iconPosition='left'
-          placeholder={t('redemption.search')}
-          value={searchKeyword}
-          loading={searching}
-          onChange={handleKeywordChange}
-        />
-      </Form>
+      <div className='router-toolbar router-block-gap-md'>
+        <div className='router-toolbar-start'>
+          <Button
+            className='router-page-button'
+            as={Link}
+            to='/redemption/add'
+            loading={loading}
+          >
+            {t('redemption.buttons.add')}
+          </Button>
+          <Button className='router-page-button' onClick={refresh} loading={loading}>
+            {t('redemption.buttons.refresh')}
+          </Button>
+        </div>
+        <Form onSubmit={searchRedemptions} className='router-search-form-lg'>
+          <Form.Input
+            className='router-section-input'
+            icon='search'
+            fluid
+            iconPosition='left'
+            placeholder={t('redemption.search')}
+            value={searchKeyword}
+            loading={searching}
+            onChange={handleKeywordChange}
+          />
+        </Form>
+      </div>
 
-      <Table basic={'very'} compact size='small'>
+      <Table basic={'very'} compact className='router-hover-table router-list-table'>
         <Table.Header>
           <Table.Row>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
-              onClick={() => {
-                sortRedemption('id');
-              }}
-            >
-              {t('redemption.table.id')}
-            </Table.HeaderCell>
-            <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortRedemption('name');
               }}
@@ -215,7 +225,7 @@ const RedemptionsTable = () => {
               {t('redemption.table.name')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortRedemption('status');
               }}
@@ -223,7 +233,7 @@ const RedemptionsTable = () => {
               {t('redemption.table.status')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortRedemption('quota');
               }}
@@ -231,7 +241,7 @@ const RedemptionsTable = () => {
               {t('redemption.table.quota')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortRedemption('created_time');
               }}
@@ -239,7 +249,7 @@ const RedemptionsTable = () => {
               {t('redemption.table.created_time')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortRedemption('redeemed_time');
               }}
@@ -259,8 +269,13 @@ const RedemptionsTable = () => {
             .map((redemption, idx) => {
               if (redemption.deleted) return <></>;
               return (
-                <Table.Row key={redemption.id}>
-                  <Table.Cell>{redemption.id}</Table.Cell>
+                <Table.Row
+                  key={redemption.id}
+                  className='router-row-clickable'
+                  onClick={() => {
+                    navigate(`/redemption/${redemption.id}`);
+                  }}
+                >
                   <Table.Cell>
                     {redemption.name ? redemption.name : t('redemption.table.no_name')}
                   </Table.Cell>
@@ -274,17 +289,21 @@ const RedemptionsTable = () => {
                       ? renderTimestamp(redemption.redeemed_time)
                       : t('redemption.table.not_redeemed')}{' '}
                   </Table.Cell>
-                  <Table.Cell>
-                    <div>
+                  <Table.Cell
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    <div className='router-action-group'>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         positive
                         onClick={async () => {
-                          if (await copy(redemption.key)) {
+                          if (await copy(redemption.code)) {
                             showSuccess(t('token.messages.copy_success'));
                           } else {
                             showWarning(t('token.messages.copy_failed'));
-                            setSearchKeyword(redemption.key);
+                            setSearchKeyword(redemption.code);
                           }
                         }}
                       >
@@ -292,7 +311,7 @@ const RedemptionsTable = () => {
                       </Button>
                       <Popup
                         trigger={
-                          <Button size='tiny' negative>
+                          <Button className='router-inline-button' negative>
                             {t('redemption.buttons.delete')}
                           </Button>
                         }
@@ -301,6 +320,7 @@ const RedemptionsTable = () => {
                         hoverable
                       >
                         <Button
+                          className='router-inline-button'
                           negative
                           onClick={() => {
                             manageRedemption(redemption.id, 'delete', idx);
@@ -310,7 +330,7 @@ const RedemptionsTable = () => {
                         </Button>
                       </Popup>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         disabled={redemption.status === 3} // used
                         onClick={() => {
                           manageRedemption(
@@ -325,7 +345,7 @@ const RedemptionsTable = () => {
                           : t('redemption.buttons.enable')}
                       </Button>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         as={Link}
                         to={'/redemption/edit/' + redemption.id}
                       >
@@ -340,23 +360,12 @@ const RedemptionsTable = () => {
 
         <Table.Footer>
           <Table.Row>
-            <Table.HeaderCell colSpan='7'>
-              <Button
-                size='small'
-                as={Link}
-                to='/redemption/add'
-                loading={loading}
-              >
-                {t('redemption.buttons.add')}
-              </Button>
-              <Button size='small' onClick={refresh} loading={loading}>
-                {t('redemption.buttons.refresh')}
-              </Button>
+            <Table.HeaderCell colSpan='6'>
               <Pagination
+                className='router-page-pagination'
                 floated='right'
                 activePage={activePage}
                 onPageChange={onPaginationChange}
-                size='small'
                 siblingRange={1}
                 totalPages={
                   Math.ceil(redemptions.length / ITEMS_PER_PAGE) +

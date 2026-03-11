@@ -2,7 +2,7 @@
   "header": {
     "home": "首页",
     "channel": "渠道",
-    "model_providers": "供应商",
+    "providers": "供应商",
     "group": "分组",
     "token": "令牌",
     "redemption": "兑换",
@@ -10,6 +10,7 @@
     "user": "用户",
     "dashboard": "总览",
     "log": "日志",
+    "task": "任务",
     "setting": "设置",
     "about": "关于",
     "chat": "聊天",
@@ -24,7 +25,17 @@
     "get_code": {
       "title": "获取兑换码",
       "current_quota": "当前可用额度",
-      "button": "立即获取兑换码"
+      "button": "前往充值"
+    },
+    "history": {
+      "title": "充值记录",
+      "refresh": "刷新",
+      "empty": "暂无充值记录",
+      "columns": {
+        "time": "时间",
+        "quota": "额度",
+        "detail": "明细"
+      }
     },
     "redeem_code": {
       "title": "兑换码充值",
@@ -43,20 +54,19 @@
     "title": "管理渠道",
     "tabs": {
       "channels": "渠道管理",
-      "model_providers": "模型供应商"
+      "providers": "供应商"
     },
-  "search": "搜索渠道标识或显示名称...",
-  "table": {
-    "id": "ID",
-    "name": "渠道",
-    "identifier": "标识：{{id}}",
+    "search": "搜索渠道标识...",
+    "table": {
+      "id": "渠道标识",
+      "name": "渠道",
       "group": "分组",
       "type": "协议类型",
       "status": "状态",
       "response_time": "响应时间",
+      "capabilities": "能力",
       "balance": "余额",
       "priority": "优先级",
-      "test_model": "测试模型",
       "actions": "操作",
       "no_name": "无",
       "status_enabled": "已启用",
@@ -68,13 +78,11 @@
       "status_unknown": "未知状态",
       "not_tested": "未测试",
       "priority_tip": "渠道选择优先级，越高越优先",
-      "select_test_model": "请选择测试模型",
       "click_to_update": "点击更新",
       "balance_not_supported": "-"
     },
     "buttons": {
       "test": "测试",
-      "test_channel": "测试渠道",
       "disable_channel": "禁用渠道",
       "delete_channel": "删除渠道",
       "delete": "删除",
@@ -84,26 +92,33 @@
       "enable": "启用",
       "disable": "禁用",
       "edit": "编辑",
-      "copy": "复制",
-      "add": "新增渠道",
+    "copy": "复制",
+    "tasks": "任务",
+    "add": "新增渠道",
       "test_all": "测试所有渠道",
       "refresh": "刷新"
     },
     "messages": {
-      "test_success": "渠道 {{name}} 测试成功，测试模型 {{model}}，耗时 {{time}} 秒，结果：{{message}}",
-      "test_all_started": "已成功开始测试渠道，请刷新页面查看结果。",
-      "batch_test_select_required": "请先选择至少一个渠道。",
-      "batch_test_done": "批量测试完成：成功 {{success}}，失败 {{failed}}。",
       "batch_disable_select_required": "请先选择至少一个待禁用渠道。",
       "batch_disable_done": "批量禁用完成：成功 {{success}}，失败 {{failed}}。",
       "batch_delete_select_required": "请先选择至少一个待删除渠道。",
       "batch_delete_done": "批量删除完成：成功 {{success}}，失败 {{failed}}。",
       "balance_update_success": "渠道 {{name}} 余额更新成功！",
+      "balance_update_submitted": "已提交渠道 {{name}} 的余额刷新任务。",
+      "balance_update_reused": "渠道 {{name}} 已有余额刷新任务在执行，已复用。",
+      "balance_update_failed": "渠道 {{name}} 余额刷新失败。",
+      "balance_update_submit_failed": "提交余额刷新任务失败。",
       "all_balance_updated": "已更新完毕所有已启用渠道余额！",
       "operation_success": "操作成功完成！"
     },
+    "model_types": {
+      "text": "文本",
+      "image": "图片",
+      "audio": "音频",
+      "video": "视频"
+    },
     "providers": {
-      "title": "模型供应商管理",
+      "title": "供应商管理",
       "search": "搜索供应商、名称、来源、模型...",
       "fetch": {
         "provider": "供应商",
@@ -117,11 +132,13 @@
         "reload": "加载已保存配置",
         "load_defaults": "载入系统默认模型列表",
         "add_provider": "新增供应商",
+        "refresh": "刷新",
         "save": "保存配置"
       },
       "table": {
         "provider": "供应商标识",
         "name": "展示名称",
+        "capabilities": "能力",
         "key": "API Key",
         "key_set": "已配置",
         "key_not_set": "未配置",
@@ -129,7 +146,7 @@
         "source": "来源",
         "updated_at": "更新时间",
         "actions": "操作",
-        "empty": "暂无模型供应商配置",
+        "empty": "暂无供应商配置",
         "model_count": "共 {{count}} 个模型"
       },
       "model_detail_table": {
@@ -146,11 +163,11 @@
         "empty": "暂无模型明细"
       },
       "dialog": {
-        "title_create": "新增模型供应商",
-        "title_edit": "编辑模型供应商",
-        "title_detail": "模型供应商详情",
-        "delete_title": "确认删除模型供应商",
-        "delete_content": "确定要删除模型供应商 {{provider}} 吗？",
+        "title_create": "新增供应商",
+        "title_edit": "编辑供应商",
+        "title_detail": "供应商详情",
+        "delete_title": "确认删除供应商",
+        "delete_content": "确定要删除供应商 {{provider}} 吗？",
         "delete_confirm": "确认删除",
         "edit": "编辑",
         "provider": "供应商标识",
@@ -170,13 +187,13 @@
         "confirm": "确认"
       },
       "messages": {
-        "load_failed": "加载模型供应商配置失败",
+        "load_failed": "加载供应商配置失败",
         "load_defaults_failed": "加载默认模型列表失败",
         "defaults_loaded": "已载入系统默认模型列表",
         "provider_required": "供应商标识不能为空",
         "provider_exists": "该供应商已存在，请直接编辑",
-        "save_failed": "保存模型供应商配置失败",
-        "save_success": "模型供应商配置已保存",
+        "save_failed": "保存供应商配置失败",
+        "save_success": "供应商配置已保存",
         "model_details_invalid": "模型明细 JSON 格式不合法，请检查后重试",
         "fetch_provider_required": "请先选择供应商",
         "fetch_key_required": "请先填写 API Key，或在供应商配置中保存 Key",
@@ -185,14 +202,14 @@
       }
     },
     "edit": {
-    "title_detail": "渠道详情",
-    "title_edit": "更新渠道信息",
-    "title_create": "创建新的渠道",
-    "identifier": "渠道标识",
-    "identifier_placeholder": "例如：openai-main",
-    "type": "协议类型",
-    "name": "显示名称",
-    "name_placeholder": "可选，留空时直接显示渠道标识",
+      "title_detail": "渠道详情",
+      "title_edit": "更新渠道信息",
+      "title_create": "创建新的渠道",
+      "identifier": "渠道标识",
+      "identifier_placeholder": "例如：openai-main",
+      "type": "协议类型",
+      "name": "渠道标识",
+      "name_placeholder": "例如：openai-main",
       "group": "分组",
       "group_placeholder": "请选择可以使用该渠道的分组",
       "group_addition": "可在分组管理页面新增分组：",
@@ -227,11 +244,32 @@
           "selected": "启用",
           "name": "名称",
           "alias": "别名",
+          "type": "类型",
+          "providers": "供应商归属",
           "price_unit": "计价单位",
-          "input_price": "输入价覆盖",
-          "output_price": "输出价覆盖"
+          "input_price": "输入价",
+          "output_price": "输出价",
+          "actions": "操作"
         },
-        "realtime_enabled": "已启用实时模型同步：修改地址或密钥后会自动刷新并默认全选。",
+        "filters": {
+          "all": "全部模型",
+          "unassigned": "仅看未归属",
+          "manual": "仅看待手动归属"
+        },
+        "assignment_summary": "已归属 {{assigned}}，未归属 {{unassigned}}，可自动录入 {{auto}}，待手动录入 {{manual}}",
+        "auto_assign": "一键录入",
+        "auto_assign_empty": "当前没有可一键录入的模型",
+        "auto_assign_success": "已一键录入 {{success}} 个模型，失败 {{failed}} 个",
+        "provider_loading": "加载供应商中...",
+        "provider_unassigned": "未归属",
+        "inactive": "已下线",
+        "provider_add": "录入",
+        "provider_no_options": "请先新增供应商",
+        "provider_load_failed": "加载供应商列表失败",
+        "provider_append_invalid": "请选择供应商并填写模型名称",
+        "provider_append_success": "模型已录入供应商",
+        "provider_append_failed": "录入供应商失败",
+        "realtime_enabled": "已启用实时模型同步：修改地址或密钥后会自动刷新模型列表，但不会默认全选。",
         "realtime_hint": "填写地址和密钥后会自动获取该渠道支持的模型。",
         "flow_title": "新建渠道流程",
         "flow_steps": "1）验证连接并拉取模型 2）选择该渠道实际可用模型 3）提交创建。连接参数变更后需要重新验证。",
@@ -239,45 +277,65 @@
         "protocol_support_yes": "当前协议支持连接验证。",
         "protocol_support_no": "当前协议暂不支持连接验证，使用系统模型列表进行选择。",
         "manual_mode_hint": "当前协议使用系统模型列表，不执行在线连接验证。",
+        "append_dialog": {
+          "title": "录入供应商模型",
+          "provider": "目标供应商",
+          "provider_placeholder": "请选择供应商",
+          "model": "模型",
+          "type": "类型",
+          "cancel": "取消",
+          "confirm": "确认录入"
+        },
         "verify_prerequisite": "请先填写地址和密钥，再验证连接。",
         "verify_required": "请先验证连接并获取模型后再提交。",
         "verify_in_progress": "正在验证连接并同步模型...",
         "verify_ready": "连接已验证，可以提交。",
         "verify_stale": "连接参数已变更，请重新验证并获取模型。",
+        "search_placeholder": "搜索模型、别名、类型、供应商...",
         "empty": "暂无可选模型，请先点击“获取模型”或检查配置。",
+        "empty_filtered": "当前筛选条件下暂无模型",
+        "empty_search": "没有匹配的模型",
         "last_synced": "最近同步时间：{{time}}"
       },
-      "capability_tester": {
-        "title": "能力测试",
-        "hint": "使用当前草稿渠道和已选模型做真实探测。未匹配到图片模型或音频模型时，会自动跳过对应能力测试。",
-        "button": "开始测试",
-        "empty": "还没有测试结果，点击“开始测试”后会依次探测 chat、responses、images、audio。",
+      "model_tester": {
+        "title": "模型测试",
+        "hint": "展示第二步中已选模型，并为每个模型配置实际测试端点。文本模型默认测试 /v1/responses，也可以切换为 /v1/chat/completions；其他类型使用固定端点。支持单条测试，也支持勾选多条批量测试。",
+        "button": "测试选中模型",
+        "single": "测试",
+        "task_created": "已提交 {{count}} 个测试任务，其中复用 {{reused}} 个运行中任务。",
+        "selection": "已勾选 {{selected}} / {{total}}",
+        "selection_notice": "模型测试结果仅用于诊断渠道能力，不会改变已选模型是否可用。只要模型已被选中，创建或编辑分组时都可以继续使用。",
+        "verify_required": "请先完成当前模型测试后再继续。",
+        "empty": "当前没有可测试的模型，请先在第二步选择模型。",
         "last_tested": "最近测试时间：{{time}}",
-        "test_success": "能力测试已完成",
-        "test_failed": "能力测试失败",
-        "stale": "连接信息或模型选择已变更，请重新执行能力测试。",
+        "test_success": "模型测试任务已提交",
+        "test_failed": "模型测试失败",
+        "stale": "连接信息、模型选择或端点已变更，请重新执行模型测试。",
         "status": {
+          "pending": "排队中",
+          "running": "运行中",
           "supported": "支持",
           "unsupported": "不支持",
           "skipped": "已跳过"
         },
         "table": {
-          "capability": "能力",
-          "endpoint": "接口",
-          "model": "测试模型",
+          "model": "模型",
+          "type": "类型",
+          "endpoint": "端点",
           "status": "结果",
           "latency": "耗时",
-          "message": "说明"
+          "message": "说明",
+          "actions": "操作"
         }
       },
-    "messages": {
-      "identifier_required": "请填写渠道标识！",
-      "identifier_invalid": "渠道标识只支持小写字母、数字和 -，且长度不能超过 64 个字符。",
-      "key_required": "请填写渠道密钥！",
-      "groups_required": "请至少选择一个分组！",
+      "messages": {
+        "identifier_required": "请填写渠道标识！",
+        "identifier_invalid": "渠道标识只支持小写字母、数字和 -，且长度不能超过 64 个字符。",
+        "key_required": "请填写渠道密钥！",
+        "groups_required": "请至少选择一个分组！",
         "models_required": "请至少选择一个模型！",
-        "create_draft_failed": "创建草稿渠道失败",
-        "update_draft_failed": "保存草稿渠道失败",
+        "create_channel_failed": "创建渠道失败",
+        "save_channel_failed": "保存渠道失败",
         "fetch_models_failed": "获取模型失败",
         "models_empty": "未返回可用模型",
         "model_config_invalid": "模型配置无效，请检查模型别名是否为空或重复，价格覆盖是否为非负数。",
@@ -297,7 +355,7 @@
       "wizard": {
         "step_basic": "步骤 1：连接信息",
         "step_models": "步骤 2：模型选择",
-        "step_capabilities": "步骤 3：能力测试",
+        "step_model_tests": "步骤 3：模型测试",
         "step_advanced": "步骤 4：高级配置"
       },
       "aws_region_placeholder": "region，例如：us-west-2",
@@ -321,10 +379,10 @@
   },
   "group_manage": {
     "title": "分组管理",
-    "search": "搜索分组标识、名称或描述",
+    "search": "搜索分组标识或描述",
     "table": {
       "id": "分组标识",
-      "name": "展示名称",
+      "name": "分组",
       "description": "描述",
       "channels": "渠道",
       "billing_ratio": "业务倍率",
@@ -341,8 +399,8 @@
     "form": {
       "id": "分组标识",
       "id_placeholder": "例如：enterprise",
-      "name": "展示名称",
-      "name_placeholder": "例如：企业版",
+      "name": "分组标识",
+      "name_placeholder": "例如：enterprise",
       "description": "描述",
       "description_placeholder": "可选，用于说明该分组用途",
       "billing_ratio": "业务倍率",
@@ -495,6 +553,8 @@
     }
   },
   "common": {
+    "loading": "加载中...",
+    "no_data": "暂无数据",
     "quota": {
       "display": "等价金额：${{amount}}",
       "display_short": "${{amount}}",
@@ -503,7 +563,7 @@
   },
   "redemption": {
     "title": "兑换管理",
-    "search": "搜索兑换码的 ID 和名称 ...",
+    "search": "搜索兑换码和名称 ...",
     "table": {
       "id": "ID",
       "name": "名称",
@@ -522,7 +582,7 @@
       "enable": "启用",
       "disable": "禁用",
       "edit": "编辑",
-      "add": "添加新的兑换码",
+      "add": "新增兑换码",
       "refresh": "刷新"
     },
     "status": {
@@ -543,6 +603,12 @@
       "buttons": {
         "submit": "提交",
         "cancel": "取消"
+      }
+    },
+    "detail": {
+      "code": "兑换码",
+      "buttons": {
+        "back": "返回"
       }
     },
     "messages": {
@@ -589,6 +655,63 @@
       "query": "操作",
       "submit": "查询",
       "refresh": "刷新"
+    }
+  },
+  "task": {
+    "title": "任务",
+    "empty": "暂无任务",
+    "summary": "共 {{total}} 条任务",
+  "filters": {
+    "type_all": "全部类型",
+    "status_all": "全部状态",
+    "channel_id": "筛选渠道 ID",
+    "quick_all": "全部"
+  },
+    "types": {
+      "channel_model_test": "模型测试",
+      "channel_refresh_models": "刷新模型",
+      "channel_refresh_balance": "刷新余额"
+    },
+    "status": {
+      "pending": "排队中",
+      "running": "运行中",
+      "succeeded": "成功",
+      "failed": "失败",
+      "canceled": "已取消"
+    },
+    "table": {
+      "type": "类型",
+      "channel": "渠道",
+      "model": "模型",
+      "status": "状态",
+      "created_at": "创建时间",
+      "finished_at": "完成时间",
+      "message": "结果",
+      "actions": "操作"
+    },
+    "buttons": {
+      "refresh": "刷新",
+      "model_tests": "测试任务",
+      "running": "运行中",
+      "retry": "重试",
+      "cancel": "取消"
+    },
+  "detail": {
+    "buttons": {
+      "back": "返回",
+      "channel": "查看渠道"
+    },
+    "endpoint": "端点",
+    "payload": "任务参数",
+    "result": "执行结果",
+      "error": "错误信息"
+    },
+    "messages": {
+      "load_failed": "读取任务失败",
+      "retry_success": "任务已重新提交",
+      "retry_failed": "任务重试失败",
+      "cancel_success": "任务已取消",
+      "cancel_failed": "取消任务失败"
     }
   },
   "user": {
@@ -660,7 +783,8 @@
       "sort_by": "排序方式"
     },
     "buttons": {
-      "add": "添加新的用户",
+      "add": "新增用户",
+      "refresh": "刷新",
       "delete": "删除",
       "delete_user": "删除用户",
       "enable": "启用",
@@ -698,7 +822,7 @@
       "span": "跨度",
       "start": "开始",
       "end": "结束",
-      "providers": "模型供应商",
+      "providers": "供应商",
       "no_providers": "暂无模型",
       "granularity_options": {
         "hour": "小时",
@@ -774,6 +898,16 @@
       "other": "其他设置"
     },
     "personal": {
+      "tokens": {
+        "title": "令牌与邀请"
+      },
+      "password": {
+        "title": "修改密码"
+      },
+      "delete": {
+        "title": "删除账户",
+        "confirm": "确认删除"
+      },
       "general": {
         "title": "通用设置",
         "system_token_notice": "注意，此处生成的令牌用于系统管理，而非用于请求 OpenAI 相关的服务，请知悉。",
@@ -823,9 +957,18 @@
         "title": "通用设置",
         "server_address": "服务器地址",
         "server_address_placeholder": "例如：https://yourdomain.com",
+        "system_name": "系统名称",
+        "logo": "Logo 地址",
         "buttons": {
           "update": "更新服务器地址"
         }
+      },
+      "top_up_link": "充值链接",
+      "chat_link": "聊天链接",
+      "notice": "站点公告",
+      "notice_placeholder": "支持 Markdown",
+      "buttons": {
+        "save": "保存"
       },
       "login": {
         "title": "配置登录注册",

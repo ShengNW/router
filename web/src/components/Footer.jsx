@@ -32,9 +32,9 @@ const Footer = () => {
 
   return (
     <Segment vertical>
-      <Container textAlign='center' style={{ color: '#666666' }}>
+      <Container textAlign='center' className='router-footer-container'>
         <div
-          className='custom-footer'
+          className='custom-footer router-footer-content'
           dangerouslySetInnerHTML={{ __html: footer }}
         ></div>
       </Container>

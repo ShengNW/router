@@ -2,7 +2,7 @@
   "header": {
     "home": "Home",
     "channel": "Channel",
-    "model_providers": "Providers",
+    "providers": "Providers",
     "group": "Group",
     "token": "Token",
     "redemption": "Redemption",
@@ -10,6 +10,7 @@
     "user": "User",
     "dashboard": "Dashboard",
     "log": "Log",
+    "task": "Tasks",
     "setting": "Settings",
     "about": "About",
     "chat": "Chat",
@@ -24,7 +25,17 @@
     "get_code": {
       "title": "Get Redemption Code",
       "current_quota": "Current Available Quota",
-      "button": "Get Code Now"
+      "button": "Go to Top-up"
+    },
+    "history": {
+      "title": "Top-up History",
+      "refresh": "Refresh",
+      "empty": "No top-up records yet",
+      "columns": {
+        "time": "Time",
+        "quota": "Quota",
+        "detail": "Detail"
+      }
     },
     "redeem_code": {
       "title": "Redeem Code",
@@ -43,20 +54,19 @@
     "title": "Channel Management",
     "tabs": {
       "channels": "Channels",
-      "model_providers": "Model Providers"
+      "providers": "Providers"
     },
-  "search": "Search channels by identifier or display name...",
-  "table": {
-    "id": "ID",
-    "name": "Channel",
-    "identifier": "Identifier: {{id}}",
+    "search": "Search channels by identifier...",
+    "table": {
+      "id": "Channel Identifier",
+      "name": "Channel",
       "group": "Group",
       "type": "Protocol Type",
       "status": "Status",
       "response_time": "Response Time",
+      "capabilities": "Capabilities",
       "balance": "Balance",
       "priority": "Priority",
-      "test_model": "Test Model",
       "actions": "Actions",
       "no_name": "None",
       "status_enabled": "Enabled",
@@ -68,13 +78,11 @@
       "status_unknown": "Unknown Status",
       "not_tested": "Not Tested",
       "priority_tip": "Channel selection priority, higher is preferred",
-      "select_test_model": "Please select test model",
       "click_to_update": "Click to update",
       "balance_not_supported": "-"
     },
     "buttons": {
       "test": "Test",
-      "test_channel": "Test Channels",
       "disable_channel": "Disable Channels",
       "delete_channel": "Delete Channels",
       "delete": "Delete",
@@ -84,26 +92,33 @@
       "enable": "Enable",
       "disable": "Disable",
       "edit": "Edit",
-      "copy": "Copy",
-      "add": "Add New Channel",
+    "copy": "Copy",
+    "tasks": "Tasks",
+    "add": "Add New Channel",
       "test_all": "Test All Channels",
       "refresh": "Refresh"
     },
     "messages": {
-      "test_success": "Channel {{name}} test successful, model {{model}}, time {{time}}s, result: {{message}}",
-      "test_all_started": "Channel testing started successfully, please refresh page to see results.",
-      "batch_test_select_required": "Please select at least one channel first.",
-      "batch_test_done": "Batch testing finished: {{success}} succeeded, {{failed}} failed.",
       "batch_disable_select_required": "Please select at least one channel to disable.",
       "batch_disable_done": "Batch disable finished: {{success}} succeeded, {{failed}} failed.",
       "batch_delete_select_required": "Please select at least one channel to delete.",
       "batch_delete_done": "Batch deletion finished: {{success}} succeeded, {{failed}} failed.",
       "balance_update_success": "Channel {{name}} balance updated successfully!",
+      "balance_update_submitted": "Balance refresh task submitted for channel {{name}}.",
+      "balance_update_reused": "An active balance refresh task already exists for channel {{name}}.",
+      "balance_update_failed": "Failed to refresh balance for channel {{name}}.",
+      "balance_update_submit_failed": "Failed to submit balance refresh task.",
       "all_balance_updated": "All enabled channel balances have been updated!",
       "operation_success": "Operation completed successfully!"
     },
+    "model_types": {
+      "text": "Text",
+      "image": "Image",
+      "audio": "Audio",
+      "video": "Video"
+    },
     "providers": {
-      "title": "Model Provider Catalog",
+      "title": "Provider Catalog",
       "search": "Search provider, name, source, model...",
       "fetch": {
         "provider": "Provider",
@@ -117,11 +132,13 @@
         "reload": "Reload Saved Catalog",
         "load_defaults": "Load Built-in Default Models",
         "add_provider": "Add Provider",
+        "refresh": "Refresh",
         "save": "Save Catalog"
       },
       "table": {
         "provider": "Provider ID",
         "name": "Display Name",
+        "capabilities": "Capabilities",
         "key": "API Key",
         "key_set": "Configured",
         "key_not_set": "Not Set",
@@ -129,7 +146,7 @@
         "source": "Source",
         "updated_at": "Updated At",
         "actions": "Actions",
-        "empty": "No model provider catalog",
+        "empty": "No provider catalog",
         "model_count": "{{count}} models"
       },
       "model_detail_table": {
@@ -146,11 +163,11 @@
         "empty": "No model details"
       },
       "dialog": {
-        "title_create": "Add Model Provider",
-        "title_edit": "Edit Model Provider",
-        "title_detail": "Model Provider Details",
-        "delete_title": "Confirm Delete Model Provider",
-        "delete_content": "Are you sure you want to delete model provider {{provider}}?",
+        "title_create": "Add Provider",
+        "title_edit": "Edit Provider",
+        "title_detail": "Provider Details",
+        "delete_title": "Confirm Delete Provider",
+        "delete_content": "Are you sure you want to delete provider {{provider}}?",
         "delete_confirm": "Delete",
         "edit": "Edit",
         "provider": "Provider ID",
@@ -170,13 +187,13 @@
         "confirm": "Confirm"
       },
       "messages": {
-        "load_failed": "Failed to load model provider catalog",
+        "load_failed": "Failed to load provider catalog",
         "load_defaults_failed": "Failed to load default model list",
         "defaults_loaded": "Built-in default model list loaded",
         "provider_required": "Provider id is required",
         "provider_exists": "This provider already exists, please edit it directly",
-        "save_failed": "Failed to save model provider catalog",
-        "save_success": "Model provider catalog saved",
+        "save_failed": "Failed to save provider catalog",
+        "save_success": "Provider catalog saved",
         "model_details_invalid": "Invalid model_details JSON format",
         "fetch_provider_required": "Please choose a provider first",
         "fetch_key_required": "Please provide API key first, or save one in provider config",
@@ -185,14 +202,14 @@
       }
     },
     "edit": {
-    "title_detail": "Channel Details",
-    "title_edit": "Update Channel Information",
-    "title_create": "Create New Channel",
-    "identifier": "Channel Identifier",
-    "identifier_placeholder": "e.g. openai-main",
-    "type": "Protocol Type",
-    "name": "Display Name",
-    "name_placeholder": "Optional, falls back to the channel identifier",
+      "title_detail": "Channel Details",
+      "title_edit": "Update Channel Information",
+      "title_create": "Create New Channel",
+      "identifier": "Channel Identifier",
+      "identifier_placeholder": "e.g. openai-main",
+      "type": "Protocol Type",
+      "name": "Channel Identifier",
+      "name_placeholder": "e.g. openai-main",
       "group": "Group",
       "group_placeholder": "Please select groups that can use this channel",
       "group_addition": "You can add a group in Group Management:",
@@ -227,11 +244,32 @@
           "selected": "Enabled",
           "name": "Name",
           "alias": "Alias",
+          "type": "Type",
+          "providers": "Provider Ownership",
           "price_unit": "Price Unit",
-          "input_price": "Input Override",
-          "output_price": "Output Override"
+          "input_price": "Input Price",
+          "output_price": "Output Price",
+          "actions": "Actions"
         },
-        "realtime_enabled": "Realtime model sync is enabled: changing address or key refreshes models and selects all by default.",
+        "filters": {
+          "all": "All Models",
+          "unassigned": "Unassigned Only",
+          "manual": "Manual Assignment Only"
+        },
+        "assignment_summary": "Assigned {{assigned}}, unassigned {{unassigned}}, auto-importable {{auto}}, manual {{manual}}",
+        "auto_assign": "Auto Import",
+        "auto_assign_empty": "No models can be auto-imported right now",
+        "auto_assign_success": "Imported {{success}} models, failed {{failed}}",
+        "provider_loading": "Loading providers...",
+        "provider_unassigned": "Unassigned",
+        "inactive": "Inactive",
+        "provider_add": "Add",
+        "provider_no_options": "Please create a provider first",
+        "provider_load_failed": "Failed to load provider list",
+        "provider_append_invalid": "Please select a provider and enter a model name",
+        "provider_append_success": "Model added to provider",
+        "provider_append_failed": "Failed to add model to provider",
+        "realtime_enabled": "Realtime model sync is enabled: changing address or key refreshes the model list, but does not select all by default.",
         "realtime_hint": "After address and key are filled, supported models will be fetched automatically.",
         "flow_title": "Create Channel Flow",
         "flow_steps": "1) Verify connection and fetch models 2) Select models actually supported by this channel 3) Submit creation. Re-verify after connection changes.",
@@ -239,45 +277,65 @@
         "protocol_support_yes": "This protocol supports connection verification.",
         "protocol_support_no": "This protocol does not support connection verification. Use system model list for selection.",
         "manual_mode_hint": "This protocol uses system model list and does not run online connection verification.",
+        "append_dialog": {
+          "title": "Add Model to Provider",
+          "provider": "Target Provider",
+          "provider_placeholder": "Select a provider",
+          "model": "Model",
+          "type": "Type",
+          "cancel": "Cancel",
+          "confirm": "Add"
+        },
         "verify_prerequisite": "Please provide address and key before verifying connection.",
         "verify_required": "Please verify connection and fetch models before submit.",
         "verify_in_progress": "Verifying connection and syncing models...",
         "verify_ready": "Connection verified. You can submit now.",
         "verify_stale": "Connection changed. Please verify and fetch models again.",
+        "search_placeholder": "Search model, alias, type, provider...",
         "empty": "No models available yet. Click \"Fetch Models\" or check your configuration.",
+        "empty_filtered": "No models match the current filter",
+        "empty_search": "No matching models",
         "last_synced": "Last synced at: {{time}}"
       },
-      "capability_tester": {
-        "title": "Capability Test",
-        "hint": "Run real probes against the current draft channel and selected models. Image or audio checks are skipped automatically when no matching model is selected.",
-        "button": "Run Tests",
-        "empty": "No test result yet. Click \"Run Tests\" to probe chat, responses, images, and audio one by one.",
+      "model_tester": {
+        "title": "Model Test",
+        "hint": "Shows the models selected in step 2 and lets you choose the real upstream endpoint for each model. Text models default to /v1/responses and can be switched to /v1/chat/completions. Other model types use fixed endpoints. Supports both single-row and bulk testing.",
+        "button": "Test Selected Models",
+        "single": "Test",
+        "task_created": "{{count}} test tasks submitted, {{reused}} active tasks reused.",
+        "selection": "Selected {{selected}} / {{total}}",
+        "selection_notice": "Model test results are only used to diagnose channel capability and do not change whether a selected model can be used. As long as the model is selected, it can still be used when creating or editing groups.",
+        "verify_required": "Please finish the current model tests before continuing.",
+        "empty": "No testable models yet. Please select models in step 2 first.",
         "last_tested": "Last tested at: {{time}}",
-        "test_success": "Capability tests completed",
-        "test_failed": "Capability test failed",
-        "stale": "Connection info or model selection changed. Please run capability tests again.",
+        "test_success": "Model test tasks submitted",
+        "test_failed": "Model test failed",
+        "stale": "Connection info, model selection, or endpoint changed. Please run model tests again.",
         "status": {
+          "pending": "Pending",
+          "running": "Running",
           "supported": "Supported",
           "unsupported": "Unsupported",
           "skipped": "Skipped"
         },
         "table": {
-          "capability": "Capability",
+          "model": "Model",
+          "type": "Type",
           "endpoint": "Endpoint",
-          "model": "Test Model",
           "status": "Status",
           "latency": "Latency",
-          "message": "Message"
+          "message": "Message",
+          "actions": "Actions"
         }
       },
-    "messages": {
-      "identifier_required": "Please enter a channel identifier!",
-      "identifier_invalid": "Channel identifier only supports lowercase letters, digits, and -, with a maximum length of 64 characters.",
-      "key_required": "Please enter the channel key!",
-      "groups_required": "Please select at least one group!",
+      "messages": {
+        "identifier_required": "Please enter a channel identifier!",
+        "identifier_invalid": "Channel identifier only supports lowercase letters, digits, and -, with a maximum length of 64 characters.",
+        "key_required": "Please enter the channel key!",
+        "groups_required": "Please select at least one group!",
         "models_required": "Please select at least one model!",
-        "create_draft_failed": "Failed to create channel draft",
-        "update_draft_failed": "Failed to save channel draft",
+        "create_channel_failed": "Failed to create channel",
+        "save_channel_failed": "Failed to save channel",
         "fetch_models_failed": "Failed to fetch models",
         "models_empty": "No available models were returned",
         "model_config_invalid": "Invalid model configuration. Check alias emptiness or duplicates, and ensure price overrides are non-negative.",
@@ -297,7 +355,7 @@
       "wizard": {
         "step_basic": "Step 1: Connection",
         "step_models": "Step 2: Model Selection",
-        "step_capabilities": "Step 3: Capability Test",
+        "step_model_tests": "Step 3: Model Test",
         "step_advanced": "Step 4: Advanced Settings"
       },
       "aws_region_placeholder": "region, e.g.: us-west-2",
@@ -321,10 +379,10 @@
   },
   "group_manage": {
     "title": "Group Management",
-    "search": "Search group ID, name, or description",
+    "search": "Search group ID or description",
     "table": {
       "id": "Group ID",
-      "name": "Display Name",
+      "name": "Group",
       "description": "Description",
       "channels": "Channels",
       "billing_ratio": "Billing Ratio",
@@ -341,8 +399,8 @@
     "form": {
       "id": "Group ID",
       "id_placeholder": "e.g. enterprise",
-      "name": "Display Name",
-      "name_placeholder": "e.g. Enterprise",
+      "name": "Group ID",
+      "name_placeholder": "e.g. enterprise",
       "description": "Description",
       "description_placeholder": "Optional description for this group",
       "billing_ratio": "Billing Ratio",
@@ -495,6 +553,8 @@
     }
   },
   "common": {
+    "loading": "Loading...",
+    "no_data": "No data",
     "quota": {
       "display": "Equivalent: ${{amount}}",
       "display_short": "${{amount}}",
@@ -503,7 +563,7 @@
   },
   "redemption": {
     "title": "Redemption Management",
-    "search": "Search redemption codes by ID and name ...",
+    "search": "Search redemption codes and names ...",
     "table": {
       "id": "ID",
       "name": "Name",
@@ -522,7 +582,7 @@
       "enable": "Enable",
       "disable": "Disable",
       "edit": "Edit",
-      "add": "Add New Code",
+      "add": "Add Code",
       "refresh": "Refresh"
     },
     "status": {
@@ -543,6 +603,12 @@
       "buttons": {
         "submit": "Submit",
         "cancel": "Cancel"
+      }
+    },
+    "detail": {
+      "code": "Code",
+      "buttons": {
+        "back": "Back"
       }
     },
     "messages": {
@@ -589,6 +655,63 @@
       "query": "Action",
       "submit": "Query",
       "refresh": "Refresh"
+    }
+  },
+  "task": {
+    "title": "Tasks",
+    "empty": "No tasks yet",
+    "summary": "{{total}} tasks",
+  "filters": {
+    "type_all": "All types",
+    "status_all": "All statuses",
+    "channel_id": "Filter by channel ID",
+    "quick_all": "All"
+  },
+    "types": {
+      "channel_model_test": "Model Test",
+      "channel_refresh_models": "Refresh Models",
+      "channel_refresh_balance": "Refresh Balance"
+    },
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "canceled": "Canceled"
+    },
+    "table": {
+      "type": "Type",
+      "channel": "Channel",
+      "model": "Model",
+      "status": "Status",
+      "created_at": "Created At",
+      "finished_at": "Finished At",
+      "message": "Result",
+      "actions": "Actions"
+    },
+    "buttons": {
+      "refresh": "Refresh",
+      "model_tests": "Test Tasks",
+      "running": "Running",
+      "retry": "Retry",
+      "cancel": "Cancel"
+    },
+  "detail": {
+    "buttons": {
+      "back": "Back",
+      "channel": "View Channel"
+    },
+    "endpoint": "Endpoint",
+    "payload": "Task Payload",
+    "result": "Execution Result",
+      "error": "Error Message"
+    },
+    "messages": {
+      "load_failed": "Failed to load tasks",
+      "retry_success": "Task requeued",
+      "retry_failed": "Failed to retry task",
+      "cancel_success": "Task canceled",
+      "cancel_failed": "Failed to cancel task"
     }
   },
   "user": {
@@ -660,7 +783,8 @@
       "sort_by": "Sort By"
     },
     "buttons": {
-      "add": "Add New User",
+      "add": "Add User",
+      "refresh": "Refresh",
       "delete": "Delete",
       "delete_user": "Delete User",
       "enable": "Enable",
@@ -698,7 +822,7 @@
       "span": "Span",
       "start": "Start",
       "end": "End",
-      "providers": "Model Providers",
+      "providers": "Providers",
       "no_providers": "No models available",
       "granularity_options": {
         "hour": "Hour",
@@ -774,6 +898,16 @@
       "other": "Other Settings"
     },
     "personal": {
+      "tokens": {
+        "title": "Tokens & Invites"
+      },
+      "password": {
+        "title": "Change Password"
+      },
+      "delete": {
+        "title": "Delete Account",
+        "confirm": "Confirm Delete"
+      },
       "general": {
         "title": "General Settings",
         "system_token_notice": "Note: The token generated here is for system management, not for requesting OpenAI related services.",
@@ -823,9 +957,18 @@
         "title": "General Settings",
         "server_address": "Server Address",
         "server_address_placeholder": "e.g.: https://yourdomain.com",
+        "system_name": "System Name",
+        "logo": "Logo URL",
         "buttons": {
           "update": "Update Server Address"
         }
+      },
+      "top_up_link": "Top-up Link",
+      "chat_link": "Chat Link",
+      "notice": "Site Announcement",
+      "notice_placeholder": "Supports Markdown",
+      "buttons": {
+        "save": "Save"
       },
       "login": {
         "title": "Login & Registration Settings",

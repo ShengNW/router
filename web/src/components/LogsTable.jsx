@@ -33,7 +33,7 @@ function renderTimestamp(timestamp, trace_id) {
           showWarning(`Trace ID 复制失败：${trace_id}`);
         }
       }}
-      style={{ cursor: 'pointer' }}
+      className='router-row-clickable'
     >
       {timestamp2string(timestamp)}
     </code>
@@ -44,37 +44,37 @@ function renderType(type) {
   switch (type) {
     case 1:
       return (
-        <Label basic color='green'>
+        <Label basic color='green' className='router-tag'>
           充值
         </Label>
       );
     case 2:
       return (
-        <Label basic color='olive'>
+        <Label basic color='olive' className='router-tag'>
           消费
         </Label>
       );
     case 3:
       return (
-        <Label basic color='orange'>
+        <Label basic color='orange' className='router-tag'>
           管理
         </Label>
       );
     case 4:
       return (
-        <Label basic color='purple'>
+        <Label basic color='purple' className='router-tag'>
           系统
         </Label>
       );
     case 5:
       return (
-        <Label basic color='violet'>
+        <Label basic color='violet' className='router-tag'>
           测试
         </Label>
       );
     default:
       return (
-        <Label basic color='black'>
+        <Label basic color='black' className='router-tag'>
           未知
         </Label>
       );
@@ -98,7 +98,7 @@ function renderDetail(log) {
       {log.elapsed_time && (
         <Label
           basic
-          size={'mini'}
+          className='router-tag'
           color={getColorByElapsedTime(log.elapsed_time)}
         >
           {log.elapsed_time} ms
@@ -106,20 +106,27 @@ function renderDetail(log) {
       )}
       {log.is_stream && (
         <>
-          <Label size={'mini'} color='pink'>
+          <Label className='router-tag' color='pink'>
             Stream
           </Label>
         </>
       )}
       {log.system_prompt_reset && (
         <>
-          <Label basic size={'mini'} color='red'>
+          <Label basic className='router-tag' color='red'>
             System Prompt Reset
           </Label>
         </>
       )}
     </>
   );
+}
+
+function getLogChannelLabel(log) {
+  if (!log) {
+    return '';
+  }
+  return log.channel_name || log.channel || '';
 }
 
 const LogsTable = () => {
@@ -213,24 +220,25 @@ const LogsTable = () => {
   };
 
   const loadLogs = useCallback(
-    async (startIdx) => {
+    async (page) => {
+      const normalizedPage = Number(page) > 0 ? Number(page) : 1;
       let url = '';
       let localStartTimestamp = Date.parse(start_timestamp) / 1000;
       let localEndTimestamp = Date.parse(end_timestamp) / 1000;
       if (isAdminUser) {
-        url = `/api/v1/admin/log/?p=${startIdx}&type=${logType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}`;
+        url = `/api/v1/admin/log/?page=${normalizedPage}&type=${logType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}`;
       } else {
-        url = `/api/v1/public/log/self/?p=${startIdx}&type=${logType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
+        url = `/api/v1/public/log/self/?page=${normalizedPage}&type=${logType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
       }
       const res = await API.get(url);
       const { success, message, data } = res.data;
       if (success) {
-        if (startIdx === 0) {
+        if (normalizedPage === 1) {
           setLogs(data);
         } else {
           setLogs((prev) => {
             let next = [...prev];
-            next.splice(startIdx * ITEMS_PER_PAGE, data.length, ...data);
+            next.splice((normalizedPage - 1) * ITEMS_PER_PAGE, data.length, ...data);
             return next;
           });
         }
@@ -255,7 +263,7 @@ const LogsTable = () => {
     (async () => {
       if (activePage === Math.ceil(logs.length / ITEMS_PER_PAGE) + 1) {
         // In this case we have to load more data and then append them.
-        await loadLogs(activePage - 1);
+        await loadLogs(activePage);
       }
       setActivePage(activePage);
     })();
@@ -264,7 +272,7 @@ const LogsTable = () => {
   const refresh = useCallback(async () => {
     setLoading(true);
     setActivePage(1);
-    await loadLogs(0);
+    await loadLogs(1);
   }, [loadLogs]);
 
   useEffect(() => {
@@ -296,13 +304,13 @@ const LogsTable = () => {
 
   return (
     <>
-      <Header as='h3'>
+      <Header as='h3' className='router-section-title'>
         {t('log.usage_details')}（{t('log.total_quota')}：
         {showStat && renderQuota(stat.quota, t)}
         {!showStat && (
           <span
             onClick={handleEyeClick}
-            style={{ cursor: 'pointer', color: 'gray' }}
+            className='router-row-clickable router-text-muted'
           >
             {t('log.click_to_view')}
           </span>
@@ -312,9 +320,9 @@ const LogsTable = () => {
       <Form>
         <Form.Group>
           <Form.Input
+            className='router-section-input'
             fluid
             label={t('log.table.token_name')}
-            size={'small'}
             width={3}
             value={token_name}
             placeholder={t('log.table.token_name_placeholder')}
@@ -322,9 +330,9 @@ const LogsTable = () => {
             onChange={handleInputChange}
           />
           <Form.Input
+            className='router-section-input'
             fluid
             label={t('log.table.model_name')}
-            size={'small'}
             width={3}
             value={model_name}
             placeholder={t('log.table.model_name_placeholder')}
@@ -332,9 +340,9 @@ const LogsTable = () => {
             onChange={handleInputChange}
           />
           <Form.Input
+            className='router-section-input'
             fluid
             label={t('log.table.start_time')}
-            size={'small'}
             width={4}
             value={start_timestamp}
             type='datetime-local'
@@ -342,9 +350,9 @@ const LogsTable = () => {
             onChange={handleInputChange}
           />
           <Form.Input
+            className='router-section-input'
             fluid
             label={t('log.table.end_time')}
-            size={'small'}
             width={4}
             value={end_timestamp}
             type='datetime-local'
@@ -352,9 +360,9 @@ const LogsTable = () => {
             onChange={handleInputChange}
           />
           <Form.Button
+            className='router-section-button'
             fluid
             label={t('log.buttons.query')}
-            size={'small'}
             width={2}
             onClick={refresh}
           >
@@ -365,9 +373,9 @@ const LogsTable = () => {
           <>
             <Form.Group>
               <Form.Input
+                className='router-section-input'
                 fluid
                 label={t('log.table.channel_id')}
-                size={'small'}
                 width={3}
                 value={channel}
                 placeholder={t('log.table.channel_id_placeholder')}
@@ -375,9 +383,9 @@ const LogsTable = () => {
                 onChange={handleInputChange}
               />
               <Form.Input
+                className='router-section-input'
                 fluid
                 label={t('log.table.username')}
-                size={'small'}
                 width={3}
                 value={username}
                 placeholder={t('log.table.username_placeholder')}
@@ -388,17 +396,18 @@ const LogsTable = () => {
           </>
         )}
         <Form.Input
+          className='router-section-input'
           icon='search'
           placeholder={t('log.search')}
           value={searchKeyword}
           onChange={(e, { value }) => setSearchKeyword(value)}
         />
       </Form>
-      <Table basic={'very'} compact size='small'>
+      <Table basic={'very'} compact className='router-list-table'>
         <Table.Header>
           <Table.Row>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortLog('created_time');
               }}
@@ -408,7 +417,7 @@ const LogsTable = () => {
             </Table.HeaderCell>
             {isAdminUser && (
               <Table.HeaderCell
-                style={{ cursor: 'pointer' }}
+                className='router-sortable-header'
                 onClick={() => {
                   sortLog('channel');
                 }}
@@ -418,7 +427,7 @@ const LogsTable = () => {
               </Table.HeaderCell>
             )}
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortLog('type');
               }}
@@ -427,7 +436,7 @@ const LogsTable = () => {
               {t('log.table.type')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortLog('model_name');
               }}
@@ -439,7 +448,7 @@ const LogsTable = () => {
               <>
                 {isAdminUser && (
                   <Table.HeaderCell
-                    style={{ cursor: 'pointer' }}
+                    className='router-sortable-header'
                     onClick={() => {
                       sortLog('username');
                     }}
@@ -449,7 +458,7 @@ const LogsTable = () => {
                   </Table.HeaderCell>
                 )}
                 <Table.HeaderCell
-                  style={{ cursor: 'pointer' }}
+                  className='router-sortable-header'
                   onClick={() => {
                     sortLog('token_name');
                   }}
@@ -458,7 +467,7 @@ const LogsTable = () => {
                   {t('log.table.token_name')}
                 </Table.HeaderCell>
                 <Table.HeaderCell
-                  style={{ cursor: 'pointer' }}
+                  className='router-sortable-header'
                   onClick={() => {
                     sortLog('prompt_tokens');
                   }}
@@ -467,7 +476,7 @@ const LogsTable = () => {
                   {t('log.table.prompt_tokens')}
                 </Table.HeaderCell>
                 <Table.HeaderCell
-                  style={{ cursor: 'pointer' }}
+                  className='router-sortable-header'
                   onClick={() => {
                     sortLog('completion_tokens');
                   }}
@@ -476,7 +485,7 @@ const LogsTable = () => {
                   {t('log.table.completion_tokens')}
                 </Table.HeaderCell>
                 <Table.HeaderCell
-                  style={{ cursor: 'pointer' }}
+                  className='router-sortable-header'
                   onClick={() => {
                     sortLog('quota');
                   }}
@@ -508,10 +517,11 @@ const LogsTable = () => {
                       {log.channel ? (
                         <Label
                           basic
+                          className='router-tag'
                           as={Link}
                           to={`/channel/edit/${log.channel}`}
                         >
-                          {log.channel}
+                          {getLogChannelLabel(log)}
                         </Label>
                       ) : (
                         ''
@@ -529,6 +539,7 @@ const LogsTable = () => {
                           {log.username ? (
                             <Label
                               basic
+                              className='router-tag'
                               as={Link}
                               to={`/user/edit/${log.user_id}`}
                             >
@@ -564,30 +575,33 @@ const LogsTable = () => {
         <Table.Footer>
           <Table.Row>
             <Table.HeaderCell colSpan={'10'}>
-              <Select
-                placeholder={t('log.type.select')}
-                options={LOG_OPTIONS}
-                style={{ marginRight: '8px' }}
-                name='logType'
-                value={logType}
-                onChange={(e, { name, value }) => {
-                  setLogType(value);
-                }}
-              />
-              <Button size='small' onClick={refresh} loading={loading}>
-                {t('log.buttons.refresh')}
-              </Button>
-              <Pagination
-                floated='right'
-                activePage={activePage}
-                onPageChange={onPaginationChange}
-                size='small'
-                siblingRange={1}
-                totalPages={
-                  Math.ceil(logs.length / ITEMS_PER_PAGE) +
-                  (logs.length % ITEMS_PER_PAGE === 0 ? 1 : 0)
-                }
-              />
+              <div className='router-toolbar'>
+                <div className='router-toolbar-start'>
+                  <Select
+                    className='router-section-dropdown'
+                    placeholder={t('log.type.select')}
+                    options={LOG_OPTIONS}
+                    name='logType'
+                    value={logType}
+                    onChange={(e, { name, value }) => {
+                      setLogType(value);
+                    }}
+                  />
+                  <Button className='router-page-button' onClick={refresh} loading={loading}>
+                    {t('log.buttons.refresh')}
+                  </Button>
+                </div>
+                <Pagination
+                  className='router-page-pagination'
+                  activePage={activePage}
+                  onPageChange={onPaginationChange}
+                  siblingRange={1}
+                  totalPages={
+                    Math.ceil(logs.length / ITEMS_PER_PAGE) +
+                    (logs.length % ITEMS_PER_PAGE === 0 ? 1 : 0)
+                  }
+                />
+              </div>
             </Table.HeaderCell>
           </Table.Row>
         </Table.Footer>

@@ -6,8 +6,16 @@ import {
   Header,
   Card,
   Statistic,
+  Label,
+  Table,
 } from 'semantic-ui-react';
-import { API, showError, showInfo, showSuccess } from '../../helpers';
+import {
+  API,
+  showError,
+  showInfo,
+  showSuccess,
+  timestamp2string,
+} from '../../helpers';
 import { renderQuota } from '../../helpers/render';
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +26,8 @@ const TopUp = () => {
   const [userQuota, setUserQuota] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [user, setUser] = useState({});
+  const [topupLogs, setTopupLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const topUp = async () => {
     if (redemptionCode === '') {
@@ -27,7 +37,7 @@ const TopUp = () => {
     setIsSubmitting(true);
     try {
       const res = await API.post('/api/v1/public/user/topup', {
-        key: redemptionCode,
+        code: redemptionCode,
       });
       const { success, message, data } = res.data;
       if (success) {
@@ -36,6 +46,7 @@ const TopUp = () => {
           return quota + data;
         });
         setRedemptionCode('');
+        getTopupLogs().then();
       } else {
         showError(message);
       }
@@ -71,6 +82,21 @@ const TopUp = () => {
     }
   };
 
+  const getTopupLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const res = await API.get('/api/v1/public/log/self/?page=1&type=1');
+      const { success, message, data } = res.data;
+      if (success) {
+        setTopupLogs(Array.isArray(data) ? data : []);
+      } else {
+        showError(message);
+      }
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
   useEffect(() => {
     let status = localStorage.getItem('status');
     if (status) {
@@ -80,6 +106,7 @@ const TopUp = () => {
       }
     }
     getUserQuota().then();
+    getTopupLogs().then();
   }, []);
 
   return (
@@ -87,49 +114,27 @@ const TopUp = () => {
       <Card fluid className='chart-card'>
         <Card.Content>
           <Card.Header>
-            <Header as='h2'>{t('topup.title')}</Header>
+            <Header as='h2' className='router-page-title'>{t('topup.title')}</Header>
           </Card.Header>
 
           <Grid columns={2} stackable>
             <Grid.Column>
               <Card
                 fluid
-                style={{
-                  height: '100%',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                }}
+                className='router-soft-card router-soft-card-fill'
               >
-                <Card.Content
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <Card.Header>
-                    <Header as='h3' style={{ color: '#2185d0', margin: '1em' }}>
+                <Card.Content className='router-card-fill'>
+                  <Card.Header className='router-card-header'>
+                    <Header as='h3' className='router-section-title router-title-accent-primary'>
                       <i className='credit card icon'></i>
                       {t('topup.get_code.title')}
                     </Header>
                   </Card.Header>
-                  <Card.Description
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <div style={{ textAlign: 'center', paddingTop: '1em' }}>
-                        <Statistic>
-                          <Statistic.Value style={{ color: '#2185d0' }}>
+                  <Card.Description className='router-card-fill'>
+                    <div className='router-card-body-spread'>
+                      <div className='router-center-panel'>
+                        <Statistic className='router-accent-statistic'>
+                          <Statistic.Value>
                             {renderQuota(userQuota, t)}
                           </Statistic.Value>
                           <Statistic.Label>
@@ -138,14 +143,11 @@ const TopUp = () => {
                         </Statistic>
                       </div>
 
-                      <div
-                        style={{ textAlign: 'center', paddingBottom: '1em' }}
-                      >
+                      <div className='router-action-footer'>
                         <Button
+                          className='router-section-button router-action-button-wide'
                           primary
-                          size='large'
                           onClick={openTopUpLink}
-                          style={{ width: '80%' }}
                         >
                           {t('topup.get_code.button')}
                         </Button>
@@ -159,40 +161,19 @@ const TopUp = () => {
             <Grid.Column>
               <Card
                 fluid
-                style={{
-                  height: '100%',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                }}
+                className='router-soft-card router-soft-card-fill'
               >
-                <Card.Content
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <Card.Header>
-                    <Header as='h3' style={{ color: '#21ba45', margin: '1em' }}>
+                <Card.Content className='router-card-fill'>
+                  <Card.Header className='router-card-header'>
+                    <Header as='h3' className='router-section-title router-title-accent-positive'>
                       <i className='ticket alternate icon'></i>
                       {t('topup.redeem_code.title')}
                     </Header>
                   </Card.Header>
-                  <Card.Description
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                      }}
-                    >
+                  <Card.Description className='router-card-fill'>
+                    <div className='router-card-body-spread'>
                       <Form.Input
+                        className='router-section-input'
                         fluid
                         icon='key'
                         iconPosition='left'
@@ -208,6 +189,7 @@ const TopUp = () => {
                         }}
                         action={
                           <Button
+                            className='router-section-button'
                             icon='paste'
                             content={t('topup.redeem_code.paste')}
                             onClick={async () => {
@@ -223,11 +205,11 @@ const TopUp = () => {
                         }
                       />
 
-                      <div style={{ paddingBottom: '1em' }}>
+                      <div className='router-action-footer'>
                         <Button
+                          className='router-section-button'
                           color='green'
                           fluid
-                          size='large'
                           onClick={topUp}
                           loading={isSubmitting}
                           disabled={isSubmitting}
@@ -243,6 +225,70 @@ const TopUp = () => {
               </Card>
             </Grid.Column>
           </Grid>
+
+          <Card fluid className='router-soft-card' style={{ marginTop: '1rem' }}>
+            <Card.Content>
+              <Card.Header className='router-card-header'>
+                <div className='router-toolbar'>
+                  <Header as='h3' className='router-section-title router-title-accent-secondary'>
+                    <i className='history icon'></i>
+                    {t('topup.history.title')}
+                  </Header>
+                  <Button
+                    className='router-section-button'
+                    onClick={getTopupLogs}
+                    loading={loadingLogs}
+                  >
+                    {t('topup.history.refresh')}
+                  </Button>
+                </div>
+              </Card.Header>
+              <Table basic='very' compact className='router-list-table'>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.HeaderCell width={3}>
+                      {t('topup.history.columns.time')}
+                    </Table.HeaderCell>
+                    <Table.HeaderCell width={2}>
+                      {t('topup.history.columns.quota')}
+                    </Table.HeaderCell>
+                    <Table.HeaderCell>
+                      {t('topup.history.columns.detail')}
+                    </Table.HeaderCell>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {topupLogs.length === 0 ? (
+                    <Table.Row>
+                      <Table.Cell colSpan='3' className='router-text-muted'>
+                        {loadingLogs
+                          ? t('common.loading')
+                          : t('topup.history.empty')}
+                      </Table.Cell>
+                    </Table.Row>
+                  ) : (
+                    topupLogs.map((log) => (
+                      <Table.Row key={log.trace_id || `${log.created_at}-${log.content}`}>
+                        <Table.Cell>
+                          {log.created_at ? timestamp2string(log.created_at) : '-'}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {log.quota ? (
+                            <Label basic color='green' className='router-tag'>
+                              {renderQuota(log.quota, t)}
+                            </Label>
+                          ) : (
+                            '-'
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>{log.content || '-'}</Table.Cell>
+                      </Table.Row>
+                    ))
+                  )}
+                </Table.Body>
+              </Table>
+            </Card.Content>
+          </Card>
         </Card.Content>
       </Card>
     </div>

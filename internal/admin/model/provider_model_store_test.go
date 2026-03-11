@@ -27,6 +27,30 @@ func TestCanonicalizeModelNameForProvider(t *testing.T) {
 			model:    "gpt-4o-mini",
 			want:     "gpt-4o-mini",
 		},
+		{
+			name:     "strip black-forest-labs self prefix",
+			provider: "black-forest-labs",
+			model:    "black-forest-labs/flux-1.1-pro",
+			want:     "flux-1.1-pro",
+		},
+		{
+			name:     "strip x-ai alias prefix for xai provider",
+			provider: "xai",
+			model:    "x-ai/grok-beta",
+			want:     "grok-beta",
+		},
+		{
+			name:     "strip meta alias prefix for meta provider",
+			provider: "meta",
+			model:    "meta/llama-2-13b-chat",
+			want:     "llama-2-13b-chat",
+		},
+		{
+			name:     "strip embedded meta prefix after namespace removal",
+			provider: "meta",
+			model:    "meta/meta-llama-3-70b",
+			want:     "llama-3-70b",
+		},
 	}
 
 	for _, tt := range tests {
@@ -39,25 +63,25 @@ func TestCanonicalizeModelNameForProvider(t *testing.T) {
 	}
 }
 
-func TestBuildModelProviderModelRows_CanonicalizeAndMergeDuplicates(t *testing.T) {
-	rows := BuildModelProviderModelRows("openai", []ModelProviderModelDetail{
+func TestBuildProviderModelRows_CanonicalizeAndMergeDuplicates(t *testing.T) {
+	rows := BuildProviderModelRows("openai", []ProviderModelDetail{
 		{
 			Model:       "gpt-3.5-turbo-0613",
-			Type:        ModelProviderModelTypeText,
+			Type:        ProviderModelTypeText,
 			InputPrice:  0,
 			OutputPrice: 0.001,
-			PriceUnit:   ModelProviderPriceUnitPer1KTokens,
-			Currency:    ModelProviderPriceCurrencyUSD,
+			PriceUnit:   ProviderPriceUnitPer1KTokens,
+			Currency:    ProviderPriceCurrencyUSD,
 			Source:      "manual",
 			UpdatedAt:   100,
 		},
 		{
 			Model:       "openai/gpt-3.5-turbo-0613",
-			Type:        ModelProviderModelTypeText,
+			Type:        ProviderModelTypeText,
 			InputPrice:  0.002,
 			OutputPrice: 0,
-			PriceUnit:   ModelProviderPriceUnitPer1KTokens,
-			Currency:    ModelProviderPriceCurrencyUSD,
+			PriceUnit:   ProviderPriceUnitPer1KTokens,
+			Currency:    ProviderPriceCurrencyUSD,
 			Source:      "default",
 			UpdatedAt:   200,
 		},

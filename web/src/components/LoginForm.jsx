@@ -142,15 +142,14 @@ const LoginForm = () => {
             <div className='router-login-section'>
               <Button
                 fluid
-                size='large'
-                className='router-login-main-btn router-wallet-button'
+                className='router-login-main-btn router-auth-button router-wallet-button'
                 onClick={onWalletLoginClicked}
                 disabled={walletLoginDisabled}
               >
                 {t('auth.login.wallet_button', '使用钱包登录')}
               </Button>
               {walletLoginDisabled && (
-                <Message warning size='small'>
+                <Message warning className='router-auth-message'>
                   {t('auth.login.wallet_disabled', '钱包登录未开启，请联系管理员')}
                 </Message>
               )}
@@ -163,8 +162,7 @@ const LoginForm = () => {
                 <Button
                   basic
                   fluid
-                  size='large'
-                  className='router-login-main-btn router-password-toggle'
+                  className='router-login-main-btn router-auth-button router-password-toggle'
                   onClick={() =>
                     setShowPasswordLogin((previousState) => !previousState)
                   }
@@ -175,8 +173,9 @@ const LoginForm = () => {
 
               {showPasswordLogin && (
                 <>
-                  <Form size='large' className='router-login-form'>
+                  <Form className='router-login-form'>
                     <Form.Input
+                      className='router-auth-input'
                       fluid
                       icon='user'
                       iconPosition='left'
@@ -186,6 +185,7 @@ const LoginForm = () => {
                       onChange={handleChange}
                     />
                     <Form.Input
+                      className='router-auth-input'
                       fluid
                       icon='lock'
                       iconPosition='left'
@@ -197,8 +197,7 @@ const LoginForm = () => {
                     />
                     <Button
                       fluid
-                      size='large'
-                      className='router-password-submit'
+                      className='router-auth-button router-password-submit'
                       onClick={handleSubmit}
                     >
                       {t('auth.login.button')}

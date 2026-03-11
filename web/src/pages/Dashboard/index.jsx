@@ -915,7 +915,7 @@ const Dashboard = () => {
         <div className='dashboard-spend-stack'>
           <Card fluid className='chart-card dashboard-spend-card'>
             <Card.Content>
-              <Card.Header>{t('dashboard.spending.overview.title')}</Card.Header>
+              <Card.Header className='router-card-header router-section-title'>{t('dashboard.spending.overview.title')}</Card.Header>
               <div className='dashboard-spend-summary'>
                 <div className='dashboard-spend-summary-row'>
                   <div className='dashboard-spend-metric'>
@@ -934,7 +934,7 @@ const Dashboard = () => {
                     </div>
                     <div className='dashboard-spend-period-row'>
                       <Dropdown
-                        className='dashboard-spend-period'
+                        className='dashboard-spend-period router-section-dropdown'
                         selection
                         fluid
                         options={overviewPeriodOptions}
@@ -953,20 +953,23 @@ const Dashboard = () => {
                 <span>{t('dashboard.spending.overview.drill_hint')}</span>
               </div>
               <div className='dashboard-spend-metric-switch'>
-                <Button.Group size='small'>
+                <Button.Group>
                   <Button
+                    className='router-inline-button'
                     active={overviewMetric === 'requests'}
                     onClick={() => setOverviewMetric('requests')}
                   >
                     {t('dashboard.spending.metrics.requests')}
                   </Button>
                   <Button
+                    className='router-inline-button'
                     active={overviewMetric === 'tokens'}
                     onClick={() => setOverviewMetric('tokens')}
                   >
                     {t('dashboard.spending.metrics.tokens')}
                   </Button>
                   <Button
+                    className='router-inline-button'
                     active={overviewMetric === 'cost'}
                     onClick={() => setOverviewMetric('cost')}
                   >
@@ -1021,17 +1024,19 @@ const Dashboard = () => {
           </Card>
           <Card fluid className='chart-card dashboard-spend-card'>
             <Card.Content>
-              <Card.Header>{t('dashboard.spending.calendar.title')}</Card.Header>
+              <Card.Header className='router-card-header router-section-title'>{t('dashboard.spending.calendar.title')}</Card.Header>
               <div className='dashboard-calendar-toolbar'>
                 <div className='calendar-view-toggle'>
-                  <Button.Group size='small'>
+                  <Button.Group>
                     <Button
+                      className='router-inline-button'
                       active={calendarView === 'calendar'}
                       onClick={() => setCalendarView('calendar')}
                     >
                       {t('dashboard.spending.calendar.view.calendar')}
                     </Button>
                     <Button
+                      className='router-inline-button'
                       active={calendarView === 'bar'}
                       onClick={() => setCalendarView('bar')}
                     >
@@ -1040,10 +1045,11 @@ const Dashboard = () => {
                   </Button.Group>
                 </div>
                 <div className='calendar-granularity-toggle'>
-                  <Button.Group size='small'>
+                  <Button.Group>
                     {['hour', 'day', 'week', 'month', 'year'].map((unit) => (
                       <Button
                         key={unit}
+                        className='router-inline-button'
                         active={calendarGranularity === unit}
                         onClick={() => setCalendarGranularity(unit)}
                       >
@@ -1053,14 +1059,16 @@ const Dashboard = () => {
                   </Button.Group>
                 </div>
                 <div className='calendar-unit-toggle'>
-                  <Button.Group size='small'>
+                  <Button.Group>
                     <Button
+                      className='router-inline-button'
                       active={calendarUnit === 'usd'}
                       onClick={() => setCalendarUnit('usd')}
                     >
                       {t('dashboard.spending.calendar.unit.usd')}
                     </Button>
                     <Button
+                      className='router-inline-button'
                       active={calendarUnit === 'token'}
                       onClick={() => setCalendarUnit('token')}
                     >
@@ -1167,14 +1175,17 @@ const Dashboard = () => {
           </Card>
           <Card fluid className='chart-card dashboard-spend-card'>
             <Card.Content>
-              <Card.Header>
-                {t('dashboard.spending.details.title')}
-                <Dropdown
-                  selection
-                  options={detailSortOptions}
-                  value={detailSort}
-                  onChange={(e, { value }) => setDetailSort(value)}
-                />
+              <Card.Header className='router-card-header router-section-title'>
+                <div className='router-toolbar'>
+                  <span>{t('dashboard.spending.details.title')}</span>
+                  <Dropdown
+                    className='router-section-dropdown'
+                    selection
+                    options={detailSortOptions}
+                    value={detailSort}
+                    onChange={(e, { value }) => setDetailSort(value)}
+                  />
+                </div>
               </Card.Header>
               <div className='dashboard-spend-dimension'>
                 {t('dashboard.spending.details.dimension', {
@@ -1203,12 +1214,13 @@ const Dashboard = () => {
       </div>
       <Card fluid className='chart-card dashboard-filter-card'>
         <Card.Content>
-          <Card.Header>{t('dashboard.filters.title')}</Card.Header>
+          <Card.Header className='router-card-header router-section-title'>{t('dashboard.filters.title')}</Card.Header>
           <Form>
             <Form.Group widths='equal' className='dashboard-filter-row'>
               <Form.Field>
                 <label>{t('dashboard.filters.granularity')}</label>
                 <Dropdown
+                  className='router-section-dropdown'
                   selection
                   options={granularityOptions}
                   value={granularity}
@@ -1218,6 +1230,7 @@ const Dashboard = () => {
               <Form.Field>
                 <label>{t('dashboard.filters.start')}</label>
                 <Input
+                  className='router-section-input'
                   type='date'
                   value={startDate}
                   onChange={handleStartChange}
@@ -1226,21 +1239,21 @@ const Dashboard = () => {
               <Form.Field>
                 <label>{t('dashboard.filters.span')}</label>
                 <Input
+                  className={`router-section-input ${spanAuto ? 'dashboard-muted' : ''}`.trim()}
                   type='number'
                   min={1}
                   max={spanLimits[granularity]}
                   value={span}
                   onChange={handleSpanChange}
-                  className={spanAuto ? 'dashboard-muted' : ''}
                 />
               </Form.Field>
               <Form.Field>
                 <label>{t('dashboard.filters.end')}</label>
                 <Input
+                  className={`router-section-input ${endAuto ? 'dashboard-muted' : ''}`.trim()}
                   type='date'
                   value={endDate}
                   onChange={handleEndChange}
-                  className={endAuto ? 'dashboard-muted' : ''}
                 />
               </Form.Field>
             </Form.Group>
@@ -1293,7 +1306,7 @@ const Dashboard = () => {
         <Grid.Column>
           <Card fluid className='chart-card'>
             <Card.Content>
-              <Card.Header>
+              <Card.Header className='router-card-header router-section-title'>
                 {t('dashboard.charts.requests.title')}
                 {/* <span className='stat-value'>{summaryData.todayRequests}</span> */}
               </Card.Header>
@@ -1345,7 +1358,7 @@ const Dashboard = () => {
         <Grid.Column>
           <Card fluid className='chart-card'>
             <Card.Content>
-              <Card.Header>
+              <Card.Header className='router-card-header router-section-title'>
                 {t('dashboard.charts.quota.title')}
                 {/* <span className='stat-value'>
                   ${summaryData.todayQuota.toFixed(3)}
@@ -1399,7 +1412,7 @@ const Dashboard = () => {
         <Grid.Column>
           <Card fluid className='chart-card'>
             <Card.Content>
-              <Card.Header>
+              <Card.Header className='router-card-header router-section-title'>
                 {t('dashboard.charts.tokens.title')}
                 {/* <span className='stat-value'>{summaryData.todayTokens}</span> */}
               </Card.Header>
@@ -1452,7 +1465,7 @@ const Dashboard = () => {
       {/* 模型使用统计 */}
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header>{t('dashboard.statistics.title')}</Card.Header>
+          <Card.Header className='router-card-header router-section-title'>{t('dashboard.statistics.title')}</Card.Header>
           <div className='chart-container'>
             <ResponsiveContainer width='100%' height={300}>
               <BarChart data={modelData}>

@@ -2,8 +2,8 @@ package utils
 
 import "strings"
 
-// NormalizeModelProvider canonicalizes provider aliases for filtering and persistence.
-func NormalizeModelProvider(provider string) string {
+// NormalizeProvider canonicalizes provider aliases for filtering and persistence.
+func NormalizeProvider(provider string) string {
 	trimmed := strings.TrimSpace(provider)
 	if trimmed == "" {
 		return ""
@@ -16,9 +16,11 @@ func NormalizeModelProvider(provider string) string {
 		return "google"
 	case "claude", "anthropic":
 		return "anthropic"
-	case "xai", "grok":
+	case "xai", "x-ai", "x.ai", "grok":
 		return "xai"
-	case "mistral":
+	case "meta", "meta-llama", "metallama", "meta_llama":
+		return "meta"
+	case "mistral", "mistralai":
 		return "mistral"
 	case "cohere", "command-r", "commandr":
 		return "cohere"
@@ -34,20 +36,22 @@ func NormalizeModelProvider(provider string) string {
 		return "volcengine"
 	case "minimax", "abab":
 		return "minimax"
+	case "black-forest-labs", "blackforestlabs", "bfl":
+		return "black-forest-labs"
 	default:
 		return lower
 	}
 }
 
-// ResolveModelProvider infers provider from model naming rules to keep backend and frontend consistent.
-func ResolveModelProvider(modelName string) string {
+// ResolveProvider infers provider from model naming rules to keep backend and frontend consistent.
+func ResolveProvider(modelName string) string {
 	name := strings.TrimSpace(modelName)
 	if name == "" {
 		return "unknown"
 	}
 	if strings.Contains(name, "/") {
 		parts := strings.SplitN(name, "/", 2)
-		prefix := NormalizeModelProvider(parts[0])
+		prefix := NormalizeProvider(parts[0])
 		if prefix == "" {
 			return "unknown"
 		}
@@ -63,18 +67,26 @@ func ResolveModelProvider(modelName string) string {
 		return "openai"
 	case strings.HasPrefix(lower, "claude-"):
 		return "anthropic"
-	case strings.HasPrefix(lower, "gemini-"):
+	case strings.HasPrefix(lower, "gemini-"),
+		strings.HasPrefix(lower, "veo"):
 		return "google"
 	case strings.HasPrefix(lower, "grok-"):
 		return "xai"
-	case strings.HasPrefix(lower, "mistral-"):
+	case strings.HasPrefix(lower, "mistral-"),
+		strings.HasPrefix(lower, "mixtral-"),
+		strings.HasPrefix(lower, "pixtral-"),
+		strings.HasPrefix(lower, "ministral-"),
+		strings.HasPrefix(lower, "codestral-"),
+		strings.HasPrefix(lower, "open-mistral-"),
+		strings.HasPrefix(lower, "devstral-"),
+		strings.HasPrefix(lower, "magistral-"):
 		return "mistral"
 	case strings.HasPrefix(lower, "command-r"),
 		strings.HasPrefix(lower, "cohere-"):
 		return "cohere"
 	case strings.HasPrefix(lower, "deepseek-"):
 		return "deepseek"
-	case strings.HasPrefix(lower, "qwen-"),
+	case strings.HasPrefix(lower, "qwen"),
 		strings.HasPrefix(lower, "qwq-"),
 		strings.HasPrefix(lower, "qvq-"):
 		return "qwen"
@@ -91,6 +103,10 @@ func ResolveModelProvider(modelName string) string {
 		return "minimax"
 	case strings.HasPrefix(lower, "ernie-"):
 		return "baidu"
+	case strings.HasPrefix(lower, "llama"):
+		return "meta"
+	case strings.HasPrefix(lower, "flux"):
+		return "black-forest-labs"
 	default:
 		return "unknown"
 	}
@@ -102,7 +118,7 @@ func ResolveOwnedByProvider(ownedBy string) string {
 	if value == "" {
 		return "unknown"
 	}
-	canonical := NormalizeModelProvider(value)
+	canonical := NormalizeProvider(value)
 	if canonical != value {
 		return canonical
 	}
@@ -144,18 +160,22 @@ func ResolveOwnedByProvider(ownedBy string) string {
 	case strings.Contains(value, "minimax"),
 		strings.Contains(value, "abab"):
 		return "minimax"
+	case strings.Contains(value, "black-forest-labs"),
+		strings.Contains(value, "black forest labs"),
+		strings.Contains(value, "blackforestlabs"):
+		return "black-forest-labs"
 	default:
 		return value
 	}
 }
 
-// MatchModelProvider matches a model/provider metadata pair to the provider filter.
-func MatchModelProvider(modelName string, ownedBy string, provider string) bool {
-	filter := NormalizeModelProvider(provider)
+// MatchProvider matches a model/provider metadata pair to the provider filter.
+func MatchProvider(modelName string, ownedBy string, provider string) bool {
+	filter := NormalizeProvider(provider)
 	if filter == "" {
 		return true
 	}
-	if ResolveModelProvider(modelName) == filter {
+	if ResolveProvider(modelName) == filter {
 		return true
 	}
 	if ResolveOwnedByProvider(ownedBy) == filter {

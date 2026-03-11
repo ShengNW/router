@@ -30,31 +30,31 @@ function renderStatus(status, t) {
   switch (status) {
     case 1:
       return (
-        <Label basic color='green'>
+        <Label basic color='green' className='router-tag'>
           {t('token.table.status_enabled')}
         </Label>
       );
     case 2:
       return (
-        <Label basic color='red'>
+        <Label basic color='red' className='router-tag'>
           {t('token.table.status_disabled')}
         </Label>
       );
     case 3:
       return (
-        <Label basic color='yellow'>
+        <Label basic color='yellow' className='router-tag'>
           {t('token.table.status_expired')}
         </Label>
       );
     case 4:
       return (
-        <Label basic color='grey'>
+        <Label basic color='grey' className='router-tag'>
           {t('token.table.status_depleted')}
         </Label>
       );
     default:
       return (
-        <Label basic color='black'>
+        <Label basic color='black' className='router-tag'>
           {t('token.table.status_unknown')}
         </Label>
       );
@@ -86,16 +86,17 @@ const TokensTable = () => {
   const [searching, setSearching] = useState(false);
   const [orderBy, setOrderBy] = useState('');
 
-  const loadTokens = useCallback(async (startIdx) => {
-    const res = await API.get(`/api/v1/public/token/?p=${startIdx}&order=${orderBy}`);
+  const loadTokens = useCallback(async (page) => {
+    const normalizedPage = Number(page) > 0 ? Number(page) : 1;
+    const res = await API.get(`/api/v1/public/token/?page=${normalizedPage}&order=${orderBy}`);
     const { success, message, data } = res.data;
     if (success) {
-      if (startIdx === 0) {
+      if (normalizedPage === 1) {
         setTokens(data);
       } else {
         setTokens((prev) => {
           let next = [...prev];
-          next.splice(startIdx * ITEMS_PER_PAGE, data.length, ...data);
+          next.splice((normalizedPage - 1) * ITEMS_PER_PAGE, data.length, ...data);
           return next;
         });
       }
@@ -109,7 +110,7 @@ const TokensTable = () => {
     (async () => {
       if (activePage === Math.ceil(tokens.length / ITEMS_PER_PAGE) + 1) {
         // In this case we have to load more data and then append them.
-        await loadTokens(activePage - 1, orderBy);
+        await loadTokens(activePage);
       }
       setActivePage(activePage);
     })();
@@ -117,7 +118,7 @@ const TokensTable = () => {
 
   const refresh = async () => {
     setLoading(true);
-    await loadTokens(activePage - 1);
+    await loadTokens(activePage);
   };
 
   const onCopy = async (type, key) => {
@@ -212,7 +213,7 @@ const TokensTable = () => {
   };
 
   useEffect(() => {
-    loadTokens(0)
+    loadTokens(1)
       .then()
       .catch((reason) => {
         showError(reason);
@@ -257,7 +258,7 @@ const TokensTable = () => {
   const searchTokens = async () => {
     if (searchKeyword === '') {
       // if keyword is blank, load files instead.
-      await loadTokens(0);
+      await loadTokens(1);
       setActivePage(1);
       setOrderBy('');
       return;
@@ -305,23 +306,34 @@ const TokensTable = () => {
 
   return (
     <>
-      <Form onSubmit={searchTokens}>
-        <Form.Input
-          icon='search'
-          fluid
-          iconPosition='left'
-          placeholder={t('token.search')}
-          value={searchKeyword}
-          loading={searching}
-          onChange={handleKeywordChange}
-        />
-      </Form>
+      <div className='router-toolbar'>
+        <div className='router-toolbar-start'>
+          <Button className='router-page-button' as={Link} to='/token/add' loading={loading}>
+            {t('token.buttons.add')}
+          </Button>
+          <Button className='router-page-button' onClick={refresh} loading={loading}>
+            {t('token.buttons.refresh')}
+          </Button>
+        </div>
+        <Form onSubmit={searchTokens} style={{ minWidth: '320px', marginLeft: 'auto' }}>
+          <Form.Input
+            className='router-section-input'
+            icon='search'
+            fluid
+            iconPosition='left'
+            placeholder={t('token.search')}
+            value={searchKeyword}
+            loading={searching}
+            onChange={handleKeywordChange}
+          />
+        </Form>
+      </div>
 
-      <Table basic={'very'} compact size='small'>
+      <Table basic={'very'} compact className='router-list-table'>
         <Table.Header>
           <Table.Row>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortToken('name');
               }}
@@ -329,7 +341,7 @@ const TokensTable = () => {
               {t('token.table.name')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortToken('status');
               }}
@@ -337,7 +349,7 @@ const TokensTable = () => {
               {t('token.table.status')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortToken('used_quota');
               }}
@@ -345,7 +357,7 @@ const TokensTable = () => {
               {t('token.table.used_quota')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortToken('remain_quota');
               }}
@@ -353,7 +365,7 @@ const TokensTable = () => {
               {t('token.table.remain_quota')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortToken('created_time');
               }}
@@ -361,7 +373,7 @@ const TokensTable = () => {
               {t('token.table.created_time')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortToken('expired_time');
               }}
@@ -416,32 +428,32 @@ const TokensTable = () => {
                       : renderTimestamp(token.expired_time)}
                   </Table.Cell>
                   <Table.Cell>
-                    <div>
-                      <Button.Group color='green' size={'tiny'}>
+                    <div className='router-action-group'>
+                      <Button.Group color='green'>
                         <Button
-                          size={'tiny'}
+                          className='router-inline-button'
                           positive
                           onClick={async () => await onCopy('', token.key)}
                         >
                           {t('token.buttons.copy')}
                         </Button>
                         <Dropdown
-                          className='button icon'
+                          className='button icon router-inline-button'
                           floating
                           options={copyOptionsWithHandlers}
                           trigger={<></>}
                         />
                       </Button.Group>{' '}
-                      <Button.Group color='olive' size={'tiny'}>
+                      <Button.Group color='olive'>
                         <Button
-                          size={'tiny'}
+                          className='router-inline-button'
                           positive
                           onClick={() => onOpenLink('', token.key)}
                         >
                           {t('token.buttons.chat')}
                         </Button>
                         <Dropdown
-                          className='button icon'
+                          className='button icon router-inline-button'
                           floating
                           options={openLinkOptionsWithHandlers}
                           trigger={<></>}
@@ -449,7 +461,7 @@ const TokensTable = () => {
                       </Button.Group>{' '}
                       <Popup
                         trigger={
-                          <Button size='mini' negative>
+                          <Button className='router-inline-button' negative>
                             {t('token.buttons.delete')}
                           </Button>
                         }
@@ -458,7 +470,7 @@ const TokensTable = () => {
                         hoverable
                       >
                         <Button
-                          size={'tiny'}
+                          className='router-inline-button'
                           negative
                           onClick={() => {
                             manageToken(token.id, 'delete', idx);
@@ -468,7 +480,7 @@ const TokensTable = () => {
                         </Button>
                       </Popup>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         onClick={() => {
                           manageToken(
                             token.id,
@@ -482,7 +494,7 @@ const TokensTable = () => {
                           : t('token.buttons.enable')}
                       </Button>
                       <Button
-                        size={'tiny'}
+                        className='router-inline-button'
                         as={Link}
                         to={'/token/edit/' + token.id}
                       >
@@ -498,43 +510,40 @@ const TokensTable = () => {
         <Table.Footer>
           <Table.Row>
             <Table.HeaderCell colSpan='7'>
-              <Button size='small' as={Link} to='/token/add' loading={loading}>
-                {t('token.buttons.add')}
-              </Button>
-              <Button size='small' onClick={refresh} loading={loading}>
-                {t('token.buttons.refresh')}
-              </Button>
-              <Dropdown
-                placeholder={t('token.sort.placeholder')}
-                selection
-                options={[
-                  { key: '', text: t('token.sort.default'), value: '' },
-                  {
-                    key: 'remain_quota',
-                    text: t('token.sort.by_remain'),
-                    value: 'remain_quota',
-                  },
-                  {
-                    key: 'used_quota',
-                    text: t('token.sort.by_used'),
-                    value: 'used_quota',
-                  },
-                ]}
-                value={orderBy}
-                onChange={handleOrderByChange}
-                style={{ marginLeft: '10px' }}
-              />
-              <Pagination
-                floated='right'
-                activePage={activePage}
-                onPageChange={onPaginationChange}
-                size='small'
-                siblingRange={1}
-                totalPages={
-                  Math.ceil(tokens.length / ITEMS_PER_PAGE) +
-                  (tokens.length % ITEMS_PER_PAGE === 0 ? 1 : 0)
-                }
-              />
+              <div className='router-toolbar'>
+                <div className='router-toolbar-start'>
+                  <Dropdown
+                    className='router-section-dropdown'
+                    placeholder={t('token.sort.placeholder')}
+                    selection
+                    options={[
+                      { key: '', text: t('token.sort.default'), value: '' },
+                      {
+                        key: 'remain_quota',
+                        text: t('token.sort.by_remain'),
+                        value: 'remain_quota',
+                      },
+                      {
+                        key: 'used_quota',
+                        text: t('token.sort.by_used'),
+                        value: 'used_quota',
+                      },
+                    ]}
+                    value={orderBy}
+                    onChange={handleOrderByChange}
+                  />
+                </div>
+                <Pagination
+                  className='router-page-pagination'
+                  activePage={activePage}
+                  onPageChange={onPaginationChange}
+                  siblingRange={1}
+                  totalPages={
+                    Math.ceil(tokens.length / ITEMS_PER_PAGE) +
+                    (tokens.length % ITEMS_PER_PAGE === 0 ? 1 : 0)
+                  }
+                />
+              </div>
             </Table.HeaderCell>
           </Table.Row>
         </Table.Footer>

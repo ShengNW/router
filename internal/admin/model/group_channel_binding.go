@@ -18,28 +18,27 @@ type GroupChannelBindingItem struct {
 	Updated  int64  `json:"updated_at"`
 }
 
-func ListGroupChannelBindingCandidates() ([]GroupChannelBindingItem, error) {
-	return listGroupChannelBindingsWithDB(DB, "")
-}
-
 func ListGroupChannelBindings(groupID string) ([]GroupChannelBindingItem, error) {
 	if strings.TrimSpace(groupID) == "" {
-		return nil, fmt.Errorf("分组标识不能为空")
+		return nil, fmt.Errorf("分组 ID 不能为空")
 	}
-	return listGroupChannelBindingsWithDB(DB, groupID)
+	return listGroupChannelBindingsWithDB(DB, groupID, true)
 }
 
-func listGroupChannelBindingsWithDB(db *gorm.DB, groupID string) ([]GroupChannelBindingItem, error) {
+func listGroupChannelBindingsWithDB(db *gorm.DB, groupID string, enabledOnly bool) ([]GroupChannelBindingItem, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database handle is nil")
 	}
 	groupID = strings.TrimSpace(groupID)
 
 	channels := make([]Channel, 0)
-	if err := db.
+	query := db.
 		Select("id", "name", "protocol", "status", "created_time").
-		Order("created_time desc").
-		Find(&channels).Error; err != nil {
+		Order("created_time desc")
+	if enabledOnly {
+		query = query.Where("status = ?", ChannelStatusEnabled)
+	}
+	if err := query.Find(&channels).Error; err != nil {
 		return nil, err
 	}
 	channelRefs := make([]*Channel, 0, len(channels))
@@ -53,10 +52,13 @@ func listGroupChannelBindingsWithDB(db *gorm.DB, groupID string) ([]GroupChannel
 	boundIDs := make([]string, 0)
 	if groupID != "" {
 		groupCol := `"group"`
-		if err := db.Model(&Ability{}).
+		query := db.Model(&Ability{}).
 			Distinct("channel_id").
-			Where(groupCol+" = ?", groupID).
-			Pluck("channel_id", &boundIDs).Error; err != nil {
+			Where(groupCol+" = ?", groupID)
+		if enabledOnly {
+			query = query.Where("enabled = ?", true)
+		}
+		if err := query.Pluck("channel_id", &boundIDs).Error; err != nil {
 			return nil, err
 		}
 	}
@@ -71,9 +73,14 @@ func listGroupChannelBindingsWithDB(db *gorm.DB, groupID string) ([]GroupChannel
 
 	items := make([]GroupChannelBindingItem, 0, len(channels))
 	for _, channel := range channels {
-		_, bound := boundSet[channel.Id]
+		channel.NormalizeIdentity()
+		channelID := strings.TrimSpace(channel.Id)
+		if channelID == "" {
+			continue
+		}
+		_, bound := boundSet[channelID]
 		items = append(items, GroupChannelBindingItem{
-			Id:       channel.Id,
+			Id:       channelID,
 			Name:     channel.DisplayName(),
 			Protocol: channel.GetProtocol(),
 			Status:   channel.Status,
@@ -97,44 +104,25 @@ func replaceGroupChannelBindingsWithDB(db *gorm.DB, groupID string, channelIDs [
 	}
 	groupID = strings.TrimSpace(groupID)
 	if groupID == "" {
-		return fmt.Errorf("分组标识不能为空")
+		return fmt.Errorf("分组 ID 不能为空")
 	}
 
-	groupCatalog := GroupCatalog{}
-	if err := db.Where("id = ?", groupID).First(&groupCatalog).Error; err != nil {
+	groupCatalog, err := getGroupCatalogByIDWithDB(db, groupID)
+	if err != nil {
 		return err
 	}
+	groupID = groupCatalog.Id
 
 	normalizedChannelIDs := normalizeChannelIDList(channelIDs)
 
 	channelsByID := make(map[string]Channel, len(normalizedChannelIDs))
 	if len(normalizedChannelIDs) > 0 {
-		channels := make([]Channel, 0)
-		if err := db.
-			Select("id", "name", "status", "priority").
-			Where("id IN ?", normalizedChannelIDs).
-			Find(&channels).Error; err != nil {
+		enabledChannels, err := loadEnabledChannelsByIDWithDB(db, normalizedChannelIDs)
+		if err != nil {
 			return err
 		}
-		channelRefs := make([]*Channel, 0, len(channels))
-		for i := range channels {
-			channelRefs = append(channelRefs, &channels[i])
-		}
-		if err := HydrateChannelsWithModels(db, channelRefs); err != nil {
-			return err
-		}
-		for _, channel := range channels {
-			channelsByID[channel.Id] = channel
-		}
-		if len(channelsByID) != len(normalizedChannelIDs) {
-			missing := make([]string, 0)
-			for _, id := range normalizedChannelIDs {
-				if _, ok := channelsByID[id]; !ok {
-					missing = append(missing, id)
-				}
-			}
-			sort.Strings(missing)
-			return fmt.Errorf("渠道不存在: %s", strings.Join(missing, ", "))
+		for channelID, channel := range enabledChannels {
+			channelsByID[channelID] = *channel
 		}
 	}
 
@@ -158,6 +146,7 @@ func replaceGroupChannelBindingsWithDB(db *gorm.DB, groupID string, channelIDs [
 		channelAbilities := SyncGroupAbilitiesForChannel(groupID, &channel, existingByChannelID[id])
 		abilities = append(abilities, channelAbilities...)
 	}
+	abilities = normalizeAbilityRowsPreserveOrder(abilities)
 
 	if err := db.Where(groupCol+" = ?", groupID).Delete(&Ability{}).Error; err != nil {
 		return err
@@ -166,6 +155,63 @@ func replaceGroupChannelBindingsWithDB(db *gorm.DB, groupID string, channelIDs [
 		return nil
 	}
 	return db.Create(&abilities).Error
+}
+
+func loadEnabledChannelsByIDWithDB(db *gorm.DB, channelIDs []string) (map[string]*Channel, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database handle is nil")
+	}
+	normalizedChannelIDs := normalizeChannelIDList(channelIDs)
+	if len(normalizedChannelIDs) == 0 {
+		return map[string]*Channel{}, nil
+	}
+
+	channels := make([]Channel, 0, len(normalizedChannelIDs))
+	if err := db.
+		Select("id", "name", "protocol", "status", "priority", "created_time").
+		Where("id IN ?", normalizedChannelIDs).
+		Find(&channels).Error; err != nil {
+		return nil, err
+	}
+
+	channelsByID := make(map[string]*Channel, len(channels))
+	disabled := make([]string, 0)
+	for i := range channels {
+		channel := &channels[i]
+		channel.NormalizeIdentity()
+		channelID := strings.TrimSpace(channel.Id)
+		if channelID == "" {
+			continue
+		}
+		channelsByID[channelID] = channel
+		if channel.Status != ChannelStatusEnabled {
+			disabled = append(disabled, channelID)
+		}
+	}
+
+	if len(channelsByID) != len(normalizedChannelIDs) {
+		missing := make([]string, 0)
+		for _, channelID := range normalizedChannelIDs {
+			if _, ok := channelsByID[channelID]; !ok {
+				missing = append(missing, channelID)
+			}
+		}
+		sort.Strings(missing)
+		return nil, fmt.Errorf("渠道不存在: %s", strings.Join(missing, ", "))
+	}
+	if len(disabled) > 0 {
+		sort.Strings(disabled)
+		return nil, fmt.Errorf("渠道未启用，不能绑定到分组: %s", strings.Join(disabled, ", "))
+	}
+
+	channelRefs := make([]*Channel, 0, len(channels))
+	for i := range channels {
+		channelRefs = append(channelRefs, &channels[i])
+	}
+	if err := HydrateChannelsWithModels(db, channelRefs); err != nil {
+		return nil, err
+	}
+	return channelsByID, nil
 }
 
 func normalizeChannelIDList(ids []string) []string {

@@ -538,8 +538,8 @@ func AccessTokenExists(token string) (bool, error) {
 	return false, err
 }
 
-func Redeem(ctx context.Context, key string, userId string) (int64, error) {
-	return model.Redeem(ctx, key, userId)
+func Redeem(ctx context.Context, code string, userId string) (int64, error) {
+	return model.Redeem(ctx, code, userId)
 }
 
 func RecordLog(ctx context.Context, userId string, logType int, content string) {

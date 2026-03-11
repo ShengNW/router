@@ -55,31 +55,28 @@ const RegisterForm = () => {
   }
 
   return (
-    <Grid textAlign='center' style={{ marginTop: '48px' }}>
-      <Grid.Column style={{ maxWidth: 450 }}>
-        <Card
-          fluid
-          className='chart-card'
-          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
-        >
+    <Grid textAlign='center' className='router-auth-shell'>
+      <Grid.Column>
+        <Card fluid className='chart-card router-auth-card'>
           <Card.Content>
             <Card.Header>
-              <Header as='h2' textAlign='center' style={{ marginBottom: '1.5em' }}>
-                <Image src={logo} style={{ marginBottom: '10px' }} />
+              <Header as='h2' textAlign='center' className='router-auth-title router-auth-header'>
+                <Image src={logo} className='router-auth-logo' />
                 <Header.Content>{t('auth.register.title')}</Header.Content>
               </Header>
             </Card.Header>
-            <Form size='large'>
+            <Form className='router-auth-form'>
               <Form.Input
+                className='router-auth-input'
                 fluid
                 icon='user'
                 iconPosition='left'
                 placeholder={t('auth.register.username')}
                 onChange={handleChange}
                 name='username'
-                style={{ marginBottom: '1em' }}
               />
               <Form.Input
+                className='router-auth-input'
                 fluid
                 icon='lock'
                 iconPosition='left'
@@ -87,9 +84,9 @@ const RegisterForm = () => {
                 onChange={handleChange}
                 name='password'
                 type='password'
-                style={{ marginBottom: '1em' }}
               />
               <Form.Input
+                className='router-auth-input'
                 fluid
                 icon='lock'
                 iconPosition='left'
@@ -97,23 +94,21 @@ const RegisterForm = () => {
                 onChange={handleChange}
                 name='password2'
                 type='password'
-                style={{ marginBottom: '1.5em' }}
               />
               <Button
+                className='router-auth-button router-auth-primary'
                 fluid
-                size='large'
                 onClick={handleSubmit}
-                style={{ background: '#2F73FF', color: 'white', marginBottom: '1.5em' }}
                 loading={loading}
               >
                 {t('auth.register.button')}
               </Button>
             </Form>
 
-            <Message style={{ background: 'transparent', boxShadow: 'none' }}>
-              <div style={{ textAlign: 'center', fontSize: '0.9em', color: '#666' }}>
+            <Message className='router-auth-message'>
+              <div className='router-auth-secondary-text'>
                 {t('auth.register.has_account')}
-                <Link to='/login' style={{ color: '#2185d0', marginLeft: '2px' }}>
+                <Link to='/login' className='router-auth-link'>
                   {t('auth.register.login')}
                 </Link>
               </div>

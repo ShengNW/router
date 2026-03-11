@@ -7,7 +7,7 @@ const Chat = () => {
     <iframe
       src={chatLink}
       title='chat'
-      style={{ width: '100%', height: '85vh', border: 'none' }}
+      className='router-embed-frame-chat'
     />
   );
 };

@@ -191,47 +191,48 @@ const PersonalSetting = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className='router-page-stack'>
       <Segment>
-        <Header as='h3'>{t('setting.personal.binding.title', '钱包绑定')}</Header>
-        <p style={{ color: '#666' }}>
+        <Header as='h3' className='router-section-title'>{t('setting.personal.binding.title', '钱包绑定')}</Header>
+        <p className='router-section-copy'>
           {walletBinding ? `当前绑定地址：${walletBinding}` : '尚未绑定钱包'}
         </p>
-        <Button primary onClick={bindWallet} disabled={!status.wallet_login}>
+        <Button className='router-section-button' primary onClick={bindWallet} disabled={!status.wallet_login}>
           {status.wallet_login ? '绑定 / 更换钱包' : '管理员未开启钱包登录'}
         </Button>
         {!status.wallet_login && (
-          <Message warning style={{ marginTop: '12px' }}>
+          <Message warning className='router-section-message router-settings-note'>
             管理员未开启钱包登录，仍可使用账号密码登录。
           </Message>
         )}
       </Segment>
 
       <Segment>
-        <Header as='h3'>{t('setting.personal.tokens.title', '令牌与邀请')}</Header>
-        <Button color='blue' onClick={generateAccessToken} style={{ marginBottom: '8px' }}>
+        <Header as='h3' className='router-section-title'>{t('setting.personal.tokens.title', '令牌与邀请')}</Header>
+        <Button className='router-section-button router-settings-action' color='blue' onClick={generateAccessToken}>
           生成并复制系统令牌
         </Button>
         {systemToken && (
-          <Message success size='small' style={{ wordBreak: 'break-all' }}>
+          <Message success className='router-section-message router-break-all'>
             {systemToken}
           </Message>
         )}
         <Divider />
-        <Button onClick={getAffLink}>生成并复制邀请链接</Button>
+        <Button className='router-section-button' onClick={getAffLink}>生成并复制邀请链接</Button>
         {affLink && (
-          <Message success size='small' style={{ wordBreak: 'break-all' }}>
+          <Message success className='router-section-message router-break-all'>
             {affLink}
           </Message>
         )}
       </Segment>
 
       <Segment>
-        <Header as='h3'>
+        <Header as='h3' className='router-section-title'>
           {t('setting.personal.password.title', '修改密码')}
         </Header>
         <Form>
           <Form.Input
+            className='router-section-input'
             label={t('user.edit.password')}
             placeholder={t('user.edit.password_placeholder')}
             type='password'
@@ -240,6 +241,7 @@ const PersonalSetting = () => {
             autoComplete='new-password'
           />
           <Form.Input
+            className='router-section-input'
             label={t('auth.register.confirm_password')}
             placeholder={t('auth.register.confirm_password')}
             type='password'
@@ -248,6 +250,7 @@ const PersonalSetting = () => {
             autoComplete='new-password'
           />
           <Button
+            className='router-section-button'
             primary
             loading={passwordLoading}
             onClick={submitPasswordChange}
@@ -258,27 +261,30 @@ const PersonalSetting = () => {
       </Segment>
 
       <Segment>
-        <Header as='h3' color='red'>
+        <Header as='h3' color='red' className='router-section-title'>
           {t('setting.personal.delete.title', '删除账户')}
         </Header>
-        <p style={{ color: '#666' }}>删除账户将同时清除钱包绑定与令牌。</p>
+        <p className='router-section-copy'>删除账户将同时清除钱包绑定与令牌。</p>
         <Form>
           <Form.Input
+            className='router-section-input'
             label='请输入账户名以确认删除'
             placeholder={userState.user?.username}
             name='self_account_deletion_confirmation'
             value={inputs.self_account_deletion_confirmation}
             onChange={handleInputChange}
           />
-          <Button negative loading={loading} onClick={deleteAccount}>
+          <Button className='router-section-button' negative loading={loading} onClick={deleteAccount}>
             {t('setting.personal.delete.confirm', '确认删除')}
           </Button>
         </Form>
       </Segment>
 
-      <Message info>
-        <Link to='/reset'>{t('auth.login.reset_password', '找回密码')}</Link>
-        <span style={{ marginLeft: 8 }}>仍可通过账号密码登录，无需第三方账号。</span>
+      <Message info className='router-section-message'>
+        <span className='router-inline-copy'>
+          <Link to='/reset'>{t('auth.login.reset_password', '找回密码')}</Link>
+          <span>仍可通过账号密码登录，无需第三方账号。</span>
+        </span>
       </Message>
     </div>
   );

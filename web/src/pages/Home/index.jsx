@@ -62,10 +62,10 @@ const Home = () => {
         <div className='dashboard-container'>
           <Card fluid className='chart-card'>
             <Card.Content>
-              <Card.Header className='header'>
+              <Card.Header className='header router-page-title'>
                 {t('home.welcome.title')}
               </Card.Header>
-              <Card.Description style={{ lineHeight: '1.6' }}>
+              <Card.Description className='router-page-copy router-copy-relaxed'>
                 <p>{t('home.welcome.description')}</p>
                 {!userState.user && <p>{t('home.welcome.login_notice')}</p>}
               </Card.Description>
@@ -74,81 +74,54 @@ const Home = () => {
           <Card fluid className='chart-card'>
             <Card.Content>
               <Card.Header>
-                <Header as='h3'>{t('home.system_status.title')}</Header>
+                <Header as='h3' className='router-section-title'>{t('home.system_status.title')}</Header>
               </Card.Header>
               <Grid columns={2} stackable>
                 <Grid.Column>
                   <Card
                     fluid
-                    className='chart-card'
-                    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
+                    className='chart-card router-soft-card'
                   >
                     <Card.Content>
-                      <Card.Header>
-                        <Header as='h3' style={{ color: '#444' }}>
+                      <Card.Header className='router-card-header'>
+                        <Header as='h3' className='router-section-title'>
                           {t('home.system_status.info.title')}
                         </Header>
                       </Card.Header>
-                      <Card.Description
-                        style={{ lineHeight: '2', marginTop: '1em' }}
-                      >
-                        <p
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5em',
-                          }}
-                        >
+                      <Card.Description className='router-section-copy router-kv-list router-copy-relaxed'>
+                        <p className='router-kv-row'>
                           <i className='info circle icon'></i>
-                          <span style={{ fontWeight: 'bold' }}>
+                          <span className='router-kv-key'>
                             {t('home.system_status.info.name')}
                           </span>
                           <span>{statusState?.status?.system_name}</span>
                         </p>
-                        <p
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5em',
-                          }}
-                        >
+                        <p className='router-kv-row'>
                           <i className='code branch icon'></i>
-                          <span style={{ fontWeight: 'bold' }}>
+                          <span className='router-kv-key'>
                             {t('home.system_status.info.version')}
                           </span>
                           <span>
                             {statusState?.status?.version || 'unknown'}
                           </span>
                         </p>
-                        <p
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5em',
-                          }}
-                        >
+                        <p className='router-kv-row'>
                           <i className='github icon'></i>
-                          <span style={{ fontWeight: 'bold' }}>
+                          <span className='router-kv-key'>
                             {t('home.system_status.info.source')}
                           </span>
                           <a
                             href='https://github.com/yeying-community/router'
                             target='_blank'
                             rel='noreferrer'
-                            style={{ color: '#2185d0' }}
+                            className='router-link-inline'
                           >
                             {t('home.system_status.info.source_link')}
                           </a>
                         </p>
-                        <p
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5em',
-                          }}
-                        >
+                        <p className='router-kv-row'>
                           <i className='clock outline icon'></i>
-                          <span style={{ fontWeight: 'bold' }}>
+                          <span className='router-kv-key'>
                             {t('home.system_status.info.start_time')}
                           </span>
                           <span>{getStartTimeString()}</span>
@@ -161,36 +134,26 @@ const Home = () => {
                 <Grid.Column>
                   <Card
                     fluid
-                    className='chart-card'
-                    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
+                    className='chart-card router-soft-card'
                   >
                     <Card.Content>
-                      <Card.Header>
-                        <Header as='h3' style={{ color: '#444' }}>
+                      <Card.Header className='router-card-header'>
+                        <Header as='h3' className='router-section-title'>
                           {t('home.system_status.config.title')}
                         </Header>
                       </Card.Header>
-                      <Card.Description
-                        style={{ lineHeight: '2', marginTop: '1em' }}
-                      >
-                        <p
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5em',
-                          }}
-                        >
+                      <Card.Description className='router-section-copy router-kv-list router-copy-relaxed'>
+                        <p className='router-kv-row'>
                           <i className='ethereum icon'></i>
-                          <span style={{ fontWeight: 'bold' }}>
+                          <span className='router-kv-key'>
                             {t('home.system_status.config.wallet_login', '钱包登录')}
                           </span>
                           <span
-                            style={{
-                              color: statusState?.status?.wallet_login
-                                ? '#21ba45'
-                                : '#db2828',
-                              fontWeight: '500',
-                            }}
+                            className={
+                              statusState?.status?.wallet_login
+                                ? 'router-kv-value-positive'
+                                : 'router-kv-value-negative'
+                            }
                           >
                             {statusState?.status?.wallet_login
                               ? t('home.system_status.config.enabled')
@@ -211,11 +174,11 @@ const Home = () => {
             <iframe
               src={homePageContent}
               title='home'
-              style={{ width: '100%', height: '100vh', border: 'none' }}
+              className='router-embed-frame'
             />
           ) : (
             <div
-              style={{ fontSize: 'larger' }}
+              className='router-page-copy router-content-rendered'
               dangerouslySetInnerHTML={{ __html: homePageContent }}
             ></div>
           )}

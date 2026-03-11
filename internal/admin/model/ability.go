@@ -65,3 +65,28 @@ func NormalizeAbilityUpstreamModel(modelName string, upstreamModel string) strin
 	}
 	return strings.TrimSpace(modelName)
 }
+
+func normalizeAbilityRowsPreserveOrder(rows []Ability) []Ability {
+	if len(rows) == 0 {
+		return []Ability{}
+	}
+	result := make([]Ability, 0, len(rows))
+	seen := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		normalized := row
+		normalized.Group = strings.TrimSpace(normalized.Group)
+		normalized.Model = strings.TrimSpace(normalized.Model)
+		normalized.ChannelId = strings.TrimSpace(normalized.ChannelId)
+		normalized.UpstreamModel = NormalizeAbilityUpstreamModel(normalized.Model, normalized.UpstreamModel)
+		if normalized.Group == "" || normalized.Model == "" || normalized.ChannelId == "" {
+			continue
+		}
+		key := normalized.Group + "::" + normalized.Model + "::" + normalized.ChannelId
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result
+}

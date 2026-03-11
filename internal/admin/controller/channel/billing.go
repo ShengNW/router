@@ -7,10 +7,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/yeying-community/router/common/client"
 	"github.com/yeying-community/router/common/config"
+	"github.com/yeying-community/router/common/ctxkey"
+	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/admin/monitor"
@@ -120,14 +123,14 @@ type OpenRouterResponse struct {
 	} `json:"data"`
 }
 
-// GetAuthHeader get auth header
-func GetAuthHeader(token string) http.Header {
+// buildBearerAuthHeader get auth header
+func buildBearerAuthHeader(token string) http.Header {
 	h := http.Header{}
 	h.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 	return h
 }
 
-func GetResponseBody(method, url string, channel *model.Channel, headers http.Header) ([]byte, error) {
+func fetchChannelBillingResponseBody(method, url string, channel *model.Channel, headers http.Header) ([]byte, error) {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, err
@@ -135,27 +138,48 @@ func GetResponseBody(method, url string, channel *model.Channel, headers http.He
 	for k := range headers {
 		req.Header.Add(k, headers.Get(k))
 	}
+	channelID := ""
+	channelName := ""
+	if channel != nil {
+		channelID = strings.TrimSpace(channel.Id)
+		channelName = strings.TrimSpace(channel.DisplayName())
+	}
+	requestPayload := buildHTTPRequestPayloadForLog(method, url, req.Header, nil)
 	res, err := client.HTTPClient.Do(req)
 	if err != nil {
+		logger.Info(req.Context(), strings.Join([]string{
+			fmt.Sprintf("[channel-billing] stage=request channel_id=%s name=%s", channelID, channelName),
+			structuredPayloadField("request_payload", requestPayload),
+			quotedField("error", err.Error()),
+		}, " "))
 		return nil, err
 	}
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status code: %d", res.StatusCode)
-	}
+	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
+		logger.Info(req.Context(), strings.Join([]string{
+			fmt.Sprintf("[channel-billing] stage=response channel_id=%s name=%s", channelID, channelName),
+			structuredPayloadField("request_payload", requestPayload),
+			structuredPayloadField("response_payload", buildHTTPResponsePayloadForLog(res.StatusCode, res.Header, nil)),
+			quotedField("error", err.Error()),
+		}, " "))
 		return nil, err
 	}
-	err = res.Body.Close()
-	if err != nil {
-		return nil, err
+	responsePayload := buildHTTPResponsePayloadForLog(res.StatusCode, res.Header, body)
+	logger.Info(req.Context(), strings.Join([]string{
+		fmt.Sprintf("[channel-billing] stage=response channel_id=%s name=%s", channelID, channelName),
+		structuredPayloadField("request_payload", requestPayload),
+		structuredPayloadField("response_payload", responsePayload),
+	}, " "))
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status code: %d", res.StatusCode)
 	}
 	return body, nil
 }
 
 func updateChannelCloseAIBalance(channel *model.Channel) (float64, error) {
 	url := fmt.Sprintf("%s/dashboard/billing/credit_grants", channel.GetBaseURL())
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 
 	if err != nil {
 		return 0, err
@@ -171,7 +195,7 @@ func updateChannelCloseAIBalance(channel *model.Channel) (float64, error) {
 
 func updateChannelOpenAISBBalance(channel *model.Channel) (float64, error) {
 	url := fmt.Sprintf("https://api.openai-sb.com/sb-api/user/status?api_key=%s", channel.Key)
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -195,7 +219,7 @@ func updateChannelAIProxyBalance(channel *model.Channel) (float64, error) {
 	url := "https://aiproxy.io/api/report/getUserOverview"
 	headers := http.Header{}
 	headers.Add("Api-Key", channel.Key)
-	body, err := GetResponseBody("GET", url, channel, headers)
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, headers)
 	if err != nil {
 		return 0, err
 	}
@@ -213,7 +237,7 @@ func updateChannelAIProxyBalance(channel *model.Channel) (float64, error) {
 
 func updateChannelAPI2GPTBalance(channel *model.Channel) (float64, error) {
 	url := "https://api.api2gpt.com/dashboard/billing/credit_grants"
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 
 	if err != nil {
 		return 0, err
@@ -229,7 +253,7 @@ func updateChannelAPI2GPTBalance(channel *model.Channel) (float64, error) {
 
 func updateChannelAIGC2DBalance(channel *model.Channel) (float64, error) {
 	url := "https://api.aigc2d.com/dashboard/billing/credit_grants"
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -244,7 +268,7 @@ func updateChannelAIGC2DBalance(channel *model.Channel) (float64, error) {
 
 func updateChannelSiliconFlowBalance(channel *model.Channel) (float64, error) {
 	url := "https://api.siliconflow.cn/v1/user/info"
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -266,7 +290,7 @@ func updateChannelSiliconFlowBalance(channel *model.Channel) (float64, error) {
 
 func updateChannelDeepSeekBalance(channel *model.Channel) (float64, error) {
 	url := "https://api.deepseek.com/user/balance"
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -295,7 +319,7 @@ func updateChannelDeepSeekBalance(channel *model.Channel) (float64, error) {
 
 func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
 	url := "https://openrouter.ai/api/v1/credits"
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -345,7 +369,7 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 	}
 	url := fmt.Sprintf("%s/v1/dashboard/billing/subscription", baseURL)
 
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -361,7 +385,7 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 		startDate = now.AddDate(0, 0, -100).Format("2006-01-02")
 	}
 	url = fmt.Sprintf("%s/v1/dashboard/billing/usage?start_date=%s&end_date=%s", baseURL, startDate, endDate)
-	body, err = GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	body, err = fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
@@ -394,8 +418,7 @@ func UpdateChannelBalance(c *gin.Context) {
 		})
 		return
 	}
-	var err error
-	channel, err := channelsvc.GetByID(id, true)
+	taskRow, reused, err := CreateChannelRefreshBalanceTask(id, c.GetString(ctxkey.Id), c.GetString(helper.TraceIDKey))
 	if err != nil {
 		logChannelAdminWarn(c, "refresh_balance", stringField("channel_id", id), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{
@@ -404,26 +427,22 @@ func UpdateChannelBalance(c *gin.Context) {
 		})
 		return
 	}
-	balance, err := updateChannelBalance(channel)
-	if err != nil {
-		logChannelAdminWarn(c, "refresh_balance", stringField("channel_id", channel.Id), stringField("name", channel.DisplayName()), stringField("reason", err.Error()))
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
-	}
-	logChannelAdminInfo(c, "refresh_balance", stringField("channel_id", channel.Id), stringField("name", channel.DisplayName()), floatField("balance", balance))
+	logChannelAdminInfo(c, "refresh_balance", stringField("channel_id", taskRow.ChannelId), stringField("task_id", taskRow.Id), stringField("status", taskRow.Status))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"balance": balance,
+		"data": gin.H{
+			"task": taskRow,
+		},
+		"meta": gin.H{
+			"reused": reused,
+		},
 	})
 	return
 }
 
 func updateAllChannelsBalance() error {
-	channels, err := channelsvc.GetAll(0, 0, "all")
+	channels, err := channelsvc.GetAllBasic(0, 0, "all", true)
 	if err != nil {
 		return err
 	}

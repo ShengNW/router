@@ -219,19 +219,19 @@ func Register(c *gin.Context) {
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
-// @Param p query int false "Page index"
+// @Param page query int false "Page (1-based)"
 // @Param order query string false "Order"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
 // @Router /api/v1/admin/user [get]
 func GetAllUsers(c *gin.Context) {
-	p, _ := strconv.Atoi(c.Query("p"))
-	if p < 0 {
-		p = 0
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page < 1 {
+		page = 1
 	}
 
 	order := c.DefaultQuery("order", "")
-	users, err := usersvc.GetAll(p*config.ItemsPerPage, config.ItemsPerPage, order)
+	users, err := usersvc.GetAll((page-1)*config.ItemsPerPage, config.ItemsPerPage, order)
 
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -399,7 +399,7 @@ func GetUserDashboard(c *gin.Context) {
 			if strings.TrimSpace(name) == "" {
 				continue
 			}
-			provider := utils.ResolveModelProvider(name)
+			provider := utils.ResolveProvider(name)
 			if providerSet[provider] == nil {
 				providerSet[provider] = make(map[string]struct{})
 			}
@@ -1117,7 +1117,8 @@ func EmailBind(c *gin.Context) {
 }
 
 type topUpRequest struct {
-	Key string `json:"key"`
+	Code string `json:"code"`
+	Key  string `json:"key"`
 }
 
 // TopUp godoc
@@ -1142,7 +1143,11 @@ func TopUp(c *gin.Context) {
 		return
 	}
 	id := c.GetString("id")
-	quota, err := usersvc.Redeem(ctx, req.Key, id)
+	code := strings.TrimSpace(req.Code)
+	if code == "" {
+		code = strings.TrimSpace(req.Key)
+	}
+	quota, err := usersvc.Redeem(ctx, code, id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

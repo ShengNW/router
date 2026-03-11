@@ -29,41 +29,40 @@ const PasswordResetForm = () => {
   };
 
   return (
-    <Grid textAlign='center' style={{ marginTop: '48px' }}>
-      <Grid.Column style={{ maxWidth: 450 }}>
-        <Card fluid className='chart-card' style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}>
+    <Grid textAlign='center' className='router-auth-shell'>
+      <Grid.Column>
+        <Card fluid className='chart-card router-auth-card'>
           <Card.Content>
             <Card.Header>
-              <Header as='h2' textAlign='center' style={{ marginBottom: '1.5em' }}>
-                <Image src={logo} style={{ marginBottom: '10px' }} />
+              <Header as='h2' textAlign='center' className='router-auth-title router-auth-header'>
+                <Image src={logo} className='router-auth-logo' />
                 <Header.Content>{t('auth.reset.title')}</Header.Content>
               </Header>
             </Card.Header>
-            <Form size='large'>
+            <Form className='router-auth-form'>
               <Form.Input
+                className='router-auth-input'
                 fluid
                 icon='mail'
                 iconPosition='left'
                 placeholder={t('auth.reset.email')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                style={{ marginBottom: '1em' }}
               />
               <Button
+                className='router-auth-button router-auth-primary'
                 fluid
-                size='large'
                 onClick={sendResetEmail}
                 loading={loading}
-                style={{ background: '#2F73FF', color: 'white', marginBottom: '1.5em' }}
               >
                 {t('auth.reset.button')}
               </Button>
             </Form>
 
-            <Message style={{ background: 'transparent', boxShadow: 'none' }}>
-              <div style={{ textAlign: 'center', fontSize: '0.9em', color: '#666' }}>
+            <Message className='router-auth-message'>
+              <div className='router-auth-secondary-text'>
                 {t('auth.reset.remember_password')}
-                <Link to='/login' style={{ color: '#2185d0', marginLeft: '2px' }}>
+                <Link to='/login' className='router-auth-link'>
                   {t('auth.login.login')}
                 </Link>
               </div>

@@ -63,8 +63,8 @@ func AccessTokenExists(token string) (bool, error) {
 	return userrepo.AccessTokenExists(token)
 }
 
-func Redeem(ctx context.Context, key string, userId string) (int64, error) {
-	return userrepo.Redeem(ctx, key, userId)
+func Redeem(ctx context.Context, code string, userId string) (int64, error) {
+	return userrepo.Redeem(ctx, code, userId)
 }
 
 func IncreaseQuota(userId string, quota int64) error {

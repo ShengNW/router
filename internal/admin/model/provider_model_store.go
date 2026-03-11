@@ -7,31 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
-var providersUseFlatModelIDs = map[string]struct{}{
-	"openai":      {},
-	"google":      {},
-	"anthropic":   {},
-	"xai":         {},
-	"mistral":     {},
-	"cohere":      {},
-	"deepseek":    {},
-	"qwen":        {},
-	"zhipu":       {},
-	"hunyuan":     {},
-	"volcengine":  {},
-	"minimax":     {},
-	"baidu":       {},
-	"baidu-v2":    {},
-	"moonshot":    {},
-	"baichuan":    {},
-	"lingyiwanwu": {},
-	"stepfun":     {},
-	"groq":        {},
-	"xunfei":      {},
-}
-
 func canonicalizeModelNameForProvider(provider string, modelName string) string {
-	normalizedProvider := commonutils.NormalizeModelProvider(provider)
+	normalizedProvider := commonutils.NormalizeProvider(provider)
 	if normalizedProvider == "" {
 		normalizedProvider = strings.TrimSpace(strings.ToLower(provider))
 	}
@@ -39,28 +16,47 @@ func canonicalizeModelNameForProvider(provider string, modelName string) string 
 	if name == "" {
 		return ""
 	}
-	if _, ok := providersUseFlatModelIDs[normalizedProvider]; !ok {
-		return name
+	if strings.Contains(name, "/") {
+		parts := strings.SplitN(name, "/", 2)
+		if len(parts) == 2 {
+			prefix := commonutils.NormalizeProvider(parts[0])
+			if prefix == "" || prefix == "unknown" {
+				prefix = strings.TrimSpace(strings.ToLower(parts[0]))
+			}
+			if prefix == normalizedProvider {
+				trimmed := strings.TrimSpace(parts[1])
+				if trimmed != "" {
+					name = trimmed
+				}
+			}
+		}
 	}
-	prefix := normalizedProvider + "/"
 	lower := strings.ToLower(name)
-	if strings.HasPrefix(lower, prefix) {
-		trimmed := strings.TrimSpace(name[len(prefix):])
+	if normalizedProvider == "meta" && strings.HasPrefix(lower, "meta-") {
+		trimmed := strings.TrimSpace(name[len("meta-"):])
 		if trimmed != "" {
-			return trimmed
+			name = trimmed
 		}
 	}
 	return name
 }
 
-func LoadModelProviderModelDetailsMap(db *gorm.DB) (map[string][]ModelProviderModelDetail, error) {
-	rows := make([]ModelProviderModel, 0)
-	if err := db.Order("provider asc, model asc").Find(&rows).Error; err != nil {
+func LoadProviderModelDetailsMap(db *gorm.DB) (map[string][]ProviderModelDetail, error) {
+	return LoadProviderModelDetailsMapForProviders(db, nil)
+}
+
+func LoadProviderModelDetailsMapForProviders(db *gorm.DB, providers []string) (map[string][]ProviderModelDetail, error) {
+	rows := make([]ProviderModel, 0)
+	query := db.Order("provider asc, model asc")
+	if len(providers) > 0 {
+		query = query.Where("provider IN ?", providers)
+	}
+	if err := query.Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	result := make(map[string][]ModelProviderModelDetail, 0)
+	result := make(map[string][]ProviderModelDetail, 0)
 	for _, row := range rows {
-		provider := commonutils.NormalizeModelProvider(row.Provider)
+		provider := commonutils.NormalizeProvider(row.Provider)
 		if provider == "" {
 			provider = strings.TrimSpace(strings.ToLower(row.Provider))
 		}
@@ -71,7 +67,7 @@ func LoadModelProviderModelDetailsMap(db *gorm.DB) (map[string][]ModelProviderMo
 		if modelName == "" {
 			continue
 		}
-		result[provider] = append(result[provider], ModelProviderModelDetail{
+		result[provider] = append(result[provider], ProviderModelDetail{
 			Model:       modelName,
 			Type:        strings.TrimSpace(strings.ToLower(row.Type)),
 			InputPrice:  row.InputPrice,
@@ -83,20 +79,20 @@ func LoadModelProviderModelDetailsMap(db *gorm.DB) (map[string][]ModelProviderMo
 		})
 	}
 	for provider, details := range result {
-		result[provider] = NormalizeModelProviderModelDetails(details)
+		result[provider] = NormalizeProviderModelDetails(details)
 	}
 	return result, nil
 }
 
-func BuildModelProviderModelRows(provider string, details []ModelProviderModelDetail, now int64) []ModelProviderModel {
-	normalizedProvider := commonutils.NormalizeModelProvider(provider)
+func BuildProviderModelRows(provider string, details []ProviderModelDetail, now int64) []ProviderModel {
+	normalizedProvider := commonutils.NormalizeProvider(provider)
 	if normalizedProvider == "" {
 		normalizedProvider = strings.TrimSpace(strings.ToLower(provider))
 	}
 	if normalizedProvider == "" {
 		return nil
 	}
-	detailInput := make([]ModelProviderModelDetail, 0, len(details))
+	detailInput := make([]ProviderModelDetail, 0, len(details))
 	for _, detail := range details {
 		detail.Model = canonicalizeModelNameForProvider(normalizedProvider, detail.Model)
 		if strings.TrimSpace(detail.Model) == "" {
@@ -104,14 +100,14 @@ func BuildModelProviderModelRows(provider string, details []ModelProviderModelDe
 		}
 		detailInput = append(detailInput, detail)
 	}
-	normalizedDetails := NormalizeModelProviderModelDetails(detailInput)
-	rows := make([]ModelProviderModel, 0, len(normalizedDetails))
+	normalizedDetails := NormalizeProviderModelDetails(detailInput)
+	rows := make([]ProviderModel, 0, len(normalizedDetails))
 	for _, detail := range normalizedDetails {
 		updatedAt := detail.UpdatedAt
 		if updatedAt == 0 {
 			updatedAt = now
 		}
-		rows = append(rows, ModelProviderModel{
+		rows = append(rows, ProviderModel{
 			Provider:    normalizedProvider,
 			Model:       detail.Model,
 			Type:        detail.Type,

@@ -35,24 +35,41 @@ const EditUser = () => {
   };
   const fetchGroups = useCallback(async () => {
     try {
-      let res = await API.get(`/api/v1/admin/group/catalog`);
-      const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+      const rows = [];
+      let page = 1;
+      while (page <= 50) {
+        const res = await API.get('/api/v1/admin/groups', {
+          params: {
+            page,
+            page_size: 100,
+          },
+        });
+        const { success, message, data } = res.data || {};
+        if (!success) {
+          showError(message || t('group_manage.messages.load_failed'));
+          return;
+        }
+        const pageItems = Array.isArray(data?.items) ? data.items : [];
+        rows.push(...pageItems);
+        const total = Number(data?.total || pageItems.length || 0);
+        if (pageItems.length === 0 || rows.length >= total || pageItems.length < 100) {
+          break;
+        }
+        page += 1;
+      }
       setGroupOptions(
         rows
           .filter((group) => group?.enabled)
           .map((group) => ({
             key: group.id,
-            text:
-              group.name && group.name !== group.id
-                ? `${group.name} (${group.id})`
-                : group.id,
+            text: group.name || '-',
             value: group.id,
           }))
       );
     } catch (error) {
       showError(error.message);
     }
-  }, []);
+  }, [t]);
   const navigate = useNavigate();
   const handleCancel = () => {
     navigate('/setting');
@@ -83,10 +100,11 @@ const EditUser = () => {
   const submit = async () => {
     let res = undefined;
     if (userId) {
-      let data = { ...inputs, id: parseInt(userId) };
+      let data = { ...inputs, id: (userId || '').toString().trim() };
       if (typeof data.quota === 'string') {
         data.quota = parseInt(data.quota);
       }
+      data.group = (data.group || '').toString().trim();
       res = await API.put(`/api/v1/admin/user/`, data);
     } else {
       res = await API.put(`/api/v1/public/user/self`, inputs);
@@ -104,10 +122,11 @@ const EditUser = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header'>{t('user.edit.title')}</Card.Header>
+          <Card.Header className='header router-page-title'>{t('user.edit.title')}</Card.Header>
           <Form loading={loading} autoComplete='new-password'>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.username')}
                 name='username'
                 placeholder={t('user.edit.username_placeholder')}
@@ -118,6 +137,7 @@ const EditUser = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.password')}
                 name='password'
                 type={'password'}
@@ -129,6 +149,7 @@ const EditUser = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.display_name')}
                 name='display_name'
                 placeholder={t('user.edit.display_name_placeholder')}
@@ -141,6 +162,7 @@ const EditUser = () => {
               <>
                 <Form.Field>
                   <Form.Dropdown
+                    className='router-section-dropdown'
                     label={t('user.edit.group')}
                     placeholder={t('user.edit.group_placeholder')}
                     name='group'
@@ -157,6 +179,7 @@ const EditUser = () => {
                 </Form.Field>
                 <Form.Field>
                   <Form.Input
+                    className='router-section-input'
                     label={`${t('user.edit.quota')}${renderQuotaWithPrompt(
                       quota,
                       t
@@ -173,6 +196,7 @@ const EditUser = () => {
             )}
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.github_id')}
                 name='github_id'
                 value={github_id}
@@ -183,6 +207,7 @@ const EditUser = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.wechat_id')}
                 name='wechat_id'
                 value={wechat_id}
@@ -193,6 +218,7 @@ const EditUser = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('user.edit.email')}
                 name='email'
                 value={email}
@@ -201,12 +227,14 @@ const EditUser = () => {
                 readOnly
               />
             </Form.Field>
-            <Button onClick={handleCancel}>
-              {t('user.edit.buttons.cancel')}
-            </Button>
-            <Button positive onClick={submit}>
-              {t('user.edit.buttons.submit')}
-            </Button>
+            <div className='router-toolbar-start router-block-gap-sm'>
+              <Button className='router-page-button' onClick={handleCancel}>
+                {t('user.edit.buttons.cancel')}
+              </Button>
+              <Button className='router-page-button' positive onClick={submit}>
+                {t('user.edit.buttons.submit')}
+              </Button>
+            </div>
           </Form>
         </Card.Content>
       </Card>

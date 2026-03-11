@@ -2,9 +2,6 @@ package model
 
 import (
 	"fmt"
-	"strings"
-
-	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"gorm.io/gorm"
 )
 
@@ -17,13 +14,14 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		&User{},
 		&Channel{},
 		&ChannelModel{},
-		&ChannelCapabilityResult{},
+		&ChannelTest{},
+		&AsyncTask{},
 		&Token{},
 		&Redemption{},
 		&Ability{},
 		&Option{},
-		&ModelProvider{},
-		&ModelProviderModel{},
+		&Provider{},
+		&ProviderModel{},
 		&ChannelProtocolCatalog{},
 		&GroupCatalog{},
 		&Log{},
@@ -31,19 +29,13 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		return err
 	}
 
-	if err := syncChannelProtocolsWithDB(tx); err != nil {
+	if err := ensureChannelProtocolCatalogSeededWithDB(tx); err != nil {
 		return err
 	}
-	if err := syncChannelProtocolCatalogWithDB(tx); err != nil {
+	if err := syncDefaultProviderCatalogWithDB(tx); err != nil {
 		return err
 	}
-	if err := syncModelProviderCatalogWithDB(tx); err != nil {
-		return err
-	}
-	if err := syncAbilityUpstreamModelsWithDB(tx); err != nil {
-		return err
-	}
-	return syncChannelTestModelsWithDB(tx)
+	return nil
 }
 
 func runLogBaselineMigrationWithDB(tx *gorm.DB) error {
@@ -51,49 +43,4 @@ func runLogBaselineMigrationWithDB(tx *gorm.DB) error {
 		return fmt.Errorf("database handle is nil")
 	}
 	return tx.AutoMigrate(&Log{})
-}
-
-func syncChannelProtocolsWithDB(tx *gorm.DB) error {
-	rows := make([]Channel, 0)
-	if err := tx.Select("id", "protocol").Find(&rows).Error; err != nil {
-		return err
-	}
-
-	for _, row := range rows {
-		normalized := relaychannel.NormalizeProtocolName(row.Protocol)
-		if normalized == "" {
-			normalized = "openai"
-		}
-		current := strings.TrimSpace(strings.ToLower(row.Protocol))
-		if current == normalized {
-			continue
-		}
-		if err := tx.Model(&Channel{}).
-			Where("id = ?", row.Id).
-			Update("protocol", normalized).Error; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func syncChannelTestModelsWithDB(db *gorm.DB) error {
-	channels := make([]Channel, 0)
-	if err := db.Select("id").Find(&channels).Error; err != nil {
-		return err
-	}
-
-	for _, channel := range channels {
-		if err := EnsureChannelTestModelWithDB(db, channel.Id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func syncAbilityUpstreamModelsWithDB(db *gorm.DB) error {
-	if db == nil {
-		return fmt.Errorf("database handle is nil")
-	}
-	return db.Exec(`UPDATE group_model_channels SET upstream_model = model WHERE COALESCE(upstream_model, '') = ''`).Error
 }

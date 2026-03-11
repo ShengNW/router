@@ -1,42 +1,101 @@
 package channel
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
+	"errors"
 	"net/http"
-	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yeying-community/router/common/helper"
 	commonutils "github.com/yeying-community/router/common/utils"
 	"github.com/yeying-community/router/internal/admin/model"
+	"gorm.io/gorm"
 )
 
-type modelProviderCatalogItem struct {
-	ID           string                           `json:"id"`
-	Provider     string                           `json:"provider,omitempty"`
-	Name         string                           `json:"name,omitempty"`
-	Models       []string                         `json:"models"`
-	ModelDetails []model.ModelProviderModelDetail `json:"model_details,omitempty"`
-	BaseURL      string                           `json:"base_url,omitempty"`
-	SortOrder    int                              `json:"sort_order,omitempty"`
-	Source       string                           `json:"source,omitempty"`
-	UpdatedAt    int64                            `json:"updated_at,omitempty"`
+const (
+	defaultProviderPageSize = 10
+	maxProviderPageSize     = 100
+)
+
+type providerCatalogItem struct {
+	ID           string                      `json:"id"`
+	Provider     string                      `json:"provider,omitempty"`
+	Name         string                      `json:"name,omitempty"`
+	Models       []string                    `json:"models"`
+	ModelDetails []model.ProviderModelDetail `json:"model_details,omitempty"`
+	BaseURL      string                      `json:"base_url,omitempty"`
+	OfficialURL  string                      `json:"official_url,omitempty"`
+	SortOrder    int                         `json:"sort_order,omitempty"`
+	Source       string                      `json:"source,omitempty"`
+	UpdatedAt    int64                       `json:"updated_at,omitempty"`
 }
 
-type modelProviderCatalogUpdateRequest struct {
-	Providers []modelProviderCatalogItem `json:"providers"`
+type providerCatalogListData struct {
+	Items    []providerCatalogItem `json:"items"`
+	Total    int64                 `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"page_size"`
 }
 
-func normalizeModelProviderCatalogID(item modelProviderCatalogItem) string {
-	id := commonutils.NormalizeModelProvider(item.ID)
+type appendProviderModelRequest struct {
+	Model       string  `json:"model"`
+	Type        string  `json:"type,omitempty"`
+	InputPrice  float64 `json:"input_price,omitempty"`
+	OutputPrice float64 `json:"output_price,omitempty"`
+	PriceUnit   string  `json:"price_unit,omitempty"`
+	Currency    string  `json:"currency,omitempty"`
+	Source      string  `json:"source,omitempty"`
+}
+
+func providerModelNames(details []model.ProviderModelDetail) []string {
+	normalized := model.NormalizeProviderModelDetails(details)
+	names := make([]string, 0, len(normalized))
+	for _, item := range normalized {
+		if strings.TrimSpace(item.Model) == "" {
+			continue
+		}
+		names = append(names, item.Model)
+	}
+	return names
+}
+
+func mergeProviderDetailInputs(current []model.ProviderModelDetail, fallbackModels []string, now int64) []model.ProviderModelDetail {
+	merged := make([]model.ProviderModelDetail, 0, len(current)+len(fallbackModels))
+	merged = append(merged, current...)
+	seen := make(map[string]struct{}, len(current))
+	for _, detail := range current {
+		modelName := strings.TrimSpace(detail.Model)
+		if modelName == "" {
+			continue
+		}
+		seen[modelName] = struct{}{}
+	}
+	for _, modelName := range fallbackModels {
+		name := strings.TrimSpace(modelName)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		merged = append(merged, model.ProviderModelDetail{
+			Model:     name,
+			Source:    "manual",
+			UpdatedAt: now,
+		})
+	}
+	return model.NormalizeProviderModelDetails(merged)
+}
+
+func normalizeProviderCatalogID(item providerCatalogItem) string {
+	id := commonutils.NormalizeProvider(item.ID)
 	if id == "" {
-		id = commonutils.NormalizeModelProvider(item.Provider)
+		id = commonutils.NormalizeProvider(item.Provider)
 	}
 	if id == "" {
-		id = commonutils.NormalizeModelProvider(item.Name)
+		id = commonutils.NormalizeProvider(item.Name)
 	}
 	return id
 }
@@ -48,298 +107,446 @@ func normalizeCatalogSortOrder(sortOrder int) int {
 	return 0
 }
 
-func finalizeModelProviderCatalogSortOrder(items []modelProviderCatalogItem) []modelProviderCatalogItem {
-	sort.SliceStable(items, func(i, j int) bool {
-		leftOrder := normalizeCatalogSortOrder(items[i].SortOrder)
-		rightOrder := normalizeCatalogSortOrder(items[j].SortOrder)
-		if leftOrder > 0 && rightOrder > 0 {
-			if leftOrder != rightOrder {
-				return leftOrder < rightOrder
-			}
-			return items[i].ID < items[j].ID
+func parseProviderPageParams(c *gin.Context) (page int, pageSize int) {
+	pageSize = defaultProviderPageSize
+	if raw := strings.TrimSpace(c.Query("page_size")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			pageSize = parsed
 		}
-		if leftOrder > 0 {
-			return true
-		}
-		if rightOrder > 0 {
-			return false
-		}
-		return items[i].ID < items[j].ID
-	})
-
-	nextOrder := 10
-	for i := range items {
-		order := normalizeCatalogSortOrder(items[i].SortOrder)
-		if order > 0 {
-			items[i].SortOrder = order
-			if order >= nextOrder {
-				nextOrder = order + 10
-			}
-			continue
-		}
-		items[i].SortOrder = nextOrder
-		nextOrder += 10
 	}
-	return items
+	if pageSize > maxProviderPageSize {
+		pageSize = maxProviderPageSize
+	}
+	page = 1
+	if raw := strings.TrimSpace(c.Query("page")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	return page, pageSize
 }
 
-func normalizeModelProviderCatalog(items []modelProviderCatalogItem) []modelProviderCatalogItem {
-	now := helper.GetTimestamp()
-	indexByProvider := make(map[string]int, len(items))
-	normalized := make([]modelProviderCatalogItem, 0, len(items))
-	for _, item := range items {
-		provider := normalizeModelProviderCatalogID(item)
+func buildProviderCatalogItems(rows []model.Provider) ([]providerCatalogItem, error) {
+	if len(rows) == 0 {
+		return []providerCatalogItem{}, nil
+	}
+	providers := make([]string, 0, len(rows))
+	for _, row := range rows {
+		provider := commonutils.NormalizeProvider(row.Id)
 		if provider == "" {
 			continue
 		}
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			name = provider
-		}
-		source := strings.TrimSpace(strings.ToLower(item.Source))
-		if source == "" {
-			source = "manual"
-		}
-		baseURL := strings.TrimSpace(item.BaseURL)
-		detailsInput := make([]model.ModelProviderModelDetail, 0, len(item.ModelDetails)+len(item.Models))
-		detailsInput = append(detailsInput, item.ModelDetails...)
-		for _, modelName := range item.Models {
-			detailsInput = append(detailsInput, model.ModelProviderModelDetail{Model: strings.TrimSpace(modelName)})
-		}
-		details := model.MergeModelProviderDetails(provider, detailsInput, item.Models, false, now)
-		entry := modelProviderCatalogItem{
-			ID:           provider,
-			Name:         name,
-			Models:       model.ModelProviderModelNames(details),
-			ModelDetails: details,
-			BaseURL:      baseURL,
-			SortOrder:    normalizeCatalogSortOrder(item.SortOrder),
-			Source:       source,
-			UpdatedAt:    item.UpdatedAt,
-		}
-		if idx, ok := indexByProvider[provider]; ok {
-			existing := normalized[idx]
-			existing.ModelDetails = model.MergeModelProviderDetails(
-				provider,
-				append(existing.ModelDetails, entry.ModelDetails...),
-				append(existing.Models, entry.Models...),
-				false,
-				now,
-			)
-			existing.Models = model.ModelProviderModelNames(existing.ModelDetails)
-			if existing.Name == existing.ID && entry.Name != entry.ID {
-				existing.Name = entry.Name
-			}
-			if existing.BaseURL == "" && entry.BaseURL != "" {
-				existing.BaseURL = entry.BaseURL
-			}
-			if entry.BaseURL != "" && entry.Source != "default" {
-				existing.BaseURL = entry.BaseURL
-			}
-			if entry.SortOrder > 0 && entry.Source != "default" {
-				existing.SortOrder = entry.SortOrder
-			}
-			if existing.SortOrder <= 0 && entry.SortOrder > 0 {
-				existing.SortOrder = entry.SortOrder
-			}
-			if entry.UpdatedAt > existing.UpdatedAt {
-				existing.UpdatedAt = entry.UpdatedAt
-			}
-			existing.Source = entry.Source
-			normalized[idx] = existing
-			continue
-		}
-		indexByProvider[provider] = len(normalized)
-		normalized = append(normalized, entry)
+		providers = append(providers, provider)
 	}
-	return finalizeModelProviderCatalogSortOrder(normalized)
-}
-
-func loadModelProviderCatalog() ([]modelProviderCatalogItem, error) {
-	detailsByProvider, err := model.LoadModelProviderModelDetailsMap(model.DB)
+	detailsByProvider, err := model.LoadProviderModelDetailsMapForProviders(model.DB, providers)
 	if err != nil {
 		return nil, err
 	}
-
-	rows := make([]model.ModelProvider, 0)
-	if err := model.DB.Order("sort_order asc, id asc").Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	items := make([]modelProviderCatalogItem, 0, len(rows))
+	items := make([]providerCatalogItem, 0, len(rows))
 	for _, row := range rows {
-		provider := commonutils.NormalizeModelProvider(row.Id)
+		provider := commonutils.NormalizeProvider(row.Id)
 		if provider == "" {
 			continue
 		}
-		details := model.MergeModelProviderDetails(provider, detailsByProvider[provider], nil, false, helper.GetTimestamp())
-		items = append(items, modelProviderCatalogItem{
+		details := model.NormalizeProviderModelDetails(detailsByProvider[provider])
+		items = append(items, providerCatalogItem{
 			ID:           provider,
 			Name:         strings.TrimSpace(row.Name),
-			Models:       model.ModelProviderModelNames(details),
+			Models:       providerModelNames(details),
 			ModelDetails: details,
 			BaseURL:      strings.TrimSpace(row.BaseURL),
+			OfficialURL:  strings.TrimSpace(row.OfficialURL),
 			SortOrder:    normalizeCatalogSortOrder(row.SortOrder),
 			Source:       strings.TrimSpace(strings.ToLower(row.Source)),
 			UpdatedAt:    row.UpdatedAt,
 		})
 	}
-	return normalizeModelProviderCatalog(items), nil
+	return items, nil
 }
 
-func saveModelProviderCatalog(items []modelProviderCatalogItem) ([]modelProviderCatalogItem, error) {
-	now := helper.GetTimestamp()
-	currentItems, currentErr := loadModelProviderCatalog()
-	if currentErr != nil {
-		return nil, currentErr
+func buildProviderListQuery(keyword string) *gorm.DB {
+	query := model.DB.Model(&model.Provider{})
+	normalizedKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	if normalizedKeyword == "" {
+		return query
 	}
-	currentDetailsByProvider := make(map[string][]model.ModelProviderModelDetail, len(currentItems))
-	for _, item := range currentItems {
-		provider := normalizeModelProviderCatalogID(item)
-		if provider == "" {
-			continue
-		}
-		details := model.MergeModelProviderDetails(provider, item.ModelDetails, item.Models, false, now)
-		currentDetailsByProvider[provider] = details
+	likeKeyword := "%" + normalizedKeyword + "%"
+	return query.Where(
+		`LOWER(id) LIKE ? OR LOWER(name) LIKE ? OR LOWER(COALESCE(base_url, '')) LIKE ? OR LOWER(COALESCE(official_url, '')) LIKE ? OR LOWER(source) LIKE ? OR EXISTS (SELECT 1 FROM `+model.ProviderModelsTableName+` pm WHERE pm.provider = providers.id AND LOWER(pm.model) LIKE ?)`,
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+		likeKeyword,
+	)
+}
+
+func listProviderCatalog(page int, pageSize int, keyword string) (providerCatalogListData, error) {
+	if page < 1 {
+		page = 1
+	}
+	total := int64(0)
+	if err := buildProviderListQuery(keyword).Count(&total).Error; err != nil {
+		return providerCatalogListData{}, err
+	}
+	rows := make([]model.Provider, 0)
+	if err := buildProviderListQuery(keyword).
+		Order("sort_order asc, id asc").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&rows).Error; err != nil {
+		return providerCatalogListData{}, err
+	}
+	items, err := buildProviderCatalogItems(rows)
+	if err != nil {
+		return providerCatalogListData{}, err
+	}
+	return providerCatalogListData{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
+}
+
+func getProviderCatalogItemByID(id string) (providerCatalogItem, error) {
+	provider := commonutils.NormalizeProvider(id)
+	if provider == "" {
+		return providerCatalogItem{}, gorm.ErrRecordNotFound
+	}
+	row := model.Provider{}
+	if err := model.DB.First(&row, "id = ?", provider).Error; err != nil {
+		return providerCatalogItem{}, err
+	}
+	items, err := buildProviderCatalogItems([]model.Provider{row})
+	if err != nil {
+		return providerCatalogItem{}, err
+	}
+	if len(items) == 0 {
+		return providerCatalogItem{}, gorm.ErrRecordNotFound
+	}
+	return items[0], nil
+}
+
+func nextProviderSortOrder(tx *gorm.DB) (int, error) {
+	nextOrder := 10
+	if err := tx.Model(&model.Provider{}).Select("COALESCE(MAX(sort_order), 0) + 10").Scan(&nextOrder).Error; err != nil {
+		return 0, err
+	}
+	if nextOrder <= 0 {
+		nextOrder = 10
+	}
+	return nextOrder, nil
+}
+
+func normalizeProviderUpsertItem(providerID string, item providerCatalogItem, existing *providerCatalogItem, defaultSortOrder int) (providerCatalogItem, error) {
+	provider := commonutils.NormalizeProvider(providerID)
+	bodyProvider := normalizeProviderCatalogID(item)
+	if provider == "" {
+		provider = bodyProvider
+	}
+	if provider == "" {
+		return providerCatalogItem{}, errors.New("供应商标识不能为空")
+	}
+	if bodyProvider != "" && bodyProvider != provider {
+		return providerCatalogItem{}, errors.New("供应商标识不匹配")
 	}
 
-	normalized := finalizeModelProviderCatalogSortOrder(normalizeModelProviderCatalog(items))
-	for i := range normalized {
-		if len(normalized[i].ModelDetails) == 0 && len(normalized[i].Models) == 0 {
-			if existingDetails, ok := currentDetailsByProvider[normalized[i].ID]; ok {
-				normalized[i].ModelDetails = existingDetails
-				normalized[i].Models = model.ModelProviderModelNames(existingDetails)
-			}
-		}
-		if normalized[i].UpdatedAt == 0 {
-			normalized[i].UpdatedAt = now
+	now := helper.GetTimestamp()
+	name := strings.TrimSpace(item.Name)
+	if name == "" {
+		if existing != nil && strings.TrimSpace(existing.Name) != "" {
+			name = strings.TrimSpace(existing.Name)
+		} else {
+			name = provider
 		}
 	}
-	providerRows := make([]model.ModelProvider, 0, len(normalized))
-	modelRows := make([]model.ModelProviderModel, 0)
-	for _, item := range normalized {
-		details := model.MergeModelProviderDetails(item.ID, item.ModelDetails, item.Models, false, now)
-		item.Models = model.ModelProviderModelNames(details)
-		item.ModelDetails = details
-		providerRows = append(providerRows, model.ModelProvider{
-			Id:        item.ID,
-			Name:      strings.TrimSpace(item.Name),
-			BaseURL:   strings.TrimSpace(item.BaseURL),
-			SortOrder: item.SortOrder,
-			Source:    strings.TrimSpace(strings.ToLower(item.Source)),
-			UpdatedAt: item.UpdatedAt,
-		})
-		modelRows = append(modelRows, model.BuildModelProviderModelRows(item.ID, details, now)...)
+
+	source := strings.TrimSpace(strings.ToLower(item.Source))
+	if source == "" {
+		if existing != nil && strings.TrimSpace(existing.Source) != "" {
+			source = strings.TrimSpace(strings.ToLower(existing.Source))
+		} else {
+			source = "manual"
+		}
 	}
+
+	baseURL := strings.TrimSpace(item.BaseURL)
+	if baseURL == "" && existing != nil {
+		baseURL = strings.TrimSpace(existing.BaseURL)
+	}
+	officialURL := strings.TrimSpace(item.OfficialURL)
+	if officialURL == "" && existing != nil {
+		officialURL = strings.TrimSpace(existing.OfficialURL)
+	}
+
+	detailInput := make([]model.ProviderModelDetail, 0, len(item.ModelDetails)+len(item.Models))
+	detailInput = append(detailInput, item.ModelDetails...)
+	for _, modelName := range item.Models {
+		detailInput = append(detailInput, model.ProviderModelDetail{Model: strings.TrimSpace(modelName)})
+	}
+
+	details := mergeProviderDetailInputs(detailInput, item.Models, now)
+	if len(details) == 0 && existing != nil {
+		details = mergeProviderDetailInputs(existing.ModelDetails, existing.Models, now)
+	}
+
+	sortOrder := normalizeCatalogSortOrder(item.SortOrder)
+	if sortOrder <= 0 && existing != nil {
+		sortOrder = normalizeCatalogSortOrder(existing.SortOrder)
+	}
+	if sortOrder <= 0 {
+		sortOrder = normalizeCatalogSortOrder(defaultSortOrder)
+	}
+	if sortOrder <= 0 {
+		sortOrder = 10
+	}
+
+	return providerCatalogItem{
+		ID:           provider,
+		Name:         name,
+		Models:       providerModelNames(details),
+		ModelDetails: details,
+		BaseURL:      baseURL,
+		OfficialURL:  officialURL,
+		SortOrder:    sortOrder,
+		Source:       source,
+		UpdatedAt:    now,
+	}, nil
+}
+
+func saveProviderCatalogItem(item providerCatalogItem, create bool) (providerCatalogItem, error) {
+	resolvedID := normalizeProviderCatalogID(item)
+	existing, err := getProviderCatalogItemByID(resolvedID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return providerCatalogItem{}, err
+	}
+	existingFound := err == nil
+	if create && existingFound {
+		return providerCatalogItem{}, errors.New("该供应商已存在，请直接编辑")
+	}
+	if !create && !existingFound {
+		return providerCatalogItem{}, gorm.ErrRecordNotFound
+	}
+
 	tx := model.DB.Begin()
 	if tx.Error != nil {
-		return nil, tx.Error
+		return providerCatalogItem{}, tx.Error
 	}
-	if err := tx.Where("1 = 1").Delete(&model.ModelProviderModel{}).Error; err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Where("1 = 1").Delete(&model.ModelProvider{}).Error; err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if len(providerRows) > 0 {
-		if err := tx.Create(&providerRows).Error; err != nil {
+
+	defaultSortOrder := 0
+	if !existingFound {
+		defaultSortOrder, err = nextProviderSortOrder(tx)
+		if err != nil {
 			_ = tx.Rollback()
-			return nil, err
+			return providerCatalogItem{}, err
 		}
 	}
+
+	var existingPtr *providerCatalogItem
+	if existingFound {
+		existingCopy := existing
+		existingPtr = &existingCopy
+	}
+	normalized, err := normalizeProviderUpsertItem(resolvedID, item, existingPtr, defaultSortOrder)
+	if err != nil {
+		_ = tx.Rollback()
+		return providerCatalogItem{}, err
+	}
+
+	providerRow := model.Provider{
+		Id:          normalized.ID,
+		Name:        strings.TrimSpace(normalized.Name),
+		BaseURL:     strings.TrimSpace(normalized.BaseURL),
+		OfficialURL: strings.TrimSpace(normalized.OfficialURL),
+		SortOrder:   normalized.SortOrder,
+		Source:      strings.TrimSpace(strings.ToLower(normalized.Source)),
+		UpdatedAt:   normalized.UpdatedAt,
+	}
+	if create {
+		if err := tx.Create(&providerRow).Error; err != nil {
+			_ = tx.Rollback()
+			return providerCatalogItem{}, err
+		}
+	} else {
+		result := tx.Model(&model.Provider{}).
+			Where("id = ?", normalized.ID).
+			Updates(map[string]any{
+				"name":         providerRow.Name,
+				"base_url":     providerRow.BaseURL,
+				"official_url": providerRow.OfficialURL,
+				"sort_order":   providerRow.SortOrder,
+				"source":       providerRow.Source,
+				"updated_at":   providerRow.UpdatedAt,
+			})
+		if result.Error != nil {
+			_ = tx.Rollback()
+			return providerCatalogItem{}, result.Error
+		}
+		if result.RowsAffected == 0 {
+			_ = tx.Rollback()
+			return providerCatalogItem{}, gorm.ErrRecordNotFound
+		}
+	}
+
+	if err := tx.Where("provider = ?", normalized.ID).Delete(&model.ProviderModel{}).Error; err != nil {
+		_ = tx.Rollback()
+		return providerCatalogItem{}, err
+	}
+	modelRows := model.BuildProviderModelRows(normalized.ID, normalized.ModelDetails, normalized.UpdatedAt)
 	if len(modelRows) > 0 {
 		if err := tx.Create(&modelRows).Error; err != nil {
 			_ = tx.Rollback()
-			return nil, err
+			return providerCatalogItem{}, err
 		}
 	}
 	if err := tx.Commit().Error; err != nil {
-		return nil, err
+		return providerCatalogItem{}, err
 	}
 	if err := model.SyncModelPricingCatalogWithDB(model.DB); err != nil {
-		return nil, err
+		return providerCatalogItem{}, err
 	}
-	return normalized, nil
+	return getProviderCatalogItemByID(normalized.ID)
 }
 
-// GetModelProviders godoc
-// @Summary Get model provider catalog (admin)
+func deleteProviderCatalogItem(id string) error {
+	provider := commonutils.NormalizeProvider(id)
+	if provider == "" {
+		return errors.New("供应商标识不能为空")
+	}
+	tx := model.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if err := tx.Where("provider = ?", provider).Delete(&model.ProviderModel{}).Error; err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	result := tx.Where("id = ?", provider).Delete(&model.Provider{})
+	if result.Error != nil {
+		_ = tx.Rollback()
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		_ = tx.Rollback()
+		return gorm.ErrRecordNotFound
+	}
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+	return model.SyncModelPricingCatalogWithDB(model.DB)
+}
+
+func appendModelToProviderItem(id string, req appendProviderModelRequest) (providerCatalogItem, error) {
+	existing, err := getProviderCatalogItemByID(id)
+	if err != nil {
+		return providerCatalogItem{}, err
+	}
+
+	now := helper.GetTimestamp()
+	detail := model.ProviderModelDetail{
+		Model:       strings.TrimSpace(req.Model),
+		Type:        strings.TrimSpace(strings.ToLower(req.Type)),
+		InputPrice:  req.InputPrice,
+		OutputPrice: req.OutputPrice,
+		PriceUnit:   strings.TrimSpace(strings.ToLower(req.PriceUnit)),
+		Currency:    strings.TrimSpace(strings.ToUpper(req.Currency)),
+		Source:      strings.TrimSpace(strings.ToLower(req.Source)),
+		UpdatedAt:   now,
+	}
+	if detail.Model == "" {
+		return providerCatalogItem{}, errors.New("模型名称不能为空")
+	}
+	if detail.Source == "" {
+		detail.Source = "manual"
+	}
+
+	existing.ModelDetails = mergeProviderDetailInputs(append(existing.ModelDetails, detail), nil, now)
+	existing.UpdatedAt = now
+	return saveProviderCatalogItem(existing, false)
+}
+
+// GetProviders godoc
+// @Summary Get paged provider catalog (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
-// @Success 200 {object} docs.ModelProviderCatalogResponse
+// @Param page query int false "Page (1-based)"
+// @Param page_size query int false "Page size"
+// @Param keyword query string false "Keyword"
+// @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/provider [get]
-func GetModelProviders(c *gin.Context) {
-	items, err := loadModelProviderCatalog()
+// @Router /api/v1/admin/providers [get]
+func GetProviders(c *gin.Context) {
+	page, pageSize := parseProviderPageParams(c)
+	data, err := listProviderCatalog(page, pageSize, c.Query("keyword"))
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "模型供应商配置解析失败: " + err.Error(),
+			"message": "加载供应商列表失败: " + err.Error(),
 		})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    items,
+		"data":    data,
 	})
 }
 
-// UpdateModelProviders godoc
-// @Summary Update model provider catalog (admin)
+// GetProvider godoc
+// @Summary Get provider detail (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Provider ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/providers/{id} [get]
+func GetProvider(c *gin.Context) {
+	item, err := getProviderCatalogItemByID(c.Param("id"))
+	if err != nil {
+		message := "加载供应商详情失败: " + err.Error()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			message = "供应商不存在"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": message,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    item,
+	})
+}
+
+// CreateProvider godoc
+// @Summary Create provider (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param body body docs.ModelProviderCatalogUpdateRequest true "Model provider catalog payload"
-// @Success 200 {object} docs.ModelProviderCatalogResponse
+// @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/provider [put]
-func UpdateModelProviders(c *gin.Context) {
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
+// @Router /api/v1/admin/providers [post]
+func CreateProvider(c *gin.Context) {
+	req := providerCatalogItem{}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "读取请求失败",
+			"message": err.Error(),
 		})
 		return
 	}
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "请求体不能为空",
-		})
-		return
-	}
-	providers := make([]modelProviderCatalogItem, 0)
-	if trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &providers); err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "请求体格式错误",
-			})
-			return
-		}
-	} else {
-		req := modelProviderCatalogUpdateRequest{}
-		if err := json.Unmarshal(trimmed, &req); err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "请求体格式错误",
-			})
-			return
-		}
-		providers = req.Providers
-	}
-
-	saved, err := saveModelProviderCatalog(providers)
+	saved, err := saveProviderCatalogItem(req, true)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "保存模型供应商配置失败: " + err.Error(),
+			"message": "新增供应商失败: " + err.Error(),
 		})
 		return
 	}
@@ -347,5 +554,111 @@ func UpdateModelProviders(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    saved,
+	})
+}
+
+// UpdateProvider godoc
+// @Summary Update provider (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Provider ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/providers/{id} [put]
+func UpdateProvider(c *gin.Context) {
+	req := providerCatalogItem{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	req.ID = strings.TrimSpace(c.Param("id"))
+	saved, err := saveProviderCatalogItem(req, false)
+	if err != nil {
+		message := "保存供应商失败: " + err.Error()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			message = "供应商不存在"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": message,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    saved,
+	})
+}
+
+// AppendProviderModel godoc
+// @Summary Append one model detail into provider catalog (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Provider ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/providers/{id}/model [post]
+func AppendProviderModel(c *gin.Context) {
+	req := appendProviderModelRequest{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	saved, err := appendModelToProviderItem(c.Param("id"), req)
+	if err != nil {
+		message := "录入供应商模型失败: " + err.Error()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			message = "供应商不存在"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": message,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    saved,
+	})
+}
+
+// DeleteProvider godoc
+// @Summary Delete provider (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Provider ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/providers/{id} [delete]
+func DeleteProvider(c *gin.Context) {
+	if err := deleteProviderCatalogItem(c.Param("id")); err != nil {
+		message := "删除供应商失败: " + err.Error()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			message = "供应商不存在"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": message,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
 	})
 }

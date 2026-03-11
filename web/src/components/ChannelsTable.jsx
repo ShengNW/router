@@ -1,32 +1,129 @@
-import React, {useCallback, useEffect, useState} from 'react';
-import {useTranslation} from 'react-i18next';
-import {Button, Dropdown, Form, Icon, Input, Label, Pagination, Popup, Table,} from 'semantic-ui-react';
-import {Link, useNavigate} from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  Button,
+  Form,
+  Icon,
+  Input,
+  Label,
+  Pagination,
+  Popup,
+  Table,
+} from 'semantic-ui-react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   API,
-  loadChannelModels,
   showError,
   showInfo,
   showSuccess,
   timestamp2string,
 } from '../helpers';
 
-import {ITEMS_PER_PAGE} from '../constants';
+import { ITEMS_PER_PAGE } from '../constants';
 import {
   getChannelProtocolOptions,
   loadChannelProtocolOptions,
 } from '../helpers/helper';
-import {renderNumber} from '../helpers/render';
+import { renderNumber } from '../helpers/render';
+
+const normalizeAsyncTaskStatus = (value) => {
+  const normalized = (value || '').toString().trim().toLowerCase();
+  switch (normalized) {
+    case 'pending':
+    case 'running':
+    case 'succeeded':
+    case 'failed':
+    case 'canceled':
+      return normalized;
+    default:
+      return 'pending';
+  }
+};
+
+async function fetchTaskById(taskId) {
+  const normalizedTaskId = (taskId || '').toString().trim();
+  if (normalizedTaskId === '') {
+    throw new Error('fetch task failed');
+  }
+  const res = await API.get(`/api/v1/admin/tasks/${normalizedTaskId}`);
+  const { success, message, data } = res.data || {};
+  if (!success) {
+    throw new Error(message || 'fetch task failed');
+  }
+  return data || null;
+}
 
 function renderTimestamp(timestamp) {
   return <>{timestamp2string(timestamp)}</>;
+}
+
+async function fetchSelectedChannelModels(channelId) {
+  const normalizedChannelId = (channelId || '').toString().trim();
+  if (normalizedChannelId === '') {
+    return [];
+  }
+  const items = [];
+    let page = 1;
+    while (page < 50) {
+      const res = await API.get(`/api/v1/admin/channel/${normalizedChannelId}/models`, {
+        params: {
+          page,
+          page_size: 100,
+        },
+      });
+    const { success, data } = res.data || {};
+    if (!success) {
+      return [];
+    }
+    const pageItems = Array.isArray(data?.items) ? data.items : [];
+    items.push(...pageItems);
+    const total = Number(data?.total || pageItems.length || 0);
+    if (
+      pageItems.length === 0 ||
+      items.length >= total ||
+      pageItems.length < 100
+    ) {
+      break;
+    }
+      page += 1;
+    }
+  return items
+    .filter((item) => item && item.selected === true && item.inactive !== true)
+    .map((item) => (item.model || '').toString().trim())
+    .filter((item) => item !== '');
+}
+
+async function fetchChannelLatestTests(channelId) {
+  const normalizedChannelId = (channelId || '').toString().trim();
+  if (normalizedChannelId === '') {
+    return {
+      last_tested_at: 0,
+      items: [],
+    };
+  }
+  const res = await API.get(`/api/v1/admin/channel/${normalizedChannelId}/tests`);
+  const { success, data } = res.data || {};
+  if (!success) {
+    return {
+      last_tested_at: 0,
+      items: [],
+    };
+  }
+  return {
+    last_tested_at: Number(data?.last_tested_at || 0),
+    items: Array.isArray(data?.items) ? data.items : [],
+  };
 }
 
 function buildProtocolMap(options, t) {
   const protocolMap = {};
   if (Array.isArray(options)) {
     options.forEach((option) => {
-      if (option && typeof option.value === 'string' && option.value.trim() !== '') {
+      if (
+        option &&
+        typeof option.value === 'string' &&
+        option.value.trim() !== ''
+      ) {
         protocolMap[option.value] = option;
       }
     });
@@ -42,17 +139,17 @@ function buildProtocolMap(options, t) {
 function renderProtocol(protocol, protocolMap) {
   const normalized = (protocol || '').toString().trim().toLowerCase();
   const option = protocolMap[normalized] || protocolMap.unknown;
-  const colorMap = {
-    grey: 'rgba(0, 0, 0, 0.5)',
-    green: '#1f8f4b',
-    red: '#d64545',
-    yellow: '#b58105',
-    olive: '#7f8b24',
-    blue: '#2185d0',
-    orange: '#c66900',
+  const colorClassMap = {
+    grey: 'router-text-muted',
+    green: 'router-text-success',
+    red: 'router-text-danger',
+    yellow: 'router-text-warning',
+    olive: 'router-text-olive',
+    blue: 'router-text-info',
+    orange: 'router-text-warning',
   };
   return (
-    <span style={{ color: colorMap[option?.color] || 'inherit', fontWeight: 500 }}>
+    <span className={colorClassMap[option?.color] || undefined}>
       {option ? option.text : normalized || 'unknown'}
     </span>
   );
@@ -63,23 +160,12 @@ function getChannelDisplayName(channel) {
   if (name !== '') {
     return name;
   }
-  return (channel?.id || '').toString().trim();
+  return '-';
 }
 
 function renderChannelName(channel, t) {
   const displayName = getChannelDisplayName(channel);
-  const identifier = (channel?.id || '').toString().trim();
-  const showIdentifier = identifier !== '' && displayName !== identifier;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-      <span>{displayName || t('channel.table.no_name')}</span>
-      {showIdentifier && (
-        <span style={{ fontSize: '12px', color: 'rgba(0, 0, 0, 0.45)' }}>
-          {t('channel.table.identifier', { id: identifier })}
-        </span>
-      )}
-    </div>
-  );
+  return <span>{displayName || t('channel.table.no_name')}</span>;
 }
 
 function renderBalance(protocol, balance, t) {
@@ -114,10 +200,52 @@ function renderBalance(protocol, balance, t) {
 }
 
 const selectionModeNone = '';
-const selectionModeTest = 'test';
 const selectionModeDelete = 'delete';
 const selectionModeDisable = 'disable';
 const channelStatusCreating = 4;
+const CHANNEL_CREATE_CACHE_KEY = 'router.channel.create.v3';
+const CREATE_CHANNEL_STEP_MIN = 1;
+const CREATE_CHANNEL_STEP_MAX = 4;
+
+function parseCreateStep(rawStep) {
+  const step = Number(rawStep);
+  if (!Number.isInteger(step)) {
+    return CREATE_CHANNEL_STEP_MIN;
+  }
+  if (step < CREATE_CHANNEL_STEP_MIN) {
+    return CREATE_CHANNEL_STEP_MIN;
+  }
+  if (step > CREATE_CHANNEL_STEP_MAX) {
+    return CREATE_CHANNEL_STEP_MAX;
+  }
+  return step;
+}
+
+function readStoredCreatingStep(channelId) {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+  const targetChannelId = (channelId || '').toString().trim();
+  if (targetChannelId === '') {
+    return 0;
+  }
+  try {
+    const raw = localStorage.getItem(CHANNEL_CREATE_CACHE_KEY);
+    if (!raw) {
+      return 0;
+    }
+    const cachedState = JSON.parse(raw);
+    if (!cachedState || typeof cachedState !== 'object') {
+      return 0;
+    }
+    if ((cachedState.channel_id || '').toString().trim() !== targetChannelId) {
+      return 0;
+    }
+    return parseCreateStep(cachedState.step);
+  } catch {
+    return 0;
+  }
+}
 
 const ChannelsTable = () => {
   const { t } = useTranslation();
@@ -125,15 +253,35 @@ const ChannelsTable = () => {
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
+  const [totalChannels, setTotalChannels] = useState(0);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
   const [selectionMode, setSelectionMode] = useState(selectionModeNone);
-  const [batchTesting, setBatchTesting] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchDisabling, setBatchDisabling] = useState(false);
   const [selectedChannelIds, setSelectedChannelIds] = useState([]);
+  const [balanceRefreshTasks, setBalanceRefreshTasks] = useState({});
   const [protocolMap, setProtocolMap] = useState(() =>
     buildProtocolMap(getChannelProtocolOptions(), t)
+  );
+
+  const openChannelTasksPage = useCallback(
+    (channelId, extraParams = {}) => {
+      const normalizedChannelId = (channelId || '').toString().trim();
+      const query = new URLSearchParams();
+      if (normalizedChannelId !== '') {
+        query.set('channel_id', normalizedChannelId);
+      }
+      Object.entries(extraParams || {}).forEach(([key, value]) => {
+        const normalizedValue = (value || '').toString().trim();
+        if (normalizedValue !== '') {
+          query.set(key, normalizedValue);
+        }
+      });
+      const search = query.toString();
+      navigate(`/admin/task${search ? `?${search}` : ''}`);
+    },
+    [navigate]
   );
 
   const processChannelData = useCallback((channel) => {
@@ -143,73 +291,54 @@ const ChannelsTable = () => {
     if (next.protocol === '') {
       next.protocol = 'openai';
     }
-    const models = (next.models || '')
-      .split(',')
-      .map((model) => model.trim())
-      .filter((model) => model !== '');
-    next.models = Array.from(new Set(models));
-    const currentTestModel = (next.test_model || '').toString().trim();
-    if (next.models.length > 0) {
-      next.test_model = next.models.includes(currentTestModel)
-        ? currentTestModel
-        : next.models[0];
-    } else {
-      next.test_model = '';
-    }
-    next.model_options = next.models.map((model) => ({
-      key: model,
-      text: model,
-      value: model,
-    }));
     return next;
   }, []);
 
-  const loadChannels = useCallback(async (startIdx) => {
-    const res = await API.get(`/api/v1/admin/channel/?p=${startIdx}`);
-    const { success, message, data } = res.data;
-    if (success) {
-      let localChannels = data.map(processChannelData);
-      if (startIdx === 0) {
-        setChannels(localChannels);
+  const loadChannels = useCallback(
+    async ({ page = 1, keyword = '' } = {}) => {
+      const normalizedPage = Number(page) > 0 ? Number(page) : 1;
+      const normalizedKeyword = (keyword || '').toString().trim();
+      const res = await API.get('/api/v1/admin/channels/', {
+        params: {
+          page: normalizedPage,
+          page_size: ITEMS_PER_PAGE,
+          keyword: normalizedKeyword,
+        },
+      });
+      const { success, message, data } = res.data;
+      if (success) {
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setChannels(items.map(processChannelData));
+        const total = Number(data?.total || 0);
+        setTotalChannels(Number.isFinite(total) && total >= 0 ? total : 0);
       } else {
-        setChannels((prev) => {
-          let next = [...prev];
-          next.splice(
-            startIdx * ITEMS_PER_PAGE,
-            data.length,
-            ...localChannels
-          );
-          return next;
-        });
+        showError(message);
       }
-    } else {
-      showError(message);
-    }
-    setLoading(false);
-  }, [processChannelData]);
+      setLoading(false);
+    },
+    [processChannelData]
+  );
 
   const onPaginationChange = (e, { activePage }) => {
     (async () => {
-      if (activePage === Math.ceil(channels.length / ITEMS_PER_PAGE) + 1) {
-        // In this case we have to load more data and then append them.
-        await loadChannels(activePage - 1);
-      }
-      setActivePage(activePage);
+      const nextPage = Number(activePage) > 0 ? Number(activePage) : 1;
+      setLoading(true);
+      await loadChannels({ page: nextPage, keyword: searchKeyword });
+      setActivePage(nextPage);
     })();
   };
 
   const refresh = async () => {
     setLoading(true);
-    await loadChannels(activePage - 1);
+    await loadChannels({ page: activePage, keyword: searchKeyword });
   };
 
   useEffect(() => {
-    loadChannels(0)
+    loadChannels({ page: 1, keyword: '' })
       .then()
       .catch((reason) => {
         showError(reason);
       });
-    loadChannelModels().then();
   }, [loadChannels]);
 
   useEffect(() => {
@@ -234,6 +363,76 @@ const ChannelsTable = () => {
     setSelectedChannelIds((prev) => prev.filter((id) => validIds.has(id)));
   }, [selectionMode, channels]);
 
+  useEffect(() => {
+    const taskEntries = Object.entries(balanceRefreshTasks || {});
+    if (taskEntries.length === 0) {
+      return undefined;
+    }
+    const hasActiveTasks = taskEntries.some(([, task]) =>
+      ['pending', 'running'].includes(normalizeAsyncTaskStatus(task?.status))
+    );
+    if (!hasActiveTasks) {
+      return undefined;
+    }
+    const timer = window.setInterval(async () => {
+      const updates = await Promise.all(
+        taskEntries.map(async ([channelId, task]) => {
+          const status = normalizeAsyncTaskStatus(task?.status);
+          if (!['pending', 'running'].includes(status)) {
+            return { channelId, task };
+          }
+          try {
+            const latestTask = await fetchTaskById(task.id);
+            return { channelId, task: latestTask || task };
+          } catch {
+            return { channelId, task };
+          }
+        })
+      );
+      const nextTaskMap = {};
+      const finishedTasks = [];
+      updates.forEach(({ channelId, task }) => {
+        const status = normalizeAsyncTaskStatus(task?.status);
+        if (['pending', 'running'].includes(status)) {
+          nextTaskMap[channelId] = task;
+        } else {
+          finishedTasks.push({ channelId, task });
+        }
+      });
+      setBalanceRefreshTasks(nextTaskMap);
+      if (finishedTasks.length === 0) {
+        return;
+      }
+      const succeeded = finishedTasks.filter(
+        ({ task }) => normalizeAsyncTaskStatus(task?.status) === 'succeeded'
+      );
+      if (succeeded.length > 0) {
+        setLoading(true);
+        await loadChannels({ page: activePage, keyword: searchKeyword });
+      }
+      finishedTasks.forEach(({ channelId, task }) => {
+        const targetChannel = channels.find((item) => item.id === channelId);
+        const channelName = getChannelDisplayName(targetChannel);
+        if (normalizeAsyncTaskStatus(task?.status) === 'succeeded') {
+          showSuccess(t('channel.messages.balance_update_success', { name: channelName }));
+          return;
+        }
+        showError(
+          task?.error_message ||
+            t('channel.messages.balance_update_failed', { name: channelName })
+        );
+      });
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [
+    activePage,
+    balanceRefreshTasks,
+    channels,
+    loadChannels,
+    searchKeyword,
+    t,
+  ]);
+
   const manageChannel = async (id, action, idx, value) => {
     const normalizedID = (id || '').toString().trim();
     if (normalizedID === '') {
@@ -244,7 +443,9 @@ const ChannelsTable = () => {
     let res;
     switch (action) {
       case 'delete':
-        res = await API.delete(`/api/v1/admin/channel/${encodeURIComponent(normalizedID)}/`);
+        res = await API.delete(
+          `/api/v1/admin/channel/${encodeURIComponent(normalizedID)}/`
+        );
         break;
       case 'enable':
         data.status = 1;
@@ -277,32 +478,28 @@ const ChannelsTable = () => {
     const { success, message } = res.data;
     if (success) {
       showSuccess(t('channel.messages.operation_success'));
-      let channel = res.data.data;
-      let newChannels = [...channels];
-      let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
-      if (action === 'delete') {
-        newChannels[realIdx].deleted = true;
-      } else {
-        newChannels[realIdx].status = channel.status;
-      }
-      setChannels(newChannels);
+      setLoading(true);
+      await loadChannels({ page: activePage, keyword: searchKeyword });
     } else {
       showError(message);
     }
   };
 
   const renderStatus = (status, t) => {
-    const plainStatusText = (text, color) => (
-      <span style={{ color, fontWeight: 500 }}>{text}</span>
+    const plainStatusText = (text, className) => (
+      <span className={className}>{text}</span>
     );
     switch (status) {
       case 1:
-        return plainStatusText(t('channel.table.status_enabled'), '#1f8f4b');
+        return plainStatusText(
+          t('channel.table.status_enabled'),
+          'router-text-success'
+        );
       case 2:
         return (
           <Popup
             trigger={
-              <span style={{ color: '#d64545', fontWeight: 500 }}>
+              <span className='router-text-danger'>
                 {t('channel.table.status_disabled')}
               </span>
             }
@@ -314,7 +511,7 @@ const ChannelsTable = () => {
         return (
           <Popup
             trigger={
-              <span style={{ color: '#b58105', fontWeight: 500 }}>
+              <span className='router-text-warning'>
                 {t('channel.table.status_auto_disabled')}
               </span>
             }
@@ -323,187 +520,70 @@ const ChannelsTable = () => {
           />
         );
       case channelStatusCreating:
-        return plainStatusText(t('channel.table.status_creating'), '#2185d0');
+        return plainStatusText(
+          t('channel.table.status_creating'),
+          'router-text-info'
+        );
       default:
-        return plainStatusText(t('channel.table.status_unknown'), 'rgba(0, 0, 0, 0.5)');
+        return plainStatusText(
+          t('channel.table.status_unknown'),
+          'router-text-muted'
+        );
     }
   };
 
-  const renderResponseTime = (responseTime, t) => {
-    let time = responseTime / 1000;
-    time = time.toFixed(2) + 's';
-    if (responseTime === 0) {
-      return <span style={{ color: 'rgba(0, 0, 0, 0.5)' }}>{t('channel.table.not_tested')}</span>;
-    } else if (responseTime <= 1000) {
-      return <span style={{ color: '#1f8f4b', fontWeight: 500 }}>{time}</span>;
-    } else if (responseTime <= 3000) {
-      return <span style={{ color: '#7f8b24', fontWeight: 500 }}>{time}</span>;
-    } else if (responseTime <= 5000) {
-      return <span style={{ color: '#b58105', fontWeight: 500 }}>{time}</span>;
-    } else {
-      return <span style={{ color: '#d64545', fontWeight: 500 }}>{time}</span>;
+  const renderCapabilities = (capabilities, t) => {
+    const normalized = Array.isArray(capabilities)
+      ? capabilities.filter(Boolean).map((item) => item.toString().toLowerCase())
+      : [];
+    if (normalized.length === 0) {
+      return <span className='router-text-muted'>-</span>;
     }
+    const order = ['text', 'image', 'audio', 'video'];
+    const capabilitySet = new Set(normalized);
+    const ordered = order.filter((item) => capabilitySet.has(item));
+    return ordered.map((capability, index) => (
+      <span key={`${capability}-${index}`}>
+        {t(`channel.model_types.${capability}`, capability)}
+        {index === ordered.length - 1 ? '' : ' / '}
+      </span>
+    ));
   };
 
   const searchChannels = async () => {
-    if (searchKeyword === '') {
-      // if keyword is blank, load files instead.
-      await loadChannels(0);
-      setActivePage(1);
-      return;
-    }
     setSearching(true);
-    const res = await API.get(`/api/v1/admin/channel/search?keyword=${searchKeyword}`);
-    const { success, message, data } = res.data;
-    if (success) {
-      let localChannels = data.map(processChannelData);
-      setChannels(localChannels);
-      setActivePage(1);
-    } else {
-      showError(message);
-    }
+    setLoading(true);
+    await loadChannels({ page: 1, keyword: searchKeyword });
+    setActivePage(1);
     setSearching(false);
   };
 
-  const switchTestModel = async (idx, model) => {
-    let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
-    const currentChannel = channels[realIdx];
-    if (!currentChannel) {
-      return;
-    }
-    const previousModel = currentChannel.test_model;
-    const channelId = (currentChannel.id || '').toString().trim();
-    const selectedModel = typeof model === 'string' ? model.trim() : '';
-    if (channelId === '') {
-      showError('渠道 ID 无效');
-      return;
-    }
-
-    setChannels((prev) => {
-      if (!prev[realIdx]) return prev;
-      const next = [...prev];
-      next[realIdx] = {
-        ...next[realIdx],
-        test_model: selectedModel,
-      };
-      return next;
-    });
-
-    try {
-      const res = await API.put('/api/v1/admin/channel/test_model', {
-        id: channelId,
-        test_model: selectedModel,
-      });
-      const { success, message } = res.data;
-      if (!success) {
-        setChannels((prev) => {
-          if (!prev[realIdx]) return prev;
-          const next = [...prev];
-          next[realIdx] = {
-            ...next[realIdx],
-            test_model: previousModel,
-          };
-          return next;
-        });
-        showError(message || 'Operation failed');
-      }
-    } catch (error) {
-      setChannels((prev) => {
-        if (!prev[realIdx]) return prev;
-        const next = [...prev];
-        next[realIdx] = {
-          ...next[realIdx],
-          test_model: previousModel,
-        };
-        return next;
-      });
-      showError(error?.message || error);
-    }
-  };
-
-  const runChannelTest = async (channel, absoluteIndex, silent = false) => {
-    if (!channel || absoluteIndex < 0) {
-      return false;
-    }
-    setChannels((prev) => {
-      if (!prev[absoluteIndex]) return prev;
-      const next = [...prev];
-      next[absoluteIndex] = {
-        ...next[absoluteIndex],
-        testing: true,
-      };
-      return next;
-    });
-
-    let success = false;
-    let responseTime = 0;
-    try {
-      const channelId = (channel.id || '').toString().trim();
-      if (channelId === '') {
-        if (!silent) {
-          showError('渠道 ID 无效');
-        }
-        return false;
-      }
-      const modelName = (channel.test_model || '').toString().trim();
-      const res = await API.get(
-        `/api/v1/admin/channel/test/${encodeURIComponent(channelId)}?model=${encodeURIComponent(modelName)}`
-      );
-      const { success: ok, message, time, modelName: testedModelName } =
-        res.data || {};
-      success = !!ok;
-      responseTime = Number(time || 0) * 1000;
-      if (success) {
-        if (!silent) {
-          showSuccess(
-            t('channel.messages.test_success', {
-              name: getChannelDisplayName(channel),
-              model: testedModelName || channel.test_model || '-',
-              time,
-              message,
-            })
-          );
-        }
-      } else if (!silent) {
-        showError(message || '测试失败');
-      }
-    } catch (error) {
-      if (!silent) {
-        showError(error?.message || error);
-      }
-    } finally {
-      setChannels((prev) => {
-        if (!prev[absoluteIndex]) return prev;
-        const next = [...prev];
-        next[absoluteIndex] = {
-          ...next[absoluteIndex],
-          response_time: responseTime,
-          test_time: Date.now() / 1000,
-          testing: false,
-        };
-        return next;
-      });
-    }
-    return success;
-  };
-
-  const testChannel = async (channel, idx) => {
-    const absoluteIndex = (activePage - 1) * ITEMS_PER_PAGE + idx;
-    await runChannelTest(channel, absoluteIndex, false);
-  };
-
   const updateChannelBalance = async (id, name, idx) => {
-    const res = await API.get(`/api/v1/admin/channel/update_balance/${id}/`);
-    const { success, message, balance } = res.data;
-    if (success) {
-      let newChannels = [...channels];
-      let realIdx = (activePage - 1) * ITEMS_PER_PAGE + idx;
-      newChannels[realIdx].balance = balance;
-      newChannels[realIdx].balance_updated_time = Date.now() / 1000;
-      setChannels(newChannels);
-      showSuccess(t('channel.messages.balance_update_success', { name }));
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(`/api/v1/admin/channel/update_balance/${id}/`);
+      const { success, message, data, meta } = res.data || {};
+      if (!success) {
+        showError(message);
+        return;
+      }
+      const task = data?.task;
+      if (!task?.id) {
+        showError(t('channel.messages.balance_update_submit_failed'));
+        return;
+      }
+      setBalanceRefreshTasks((prev) => ({
+        ...prev,
+        [id]: task,
+      }));
+      showSuccess(
+        meta?.reused
+          ? t('channel.messages.balance_update_reused', { name })
+          : t('channel.messages.balance_update_submitted', { name })
+      );
+    } catch (error) {
+      showError(
+        error?.message || t('channel.messages.balance_update_submit_failed')
+      );
     }
   };
 
@@ -516,12 +596,14 @@ const ChannelsTable = () => {
     setLoading(true);
     let sortedChannels = [...channels];
     sortedChannels.sort((a, b) => {
-      if (!isNaN(a[key])) {
+      const leftValue = Array.isArray(a[key]) ? a[key].join(',') : a[key];
+      const rightValue = Array.isArray(b[key]) ? b[key].join(',') : b[key];
+      if (!isNaN(leftValue)) {
         // If the value is numeric, subtract to sort
-        return a[key] - b[key];
+        return leftValue - rightValue;
       } else {
         // If the value is not numeric, sort as strings
-        return ('' + a[key]).localeCompare(b[key]);
+        return ('' + leftValue).localeCompare(String(rightValue));
       }
     });
     if (sortedChannels[0].id === channels[0].id) {
@@ -531,8 +613,7 @@ const ChannelsTable = () => {
     setLoading(false);
   };
 
-  const startIndex = (activePage - 1) * ITEMS_PER_PAGE;
-  const pagedChannels = channels.slice(startIndex, activePage * ITEMS_PER_PAGE);
+  const pagedChannels = channels;
   const pagedChannelIds = pagedChannels
     .filter((channel) => !channel.deleted)
     .map((channel) => channel.id);
@@ -540,8 +621,8 @@ const ChannelsTable = () => {
     pagedChannelIds.length > 0 &&
     pagedChannelIds.every((id) => selectedChannelIds.includes(id));
   const inBatchSelectMode = selectionMode !== selectionModeNone;
-  const footerColSpan = 8 + (inBatchSelectMode ? 1 : 0);
-  const actionBusy = batchTesting || batchDeleting || batchDisabling;
+  const footerColSpan = 7 + (inBatchSelectMode ? 1 : 0);
+  const actionBusy = batchDeleting || batchDisabling;
 
   const toggleChannelSelection = (channelId, checked) => {
     setSelectedChannelIds((prev) => {
@@ -574,28 +655,56 @@ const ChannelsTable = () => {
     setSelectedChannelIds([]);
   };
 
-  const resolveCreatingStep = (channel) => {
-    if (!channel) {
+  const inferCreatingStepFromState = (channel, selectedModels, testData) => {
+    if (!channel || typeof channel !== 'object') {
       return 1;
     }
     if (channel.protocol === 'proxy') {
       return 1;
     }
-    const models = Array.isArray(channel.models) ? channel.models : [];
+    const models = Array.isArray(selectedModels) ? selectedModels : [];
+    if (models.length === 0) {
+      return 2;
+    }
+    const testedAt = Number(testData?.last_tested_at || 0);
+    const testResults = Array.isArray(testData?.items) ? testData.items : [];
+    if (testedAt > 0 || testResults.length > 0) {
+      return 4;
+    }
     if (models.length > 0) {
       return 3;
     }
     return 2;
   };
 
-  const openChannelByStatus = (channel) => {
+  const resolveCreatingStep = async (channel) => {
+    if (!channel) {
+      return 1;
+    }
+    const storedStep = readStoredCreatingStep(channel.id);
+    if (storedStep > 0) {
+      return storedStep;
+    }
+    try {
+      const [selectedModels, testData] = await Promise.all([
+        fetchSelectedChannelModels(channel.id),
+        fetchChannelLatestTests(channel.id),
+      ]);
+      return inferCreatingStepFromState(channel, selectedModels, testData);
+    } catch {
+      // Fallback to step 1 when details cannot be loaded.
+    }
+    return 1;
+  };
+
+  const openChannelByStatus = async (channel) => {
     if (!channel || !channel.id || inBatchSelectMode) {
       return;
     }
     if (channel.status === channelStatusCreating) {
-      const step = resolveCreatingStep(channel);
+      const step = await resolveCreatingStep(channel);
       navigate(
-        `/channel/add?draft_id=${encodeURIComponent(channel.id)}&step=${step}`
+        `/channel/add?channel_id=${encodeURIComponent(channel.id)}&step=${step}`
       );
       return;
     }
@@ -609,7 +718,9 @@ const ChannelsTable = () => {
   const collectSelectedTargets = () => {
     return selectedChannelIds
       .map((id) => {
-        const absoluteIndex = channels.findIndex((channel) => channel.id === id);
+        const absoluteIndex = channels.findIndex(
+          (channel) => channel.id === id
+        );
         if (absoluteIndex < 0) return null;
         return {
           id,
@@ -618,44 +729,6 @@ const ChannelsTable = () => {
         };
       })
       .filter(Boolean);
-  };
-
-  const confirmBatchTest = async () => {
-    if (selectedChannelIds.length === 0) {
-      showInfo(t('channel.messages.batch_test_select_required'));
-      return;
-    }
-    const targets = collectSelectedTargets();
-
-    if (targets.length === 0) {
-      showInfo(t('channel.messages.batch_test_select_required'));
-      return;
-    }
-
-    // Exit selection mode immediately after confirm.
-    setSelectionMode(selectionModeNone);
-    setSelectedChannelIds([]);
-    setBatchTesting(true);
-
-    const results = await Promise.allSettled(
-      targets.map((target) =>
-        runChannelTest(target.channel, target.absoluteIndex, true)
-      )
-    );
-    let successCount = 0;
-    results.forEach((result) => {
-      if (result.status === 'fulfilled' && result.value) {
-        successCount += 1;
-      }
-    });
-    const failedCount = results.length - successCount;
-    showInfo(
-      t('channel.messages.batch_test_done', {
-        success: successCount,
-        failed: failedCount,
-      })
-    );
-    setBatchTesting(false);
   };
 
   const confirmBatchDelete = async () => {
@@ -718,6 +791,8 @@ const ChannelsTable = () => {
     if (firstFailedMessage) {
       showError(firstFailedMessage);
     }
+    setLoading(true);
+    await loadChannels({ page: activePage, keyword: searchKeyword });
     setBatchDeleting(false);
   };
 
@@ -784,74 +859,37 @@ const ChannelsTable = () => {
     if (firstFailedMessage) {
       showError(firstFailedMessage);
     }
+    setLoading(true);
+    await loadChannels({ page: activePage, keyword: searchKeyword });
     setBatchDisabling(false);
   };
 
   return (
     <>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          flexWrap: 'wrap',
-          marginBottom: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <div className='router-toolbar router-block-gap-sm'>
+        <div className='router-toolbar-start'>
           {selectionMode === selectionModeNone ? (
             <>
-              <Button size='tiny' as={Link} to='/channel/add' disabled={actionBusy}>
+              <Button
+                className='router-page-button'
+                as={Link}
+                to='/channel/add'
+                disabled={actionBusy}
+              >
                 {t('channel.buttons.add')}
-              </Button>
-              <Button
-                size='tiny'
-                disabled={actionBusy}
-                onClick={() => {
-                  setSelectionMode(selectionModeTest);
-                  setSelectedChannelIds([]);
-                }}
-              >
-                {t('channel.buttons.test_channel')}
-              </Button>
-              <Button
-                size='tiny'
-                color='orange'
-                disabled={actionBusy}
-                onClick={() => {
-                  setSelectionMode(selectionModeDisable);
-                  setSelectedChannelIds([]);
-                }}
-              >
-                {t('channel.buttons.disable_channel')}
-              </Button>
-              <Button
-                size='tiny'
-                negative
-                disabled={actionBusy}
-                onClick={() => {
-                  setSelectionMode(selectionModeDelete);
-                  setSelectedChannelIds([]);
-                }}
-              >
-                {t('channel.buttons.delete_channel')}
               </Button>
             </>
           ) : (
             <>
               <Button
-                size='tiny'
-                positive={selectionMode === selectionModeTest}
+                className='router-page-button'
                 negative={selectionMode === selectionModeDelete}
-                color={selectionMode === selectionModeDisable ? 'orange' : undefined}
-                loading={batchTesting || batchDeleting || batchDisabling}
-                disabled={batchTesting || batchDeleting || batchDisabling}
+                color={
+                  selectionMode === selectionModeDisable ? 'orange' : undefined
+                }
+                loading={batchDeleting || batchDisabling}
+                disabled={batchDeleting || batchDisabling}
                 onClick={() => {
-                  if (selectionMode === selectionModeTest) {
-                    confirmBatchTest();
-                    return;
-                  }
                   if (selectionMode === selectionModeDisable) {
                     confirmBatchDisable();
                     return;
@@ -862,21 +900,27 @@ const ChannelsTable = () => {
                 {t('channel.buttons.confirm')}
               </Button>
               <Button
-                size='tiny'
-                disabled={batchTesting || batchDeleting || batchDisabling}
+                className='router-page-button'
+                disabled={batchDeleting || batchDisabling}
                 onClick={cancelBatchSelection}
               >
                 {t('channel.buttons.cancel')}
               </Button>
             </>
           )}
-          <Button size='tiny' onClick={refresh} loading={loading} disabled={actionBusy}>
+          <Button
+            className='router-page-button'
+            onClick={refresh}
+            loading={loading}
+            disabled={actionBusy}
+          >
             {t('channel.buttons.refresh')}
           </Button>
         </div>
 
-        <Form onSubmit={searchChannels} style={{ width: '320px', maxWidth: '100%' }}>
+        <Form onSubmit={searchChannels} className='router-search-form-md'>
           <Form.Input
+            className='router-section-input'
             icon='search'
             iconPosition='left'
             placeholder={t('channel.search')}
@@ -886,7 +930,11 @@ const ChannelsTable = () => {
           />
         </Form>
       </div>
-      <Table basic={'very'} compact size='small' className='router-hover-table'>
+      <Table
+        basic={'very'}
+        compact
+        className='router-hover-table router-list-table'
+      >
         <Table.Header>
           <Table.Row>
             {inBatchSelectMode && (
@@ -900,15 +948,15 @@ const ChannelsTable = () => {
               </Table.HeaderCell>
             )}
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortChannel('name');
               }}
             >
-              {t('channel.table.name')}
+              {t('channel.table.id')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortChannel('protocol');
               }}
@@ -916,7 +964,7 @@ const ChannelsTable = () => {
               {t('channel.table.type')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortChannel('status');
               }}
@@ -924,15 +972,15 @@ const ChannelsTable = () => {
               {t('channel.table.status')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
-                sortChannel('response_time');
+                sortChannel('capabilities');
               }}
             >
-              {t('channel.table.response_time')}
+              {t('channel.table.capabilities')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortChannel('balance');
               }}
@@ -940,183 +988,174 @@ const ChannelsTable = () => {
               {t('channel.table.balance')}
             </Table.HeaderCell>
             <Table.HeaderCell
-              style={{ cursor: 'pointer' }}
+              className='router-sortable-header'
               onClick={() => {
                 sortChannel('priority');
               }}
             >
               {t('channel.table.priority')}
             </Table.HeaderCell>
-            <Table.HeaderCell>
-              {t('channel.table.test_model')}
-            </Table.HeaderCell>
-            <Table.HeaderCell style={{ width: '280px' }}>
+            <Table.HeaderCell className='router-table-action-cell'>
               {t('channel.table.actions')}
             </Table.HeaderCell>
           </Table.Row>
         </Table.Header>
 
         <Table.Body>
-          {pagedChannels
-            .map((channel, idx) => {
-              if (channel.deleted) return <></>;
-              return (
-                <Table.Row
-                  key={channel.id}
-                  onClick={() => openChannelByStatus(channel)}
-                  style={{ cursor: inBatchSelectMode ? 'default' : 'pointer' }}
-                >
-                  {inBatchSelectMode && (
-                    <Table.Cell collapsing textAlign='center' onClick={stopRowClick}>
-                      <Form.Checkbox
-                        checked={selectedChannelIds.includes(channel.id)}
-                        onChange={(e, { checked }) => {
-                          toggleChannelSelection(channel.id, !!checked);
-                        }}
-                      />
-                    </Table.Cell>
-                  )}
-                  <Table.Cell>{renderChannelName(channel, t)}</Table.Cell>
-                  <Table.Cell>{renderProtocol(channel.protocol, protocolMap)}</Table.Cell>
-                  <Table.Cell>{renderStatus(channel.status, t)}</Table.Cell>
-                  <Table.Cell>
-                    <Popup
-                      content={
-                        channel.test_time
-                          ? renderTimestamp(channel.test_time)
-                          : t('channel.table.not_tested')
-                      }
-                      key={channel.id}
-                      trigger={
-                        channel.testing ? (
-                          <Icon name='spinner' loading />
-                        ) : (
-                          renderResponseTime(channel.response_time, t)
-                        )
-                      }
-                      basic
-                    />
-                  </Table.Cell>
-                  <Table.Cell onClick={stopRowClick}>
-                    <Popup
-                      trigger={
-                        <span
-                          onClick={() => {
-                            updateChannelBalance(
-                              channel.id,
-                              getChannelDisplayName(channel),
-                              idx,
-                            );
-                          }}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {renderBalance(channel.protocol, channel.balance, t)}
-                        </span>
-                      }
-                      content={t('channel.table.click_to_update')}
-                      basic
-                    />
-                  </Table.Cell>
-                  <Table.Cell onClick={stopRowClick}>
-                    <Popup
-                      trigger={
-                        <Input
-                          type='number'
-                          defaultValue={channel.priority}
-                          onBlur={(event) => {
-                            manageChannel(
-                              channel.id,
-                              'priority',
-                              idx,
-                              event.target.value
-                            );
-                          }}
-                        >
-                          <input style={{ maxWidth: '60px' }} />
-                        </Input>
-                      }
-                      content={t('channel.table.priority_tip')}
-                      basic
-                    />
-                  </Table.Cell>
-                  <Table.Cell onClick={stopRowClick}>
-                    <Dropdown
-                      placeholder={t('channel.table.select_test_model')}
-                      selection
-                      options={channel.model_options}
-                      value={channel.test_model}
-                      onChange={(event, data) => {
-                        switchTestModel(idx, data.value);
+          {pagedChannels.map((channel, idx) => {
+            if (channel.deleted) return <></>;
+            return (
+              <Table.Row
+                key={channel.id}
+                onClick={() => openChannelByStatus(channel)}
+                className={
+                  inBatchSelectMode ? undefined : 'router-row-clickable'
+                }
+              >
+                {inBatchSelectMode && (
+                  <Table.Cell
+                    collapsing
+                    textAlign='center'
+                    onClick={stopRowClick}
+                  >
+                    <Form.Checkbox
+                      checked={selectedChannelIds.includes(channel.id)}
+                      onChange={(e, { checked }) => {
+                        toggleChannelSelection(channel.id, !!checked);
                       }}
                     />
                   </Table.Cell>
-                  <Table.Cell style={{ width: '280px' }} onClick={stopRowClick}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '4px',
-                        rowGap: '4px',
-                      }}
-                    >
-                      <Button
-                        size={'tiny'}
-                        positive
+                )}
+                <Table.Cell>{renderChannelName(channel, t)}</Table.Cell>
+                <Table.Cell>
+                  {renderProtocol(channel.protocol, protocolMap)}
+                </Table.Cell>
+                <Table.Cell>{renderStatus(channel.status, t)}</Table.Cell>
+                <Table.Cell>
+                  {renderCapabilities(channel.capabilities, t)}
+                </Table.Cell>
+                <Table.Cell onClick={stopRowClick}>
+                  <Popup
+                    trigger={
+                      <span
                         onClick={() => {
-                          testChannel(channel, idx);
-                        }}
-                      >
-                        {t('channel.buttons.test')}
-                      </Button>
-                      <Button
-                        size={'tiny'}
-                        onClick={() => {
-                          manageChannel(
+                          if (balanceRefreshTasks[channel.id]) {
+                            return;
+                          }
+                          updateChannelBalance(
                             channel.id,
-                            channel.status === 1 ? 'disable' : 'enable',
+                            getChannelDisplayName(channel),
                             idx
                           );
                         }}
+                        className='router-row-clickable'
                       >
-                        {channel.status === 1
-                          ? t('channel.buttons.disable')
-                          : t('channel.buttons.enable')}
-                      </Button>
-                      <Button
-                        size={'tiny'}
-                        as={Link}
-                        to={`/channel/add?copy_from=${channel.id}`}
-                      >
-                        {t('channel.buttons.copy')}
-                      </Button>
-                      <Button
-                        size={'tiny'}
-                        as={Link}
-                        to={'/channel/edit/' + channel.id}
-                      >
-                        {t('channel.buttons.edit')}
-                      </Button>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              );
-            })}
+                        {balanceRefreshTasks[channel.id] ? (
+                          <>
+                            <Icon loading name='spinner' />
+                            {renderBalance(channel.protocol, channel.balance, t)}
+                          </>
+                        ) : (
+                          renderBalance(channel.protocol, channel.balance, t)
+                        )}
+                      </span>
+                    }
+                    content={t('channel.table.click_to_update')}
+                    basic
+                  />
+                </Table.Cell>
+                <Table.Cell onClick={stopRowClick}>
+                  <Popup
+                    trigger={
+                      <Input
+                        className='router-inline-input router-inline-input-short'
+                        type='number'
+                        defaultValue={channel.priority}
+                        onBlur={(event) => {
+                          manageChannel(
+                            channel.id,
+                            'priority',
+                            idx,
+                            event.target.value
+                          );
+                        }}
+                      />
+                    }
+                    content={t('channel.table.priority_tip')}
+                    basic
+                  />
+                </Table.Cell>
+                <Table.Cell
+                  className='router-table-action-cell'
+                  onClick={stopRowClick}
+                >
+                  <div className='router-action-group-tight'>
+                    <Button
+                      className='router-inline-button'
+                      onClick={() => {
+                        manageChannel(
+                          channel.id,
+                          channel.status === 1 ? 'disable' : 'enable',
+                          idx
+                        );
+                      }}
+                    >
+                      {channel.status === 1
+                        ? t('channel.buttons.disable')
+                        : t('channel.buttons.enable')}
+                    </Button>
+                    <Button
+                      className='router-inline-button'
+                      as={Link}
+                      to={`/channel/add?copy_from=${channel.id}`}
+                    >
+                      {t('channel.buttons.copy')}
+                    </Button>
+                    <Button
+                      className='router-inline-button'
+                      as={Link}
+                      to={'/channel/edit/' + channel.id}
+                    >
+                      {t('channel.buttons.edit')}
+                    </Button>
+                    <Button
+                      className='router-inline-button'
+                      type='button'
+                      onClick={() => {
+                        openChannelTasksPage(channel.id);
+                      }}
+                    >
+                      {t('channel.buttons.tasks')}
+                    </Button>
+                    <Button
+                      className='router-inline-button'
+                      negative
+                      onClick={() => {
+                        manageChannel(channel.id, 'delete', idx);
+                      }}
+                    >
+                      {t('channel.buttons.delete')}
+                    </Button>
+                  </div>
+                </Table.Cell>
+              </Table.Row>
+            );
+          })}
         </Table.Body>
 
         <Table.Footer>
           <Table.Row>
             <Table.HeaderCell colSpan={footerColSpan}>
               <Pagination
+                className='router-page-pagination'
                 floated='right'
                 activePage={activePage}
                 onPageChange={onPaginationChange}
-                size='tiny'
                 siblingRange={1}
-                totalPages={
-                  Math.ceil(channels.length / ITEMS_PER_PAGE) +
-                  (channels.length % ITEMS_PER_PAGE === 0 ? 1 : 0)
-                }
+                totalPages={Math.max(
+                  1,
+                  Math.ceil(totalChannels / ITEMS_PER_PAGE)
+                )}
               />
             </Table.HeaderCell>
           </Table.Row>

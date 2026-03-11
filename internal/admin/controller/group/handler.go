@@ -3,9 +3,11 @@ package group
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yeying-community/router/common/config"
 	"github.com/yeying-community/router/internal/admin/model"
 	groupsvc "github.com/yeying-community/router/internal/admin/service/group"
 )
@@ -25,40 +27,62 @@ type updateGroupChannelsRequest struct {
 	ChannelIDs []string `json:"channel_ids"`
 }
 
-// GetGroupCatalog godoc
-// @Summary List groups catalog (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/catalog [get]
-func GetGroupCatalog(c *gin.Context) {
-	rows, err := groupsvc.ListCatalog()
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    rows,
-	})
+const maxGroupListPageSize = 100
+
+type groupListPageData struct {
+	Items    []model.GroupCatalog `json:"items"`
+	Total    int64                `json:"total"`
+	Page     int                  `json:"page"`
+	PageSize int                  `json:"page_size"`
 }
 
-// GetGroupChannelOptions godoc
-// @Summary List group channel candidates (admin)
+func parseGroupListPageParams(c *gin.Context) (page int, pageSize int, keyword string) {
+	page = 1
+	if raw := strings.TrimSpace(c.Query("page")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	pageSize = config.ItemsPerPage
+	if raw := strings.TrimSpace(c.Query("page_size")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			pageSize = parsed
+		}
+	}
+	if pageSize > maxGroupListPageSize {
+		pageSize = maxGroupListPageSize
+	}
+	keyword = strings.TrimSpace(c.Query("keyword"))
+	return page, pageSize, keyword
+}
+
+func listGroupsPage(page int, pageSize int, keyword string) (groupListPageData, error) {
+	rows, total, err := groupsvc.ListPage(page, pageSize, keyword)
+	if err != nil {
+		return groupListPageData{}, err
+	}
+	return groupListPageData{
+		Items:    rows,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
+}
+
+// GetGroups godoc
+// @Summary List groups with pagination (admin)
 // @Tags admin
 // @Security BearerAuth
 // @Produce json
+// @Param page query int false "Page (1-based)"
+// @Param page_size query int false "Page size"
+// @Param keyword query string false "Keyword"
 // @Success 200 {object} docs.StandardResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/channel-options [get]
-func GetGroupChannelOptions(c *gin.Context) {
-	rows, err := groupsvc.ListChannelBindingCandidates()
+// @Router /api/v1/admin/groups [get]
+func GetGroups(c *gin.Context) {
+	page, pageSize, keyword := parseGroupListPageParams(c)
+	data, err := listGroupsPage(page, pageSize, keyword)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -69,7 +93,7 @@ func GetGroupChannelOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    rows,
+		"data":    data,
 	})
 }
 
@@ -210,7 +234,7 @@ func DeleteGroup(c *gin.Context) {
 	if id == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "分组标识不能为空",
+			"message": "分组 ID 不能为空",
 		})
 		return
 	}
@@ -261,7 +285,7 @@ func GetGroupChannels(c *gin.Context) {
 	if id == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "分组标识不能为空",
+			"message": "分组 ID 不能为空",
 		})
 		return
 	}
@@ -294,7 +318,7 @@ func GetGroupModels(c *gin.Context) {
 	if id == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "分组标识不能为空",
+			"message": "分组 ID 不能为空",
 		})
 		return
 	}
@@ -327,7 +351,7 @@ func GetGroupModelConfigs(c *gin.Context) {
 	if id == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "分组标识不能为空",
+			"message": "分组 ID 不能为空",
 		})
 		return
 	}
@@ -366,7 +390,7 @@ func UpdateGroupModelConfigs(c *gin.Context) {
 	if id == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "分组标识不能为空",
+			"message": "分组 ID 不能为空",
 		})
 		return
 	}
@@ -407,7 +431,7 @@ func UpdateGroupChannels(c *gin.Context) {
 	if id == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "分组标识不能为空",
+			"message": "分组 ID 不能为空",
 		})
 		return
 	}

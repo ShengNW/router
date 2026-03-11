@@ -1,5 +1,6 @@
 import React, {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -10,10 +11,13 @@ import {
   Button,
   Card,
   Checkbox,
+  Dropdown,
   Form,
   Icon,
   Label,
   Message,
+  Modal,
+  Pagination,
   Table,
 } from 'semantic-ui-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -124,6 +128,320 @@ const normalizeCurrencyValue = (value) => {
   return normalized || 'USD';
 };
 
+const normalizeChannelModelType = (value) => {
+  const normalized = (value || '').toString().trim().toLowerCase();
+  switch (normalized) {
+    case 'image':
+    case 'audio':
+    case 'video':
+      return normalized;
+    default:
+      return 'text';
+  }
+};
+
+const defaultChannelModelEndpoint = (type) => {
+  switch (normalizeChannelModelType(type)) {
+    case 'image':
+      return '/v1/images/generations';
+    case 'audio':
+      return '/v1/audio/speech';
+    case 'video':
+      return '/v1/videos';
+    default:
+      return '/v1/responses';
+  }
+};
+
+const normalizeChannelModelEndpoint = (type, value) => {
+  const normalizedType = normalizeChannelModelType(type);
+  const normalized = (value || '').toString().trim().toLowerCase();
+  if (normalizedType === 'image') {
+    switch (normalized) {
+      case '/v1/responses':
+        return '/v1/responses';
+      case '/v1/batches':
+        return '/v1/batches';
+      case '/v1/images/edits':
+        return '/v1/images/edits';
+      default:
+        return '/v1/images/generations';
+    }
+  }
+  if (normalizedType === 'text') {
+    return normalized === '/v1/chat/completions'
+      ? '/v1/chat/completions'
+      : '/v1/responses';
+  }
+  return defaultChannelModelEndpoint(normalizedType);
+};
+
+const CHANNEL_MODEL_TYPE_OPTIONS = [
+  { key: 'text', value: 'text', text: 'text' },
+  { key: 'image', value: 'image', text: 'image' },
+  { key: 'audio', value: 'audio', text: 'audio' },
+  { key: 'video', value: 'video', text: 'video' },
+];
+
+const TEXT_MODEL_ENDPOINT_OPTIONS = [
+  { key: 'responses', value: '/v1/responses', text: '/v1/responses' },
+  { key: 'chat', value: '/v1/chat/completions', text: '/v1/chat/completions' },
+];
+
+const IMAGE_MODEL_ENDPOINT_OPTIONS = [
+  { key: 'responses', value: '/v1/responses', text: '/v1/responses' },
+  { key: 'images_generations', value: '/v1/images/generations', text: '/v1/images/generations' },
+  { key: 'images_edits', value: '/v1/images/edits', text: '/v1/images/edits' },
+  { key: 'batches', value: '/v1/batches', text: '/v1/batches' },
+];
+
+const CHANNEL_MODEL_PAGE_SIZE = 10;
+
+const buildProviderOptionText = (item) => {
+  const id = (item?.id || item?.provider || '').toString().trim();
+  const name = (item?.name || '').toString().trim();
+  if (id === '') {
+    return '';
+  }
+  if (name !== '' && name !== id) {
+    return `${name} (${id})`;
+  }
+  return id;
+};
+
+const normalizeSearchKeyword = (value) =>
+  (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[\s/_-]+/g, '');
+
+const filterProviderOptionsByQuery = (options, query) => {
+  const normalizedQuery = normalizeSearchKeyword(query);
+  if (normalizedQuery === '') {
+    return options;
+  }
+  return (Array.isArray(options) ? options : []).filter((option) => {
+    const candidates = [option?.text, option?.value, option?.key].map(
+      normalizeSearchKeyword
+    );
+    return candidates.some((candidate) => candidate.includes(normalizedQuery));
+  });
+};
+
+const buildProviderCatalogIndex = (items) => {
+  const providerOptions = [];
+  const modelOwners = {};
+  const providerSeen = new Set();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const providerId = (item?.id || item?.provider || '').toString().trim();
+    if (providerId === '') {
+      return;
+    }
+    if (!providerSeen.has(providerId)) {
+      providerSeen.add(providerId);
+      providerOptions.push({
+        key: providerId,
+        value: providerId,
+        text: buildProviderOptionText(item),
+      });
+    }
+    const details = Array.isArray(item?.model_details)
+      ? item.model_details
+      : [];
+    details.forEach((detail) => {
+      const modelName = (detail?.model || '').toString().trim();
+      if (modelName === '') {
+        return;
+      }
+      if (!Array.isArray(modelOwners[modelName])) {
+        modelOwners[modelName] = [];
+      }
+      if (!modelOwners[modelName].includes(providerId)) {
+        modelOwners[modelName].push(providerId);
+      }
+    });
+  });
+  providerOptions.sort((a, b) => a.value.localeCompare(b.value));
+  Object.keys(modelOwners).forEach((modelName) => {
+    modelOwners[modelName].sort((a, b) => a.localeCompare(b));
+  });
+  return { providerOptions, modelOwners };
+};
+
+const buildProviderLookupKeys = (row) => {
+  const keys = new Set();
+  [row?.upstream_model, row?.model].forEach((value) => {
+    const normalized = (value || '').toString().trim();
+    if (normalized === '') {
+      return;
+    }
+    keys.add(normalized);
+    if (normalized.includes('/')) {
+      const parts = normalized.split('/');
+      if (parts.length > 1) {
+        const suffix = parts.slice(1).join('/').trim();
+        if (suffix !== '') {
+          keys.add(suffix);
+        }
+      }
+    }
+  });
+  return Array.from(keys);
+};
+
+const inferAssignableProviderForRowWithOptions = (row, providerOptions) => {
+  const candidates = buildProviderLookupKeys(row);
+  const providerValues = new Set(
+    (Array.isArray(providerOptions) ? providerOptions : []).map((item) =>
+      normalizeProviderIdentifier(item?.value || '')
+    )
+  );
+  for (const candidate of candidates) {
+    const resolvedProvider = resolveProviderIdentifierFromModelName(candidate);
+    if (
+      resolvedProvider !== '' &&
+      resolvedProvider !== 'unknown' &&
+      providerValues.has(resolvedProvider)
+    ) {
+      return resolvedProvider;
+    }
+  }
+  return '';
+};
+
+const normalizeProviderIdentifier = (value) => {
+  const normalized = (value || '').toString().trim().toLowerCase();
+  if (normalized === '') {
+    return '';
+  }
+  switch (normalized) {
+    case 'gpt':
+    case 'openai':
+      return 'openai';
+    case 'gemini':
+    case 'google':
+      return 'google';
+    case 'claude':
+    case 'anthropic':
+      return 'anthropic';
+    case 'x-ai':
+    case 'xai':
+    case 'grok':
+      return 'xai';
+    case 'meta':
+    case 'meta-llama':
+    case 'meta_llama':
+    case 'metallama':
+      return 'meta';
+    case 'mistral':
+    case 'mistralai':
+      return 'mistral';
+    case 'cohere':
+    case 'command-r':
+    case 'commandr':
+      return 'cohere';
+    case 'qwen':
+    case 'qwq':
+    case 'qvq':
+    case '千问':
+      return 'qwen';
+    case 'zhipu':
+    case 'glm':
+    case '智谱':
+    case 'bigmodel':
+      return 'zhipu';
+    case 'hunyuan':
+    case 'tencent':
+    case '腾讯':
+    case '混元':
+      return 'hunyuan';
+    case 'volc':
+    case 'volcengine':
+    case 'doubao':
+    case 'ark':
+    case '火山':
+    case '豆包':
+    case '字节':
+      return 'volcengine';
+    case 'minimax':
+    case 'abab':
+      return 'minimax';
+    case 'black-forest-labs':
+    case 'blackforestlabs':
+    case 'bfl':
+      return 'black-forest-labs';
+    default:
+      return normalized;
+  }
+};
+
+const resolveProviderIdentifierFromModelName = (modelName) => {
+  const name = (modelName || '').toString().trim();
+  if (name === '') {
+    return '';
+  }
+  if (name.includes('/')) {
+    const [prefix] = name.split('/', 1);
+    const normalizedPrefix = normalizeProviderIdentifier(prefix);
+    if (normalizedPrefix !== '') {
+      return normalizedPrefix;
+    }
+  }
+  const lower = name.toLowerCase();
+  if (
+    lower.startsWith('gpt-') ||
+    lower.startsWith('o1') ||
+    lower.startsWith('o3') ||
+    lower.startsWith('o4') ||
+    lower.startsWith('chatgpt-')
+  ) {
+    return 'openai';
+  }
+  if (lower.startsWith('claude-')) return 'anthropic';
+  if (lower.startsWith('gemini-') || lower.startsWith('veo')) return 'google';
+  if (lower.startsWith('grok-')) return 'xai';
+  if (
+    lower.startsWith('mistral-') ||
+    lower.startsWith('mixtral-') ||
+    lower.startsWith('pixtral-') ||
+    lower.startsWith('ministral-') ||
+    lower.startsWith('codestral-') ||
+    lower.startsWith('open-mistral-') ||
+    lower.startsWith('devstral-') ||
+    lower.startsWith('magistral-')
+  ) {
+    return 'mistral';
+  }
+  if (lower.startsWith('command-r') || lower.startsWith('cohere-'))
+    return 'cohere';
+  if (lower.startsWith('deepseek-')) return 'deepseek';
+  if (
+    lower.startsWith('qwen') ||
+    lower.startsWith('qwq-') ||
+    lower.startsWith('qvq-')
+  ) {
+    return 'qwen';
+  }
+  if (lower.startsWith('glm-') || lower.startsWith('cogview-')) return 'zhipu';
+  if (lower.startsWith('hunyuan-')) return 'hunyuan';
+  if (lower.startsWith('doubao-') || lower.startsWith('ark-'))
+    return 'volcengine';
+  if (lower.startsWith('abab') || lower.startsWith('minimax-'))
+    return 'minimax';
+  if (lower.startsWith('ernie-')) return 'baidu';
+  if (lower.startsWith('spark-')) return 'xunfei';
+  if (lower.startsWith('moonshot-') || lower.startsWith('kimi-'))
+    return 'moonshot';
+  if (lower.startsWith('llama')) return 'meta';
+  if (lower.startsWith('flux')) return 'black-forest-labs';
+  if (lower.startsWith('baichuan-')) return 'baichuan';
+  if (lower.startsWith('yi-')) return 'lingyiwanwu';
+  if (lower.startsWith('step-')) return 'stepfun';
+  if (lower.startsWith('ollama-')) return 'ollama';
+  return '';
+};
+
 const normalizeChannelModelConfigRow = (row) => {
   if (!row || typeof row !== 'object') {
     return null;
@@ -147,7 +465,10 @@ const normalizeChannelModelConfigRow = (row) => {
   return {
     model,
     upstream_model: upstreamModel || model,
-    selected: row.selected !== false,
+    type: normalizeChannelModelType(row.type),
+    endpoint: normalizeChannelModelEndpoint(row.type, row.endpoint),
+    inactive: row.inactive === true,
+    selected: row.selected === true,
     input_price: normalizePriceOverrideValue(row.input_price),
     output_price: normalizePriceOverrideValue(row.output_price),
     price_unit: normalizePriceUnitValue(row.price_unit),
@@ -203,7 +524,7 @@ const buildModelConfigsFromLegacyFields = ({
   (Array.isArray(selectedModels) ? selectedModels : []).forEach(appendModel);
 
   const selectedSet = new Set(
-    normalizeModelIDs(Array.isArray(selectedModels) ? selectedModels : []),
+    normalizeModelIDs(Array.isArray(selectedModels) ? selectedModels : [])
   );
   const modelMappingMap = parseJSONObject(modelMapping);
   const inputPriceMap = parseJSONObject(inputPrice);
@@ -215,6 +536,7 @@ const buildModelConfigsFromLegacyFields = ({
     model: modelId,
     upstream_model:
       (modelMappingMap[modelId] || '').toString().trim() || modelId,
+    type: 'text',
     selected: selectedSet.has(modelId),
     input_price: normalizePriceOverrideValue(inputPriceMap[modelId]),
     output_price: normalizePriceOverrideValue(outputPriceMap[modelId]),
@@ -226,55 +548,12 @@ const buildModelConfigsFromLegacyFields = ({
 const buildChannelModelState = (modelConfigs) => {
   const normalizedConfigs = normalizeChannelModelConfigs(modelConfigs);
   const selectedModels = normalizedConfigs
-    .filter((row) => row.selected)
+    .filter((row) => row.selected && row.inactive !== true)
     .map((row) => row.model);
   return {
     modelConfigs: normalizedConfigs,
     selectedModels,
   };
-};
-
-const buildFetchedModelConfigs = (
-  previousConfigs,
-  models,
-  selectAll = true,
-) => {
-  const fetchedConfigs = normalizeChannelModelConfigs(models);
-  if (fetchedConfigs.length > 0) {
-    return fetchedConfigs.map((row) => ({
-      ...row,
-      selected: selectAll ? true : row.selected !== false,
-    }));
-  }
-
-  const previousRows = normalizeChannelModelConfigs(previousConfigs);
-  const previousByUpstream = new Map();
-  previousRows.forEach((row) => {
-    const upstreamModel = row.upstream_model || row.model;
-    if (!upstreamModel || previousByUpstream.has(upstreamModel)) {
-      return;
-    }
-    previousByUpstream.set(upstreamModel, row);
-  });
-  return buildModelIDs(models).map((modelId) => {
-    const existing = previousByUpstream.get(modelId);
-    if (existing) {
-      return {
-        ...existing,
-        upstream_model: modelId,
-        selected: selectAll ? true : existing.selected,
-      };
-    }
-    return {
-      model: modelId,
-      upstream_model: modelId,
-      selected: selectAll,
-      input_price: null,
-      output_price: null,
-      price_unit: 'per_1k_tokens',
-      currency: 'USD',
-    };
-  });
 };
 
 const buildNextInputsWithModelConfigs = (previousInputs, modelConfigs) => {
@@ -293,6 +572,103 @@ const buildNextInputsWithModelConfigs = (previousInputs, modelConfigs) => {
   };
 };
 
+const extractChannelModelListItems = (payload) => {
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+  if (Array.isArray(payload?.model_configs)) {
+    return payload.model_configs;
+  }
+  return [];
+};
+
+const fetchAllChannelModelConfigs = async (channelId) => {
+  const normalizedChannelId = (channelId || '').toString().trim();
+  if (normalizedChannelId === '') {
+    return [];
+  }
+  const items = [];
+    let page = 1;
+    while (page < 50) {
+      const res = await API.get(`/api/v1/admin/channel/${normalizedChannelId}/models`, {
+        params: {
+          page,
+          page_size: 100,
+        },
+      });
+    const { success, message, data } = res.data || {};
+    if (!success) {
+      throw new Error(message || 'fetch channel models failed');
+    }
+    const pageItems = normalizeChannelModelConfigs(
+      extractChannelModelListItems(data)
+    );
+    items.push(...pageItems);
+    const total = Number(data?.total || pageItems.length || 0);
+    if (
+      pageItems.length === 0 ||
+      items.length >= total ||
+      pageItems.length < 100
+    ) {
+      break;
+    }
+      page += 1;
+    }
+  return normalizeChannelModelConfigs(items);
+};
+
+const fetchChannelTests = async (channelId) => {
+  const normalizedChannelId = (channelId || '').toString().trim();
+  if (normalizedChannelId === '') {
+    return {
+      items: [],
+      lastTestedAt: 0,
+    };
+  }
+  const res = await API.get(`/api/v1/admin/channel/${normalizedChannelId}/tests`);
+  const { success, message, data } = res.data || {};
+  if (!success) {
+    throw new Error(message || 'fetch channel tests failed');
+  }
+  return {
+    items: normalizeModelTestResults(data?.items),
+    lastTestedAt: Number(data?.last_tested_at || 0),
+  };
+};
+
+const fetchActiveChannelTasks = async (channelId) => {
+  const normalizedChannelId = (channelId || '').toString().trim();
+  if (normalizedChannelId === '') {
+    return [];
+  }
+  const res = await API.get('/api/v1/admin/tasks', {
+    params: {
+      page: 1,
+      page_size: 100,
+      channel_id: normalizedChannelId,
+      status: 'pending,running',
+    },
+  });
+  const { success, message, data } = res.data || {};
+  if (!success) {
+    throw new Error(message || 'fetch channel tasks failed');
+  }
+  return normalizeAsyncTasks(data?.items);
+};
+
+const fetchTaskById = async (taskId) => {
+  const normalizedTaskId = (taskId || '').toString().trim();
+  if (normalizedTaskId === '') {
+    throw new Error('fetch task failed');
+  }
+  const res = await API.get(`/api/v1/admin/tasks/${normalizedTaskId}`);
+  const { success, message, data } = res.data || {};
+  if (!success) {
+    throw new Error(message || 'fetch task failed');
+  }
+  return normalizeAsyncTasks([data])[0] || null;
+};
+
 const validateModelConfigs = (modelConfigs, t) => {
   const seen = new Set();
   for (const row of Array.isArray(modelConfigs) ? modelConfigs : []) {
@@ -305,10 +681,16 @@ const validateModelConfigs = (modelConfigs, t) => {
       return t('channel.edit.messages.model_config_invalid');
     }
     seen.add(alias);
-    if (row?.input_price !== null && normalizePriceOverrideValue(row?.input_price) === null) {
+    if (
+      row?.input_price !== null &&
+      normalizePriceOverrideValue(row?.input_price) === null
+    ) {
       return t('channel.edit.messages.model_config_invalid');
     }
-    if (row?.output_price !== null && normalizePriceOverrideValue(row?.output_price) === null) {
+    if (
+      row?.output_price !== null &&
+      normalizePriceOverrideValue(row?.output_price) === null
+    ) {
       return t('channel.edit.messages.model_config_invalid');
     }
   }
@@ -319,51 +701,117 @@ const buildChannelConnectionSignature = ({
   protocol,
   key,
   baseURL,
-  draftID,
+  channelID,
 }) => {
   const normalizedKey = (key || '').trim();
-  const normalizedDraftID = (draftID || '').trim();
+  const normalizedChannelID = (channelID || '').trim();
   const keyPart =
-    normalizedKey !== '' ? normalizedKey : `@draft:${normalizedDraftID}`;
+    normalizedKey !== '' ? normalizedKey : `@channel:${normalizedChannelID}`;
   return `${protocol}|${normalizeBaseURL(baseURL)}|${keyPart}`;
 };
 
-const buildChannelCapabilitySignature = ({
+const buildChannelModelTestSignature = ({
   protocol,
   key,
   baseURL,
-  draftID,
+  channelID,
   models,
+  modelConfigs,
 }) =>
   `${buildChannelConnectionSignature({
     protocol,
     key,
     baseURL,
-    draftID,
-  })}|${normalizeModelIDs(models).join(',')}`;
+    channelID,
+  })}|${normalizeModelIDs(models).join(',')}|${normalizeChannelModelConfigs(
+    modelConfigs
+  )
+    .filter((row) => row.selected)
+    .map((row) => `${row.model}:${row.type}:${row.endpoint || ''}`)
+    .join(',')}`;
 
-const normalizeCapabilityResults = (results) => {
+const normalizeModelTestResults = (results) => {
   if (!Array.isArray(results)) {
     return [];
   }
   return results
     .filter(
       (item) =>
-        item && typeof item === 'object' && typeof item.capability === 'string',
+        item && typeof item === 'object' && typeof item.model === 'string'
     )
     .map((item) => ({
-      capability: item.capability,
-      label: item.label || item.capability,
-      endpoint: item.endpoint || '',
       model: item.model || '',
+      upstream_model: item.upstream_model || '',
+      type: normalizeChannelModelType(item.type),
+      endpoint: item.endpoint || '',
       status: item.status || 'unsupported',
       supported: !!item.supported,
       message: item.message || '',
       latency_ms: Number(item.latency_ms || 0),
+      tested_at: Number(item.tested_at || 0),
     }));
 };
 
-const sanitizeDraftInputsForLocalStorage = (inputs) => {
+const normalizeAsyncTaskStatus = (value) => {
+  const normalized = (value || '').toString().trim().toLowerCase();
+  switch (normalized) {
+    case 'pending':
+    case 'running':
+    case 'succeeded':
+    case 'failed':
+    case 'canceled':
+      return normalized;
+    default:
+      return 'pending';
+  }
+};
+
+const isActiveAsyncTaskStatus = (value) => {
+  const normalized = normalizeAsyncTaskStatus(value);
+  return normalized === 'pending' || normalized === 'running';
+};
+
+const normalizeAsyncTasks = (items) => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return items
+    .filter((item) => item && typeof item === 'object' && item.id)
+    .map((item) => ({
+      id: (item.id || '').toString().trim(),
+      type: (item.type || '').toString().trim(),
+      status: normalizeAsyncTaskStatus(item.status),
+      channel_id: (item.channel_id || '').toString().trim(),
+      channel_name: (item.channel_name || '').toString().trim(),
+      model: (item.model || '').toString().trim(),
+      endpoint: (item.endpoint || '').toString().trim(),
+      error_message: (item.error_message || '').toString().trim(),
+      result: (item.result || '').toString().trim(),
+      created_at: Number(item.created_at || 0),
+      finished_at: Number(item.finished_at || 0),
+    }));
+};
+
+const mergeModelTestResults = (previousResults, nextResults) => {
+  const merged = new Map();
+  normalizeModelTestResults(previousResults).forEach((item) => {
+    if (!item.model) {
+      return;
+    }
+    merged.set(item.model, item);
+  });
+  normalizeModelTestResults(nextResults).forEach((item) => {
+    if (!item.model) {
+      return;
+    }
+    merged.set(item.model, item);
+  });
+  return Array.from(merged.values()).sort((a, b) =>
+    (a.model || '').localeCompare(b.model || '')
+  );
+};
+
+const sanitizeCreateInputsForLocalStorage = (inputs) => {
   if (!inputs || typeof inputs !== 'object') {
     return CHANNEL_ORIGIN_INPUTS;
   }
@@ -373,7 +821,7 @@ const sanitizeDraftInputsForLocalStorage = (inputs) => {
   };
 };
 
-const sanitizeDraftConfigForLocalStorage = (config) => {
+const sanitizeCreateConfigForLocalStorage = (config) => {
   if (!config || typeof config !== 'object') {
     return CHANNEL_DEFAULT_CONFIG;
   }
@@ -385,7 +833,7 @@ const sanitizeDraftConfigForLocalStorage = (config) => {
   };
 };
 
-const CHANNEL_CREATE_DRAFT_KEY = 'router.channel.create.draft.v2';
+const CHANNEL_CREATE_CACHE_KEY = 'router.channel.create.v3';
 const CREATE_CHANNEL_STEP_MIN = 1;
 const CREATE_CHANNEL_STEP_MAX = 4;
 
@@ -448,6 +896,34 @@ const resolveProtocolFromChannelPayload = (payload) => {
   return 'openai';
 };
 
+const inferCreatingChannelStepFromPayload = (payload) => {
+  const protocol = resolveProtocolFromChannelPayload(payload);
+  if (protocol === 'proxy') {
+    return 1;
+  }
+  const selectedModels = Array.isArray(payload?.model_configs)
+    ? payload.model_configs
+        .filter((row) => row && row.selected === true)
+        .map((row) => (row.model || '').toString().trim())
+        .filter((row) => row !== '')
+    : (payload?.models || '')
+        .toString()
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item !== '');
+  if (selectedModels.length === 0) {
+    return 2;
+  }
+  const testedAt = Number(payload?.channel_tests_last_tested_at || 0);
+  const results = Array.isArray(payload?.channel_tests)
+    ? payload.channel_tests
+    : [];
+  if (testedAt > 0 || results.length > 0) {
+    return 4;
+  }
+  return 3;
+};
+
 const EditChannel = () => {
   const { t } = useTranslation();
   const params = useParams();
@@ -464,21 +940,45 @@ const EditChannel = () => {
     const query = new URLSearchParams(location.search);
     return (query.get('copy_from') || '').trim();
   }, [hasChannelID, location.search]);
-  const draftIdFromQuery = useMemo(() => {
+  const creatingChannelIdFromQuery = useMemo(() => {
     if (hasChannelID) return '';
     const query = new URLSearchParams(location.search);
-    return (query.get('draft_id') || '').trim();
+    return (query.get('channel_id') || '').trim();
   }, [hasChannelID, location.search]);
-  const [loading, setLoading] = useState(hasChannelID || copyFromId !== '');
+  const [loading, setLoading] = useState(
+    hasChannelID || copyFromId !== '' || creatingChannelIdFromQuery !== ''
+  );
   const [createStep, setCreateStep] = useState(() => {
     const query = new URLSearchParams(location.search);
     return parseCreateStep(query.get('step'));
   });
-  const [draftChannelId, setDraftChannelId] = useState(draftIdFromQuery);
+  const [creatingChannelId, setCreatingChannelId] = useState(
+    creatingChannelIdFromQuery
+  );
   const [channelKeySet, setChannelKeySet] = useState(false);
   const handleCancel = () => {
     navigate('/admin/channel');
   };
+  const openChannelTaskView = useCallback(
+    (extraParams = {}) => {
+      const targetChannelId = ((channelId || creatingChannelId) || '')
+        .toString()
+        .trim();
+      const query = new URLSearchParams();
+      if (targetChannelId !== '') {
+        query.set('channel_id', targetChannelId);
+      }
+      Object.entries(extraParams || {}).forEach(([key, value]) => {
+        const normalizedValue = (value || '').toString().trim();
+        if (normalizedValue !== '') {
+          query.set(key, normalizedValue);
+        }
+      });
+      const search = query.toString();
+      navigate(`/admin/task${search ? `?${search}` : ''}`);
+    },
+    [channelId, creatingChannelId, navigate]
+  );
   const openEditPage = useCallback(() => {
     if (!channelId) {
       return;
@@ -488,30 +988,57 @@ const EditChannel = () => {
 
   const [inputs, setInputs] = useState(CHANNEL_ORIGIN_INPUTS);
   const [channelProtocolOptions, setChannelProtocolOptions] = useState(() =>
-    getChannelProtocolOptions(),
+    getChannelProtocolOptions()
   );
   const [fetchModelsLoading, setFetchModelsLoading] = useState(false);
   const [modelsSyncError, setModelsSyncError] = useState('');
   const [modelsLastSyncedAt, setModelsLastSyncedAt] = useState(0);
   const [verifiedModelSignature, setVerifiedModelSignature] = useState('');
-  const [capabilityResults, setCapabilityResults] = useState([]);
-  const [capabilityTesting, setCapabilityTesting] = useState(false);
-  const [capabilityTestError, setCapabilityTestError] = useState('');
-  const [capabilityTestedAt, setCapabilityTestedAt] = useState(0);
-  const [capabilityTestedSignature, setCapabilityTestedSignature] =
-    useState('');
+  const [modelTestResults, setModelTestResults] = useState([]);
+  const [modelTesting, setModelTesting] = useState(false);
+  const [modelTestingScope, setModelTestingScope] = useState('');
+  const [modelTestingTargets, setModelTestingTargets] = useState([]);
+  const [channelTasks, setChannelTasks] = useState([]);
+  const [modelTestError, setModelTestError] = useState('');
+  const [modelTestedAt, setModelTestedAt] = useState(0);
+  const [modelTestedSignature, setModelTestedSignature] = useState('');
+  const [modelTestTargetModels, setModelTestTargetModels] = useState([]);
   const [config, setConfig] = useState(CHANNEL_DEFAULT_CONFIG);
+  const [providerOptions, setProviderOptions] = useState([]);
+  const [providerModelOwners, setProviderModelOwners] = useState({});
+  const [providerCatalogLoading, setProviderCatalogLoading] = useState(false);
+  const [providerCatalogLoaded, setProviderCatalogLoaded] = useState(false);
+  const [appendProviderModalOpen, setAppendProviderModalOpen] = useState(false);
+  const [appendingProviderModel, setAppendingProviderModel] = useState(false);
+  const [autoAssigningProviders, setAutoAssigningProviders] = useState(false);
+  const [appendProviderForm, setAppendProviderForm] = useState({
+    provider: '',
+    model: '',
+    type: 'text',
+  });
+  const [modelSearchKeyword, setModelSearchKeyword] = useState('');
+  const [detailModelFilter, setDetailModelFilter] = useState('all');
+  const [detailModelPage, setDetailModelPage] = useState(1);
   const fetchingModelsRef = useRef(false);
-  const draftChannelIdRef = useRef(draftIdFromQuery);
+  const creatingChannelIdRef = useRef(creatingChannelIdFromQuery);
+  const creatingStepProvidedRef = useRef(false);
+  const skipNextCreatingReloadRef = useRef('');
+  const pendingRefreshTaskIdRef = useRef('');
+  const pendingRefreshSignatureRef = useRef('');
+  const deferredModelSearchKeyword = useDeferredValue(modelSearchKeyword);
   const currentProtocolOption = useMemo(() => {
-    const normalizedProtocol = (inputs.protocol || '').toString().trim().toLowerCase();
+    const normalizedProtocol = (inputs.protocol || '')
+      .toString()
+      .trim()
+      .toLowerCase();
     if (normalizedProtocol === '') {
       return null;
     }
     return (
       channelProtocolOptions.find(
         (option) =>
-          (option?.value || '').toString().trim().toLowerCase() === normalizedProtocol,
+          (option?.value || '').toString().trim().toLowerCase() ===
+          normalizedProtocol
       ) || null
     );
   }, [channelProtocolOptions, inputs.protocol]);
@@ -541,11 +1068,11 @@ const EditChannel = () => {
 
   const effectivePreviewKey = useMemo(
     () => buildEffectiveKey().trim(),
-    [buildEffectiveKey],
+    [buildEffectiveKey]
   );
   const previewChannelID = useMemo(
-    () => ((hasChannelID ? channelId : draftChannelId) || '').trim(),
-    [channelId, draftChannelId, hasChannelID],
+    () => ((hasChannelID ? channelId : creatingChannelId) || '').trim(),
+    [channelId, creatingChannelId, hasChannelID]
   );
   const hasModelPreviewCredentials =
     effectivePreviewKey !== '' || (previewChannelID !== '' && channelKeySet);
@@ -557,26 +1084,28 @@ const EditChannel = () => {
         protocol: inputs.protocol,
         key: effectivePreviewKey,
         baseURL: inputs.base_url,
-        draftID: previewChannelID,
+        channelID: previewChannelID,
       }),
-    [effectivePreviewKey, inputs.base_url, inputs.protocol, previewChannelID],
+    [effectivePreviewKey, inputs.base_url, inputs.protocol, previewChannelID]
   );
-  const currentCapabilitySignature = useMemo(
+  const currentModelTestSignature = useMemo(
     () =>
-      buildChannelCapabilitySignature({
+      buildChannelModelTestSignature({
         protocol: inputs.protocol,
         key: effectivePreviewKey,
         baseURL: inputs.base_url,
-        draftID: previewChannelID,
+        channelID: previewChannelID,
         models: inputs.models,
+        modelConfigs: inputs.model_configs,
       }),
     [
       effectivePreviewKey,
       inputs.base_url,
+      inputs.model_configs,
       inputs.models,
       inputs.protocol,
       previewChannelID,
-    ],
+    ]
   );
   const requiresConnectionVerification =
     isCreateMode && inputs.protocol !== 'proxy';
@@ -592,18 +1121,226 @@ const EditChannel = () => {
   const requireVerificationBeforeProceed =
     requiresConnectionVerification && inputs.models.length === 0;
   const fetchModelsButtonText = t('channel.edit.buttons.fetch_models');
-  const identifierReadonlyProps =
-    isDetailMode || isEditMode ? { readOnly: true } : {};
   const inputReadonlyProps = isDetailMode ? { readOnly: true } : {};
   const textAreaReadonlyProps = isDetailMode ? { readOnly: true } : {};
   const visibleModelConfigs = useMemo(
     () => normalizeChannelModelConfigs(inputs.model_configs),
-    [inputs.model_configs],
+    [inputs.model_configs]
   );
+  const modelTestResultsByModel = useMemo(() => {
+    const index = new Map();
+    normalizeModelTestResults(modelTestResults).forEach((item) => {
+      if (!item.model) {
+        return;
+      }
+      index.set(item.model, item);
+    });
+    return index;
+  }, [modelTestResults]);
+  const modelTestRows = useMemo(() => {
+    return visibleModelConfigs.filter((row) => {
+      if (row.inactive) {
+        return false;
+      }
+      if (row.selected) {
+        return true;
+      }
+      return modelTestResultsByModel.has(row.model);
+    });
+  }, [modelTestResultsByModel, visibleModelConfigs]);
+  const allModelTestTargetsSelected = useMemo(() => {
+    if (modelTestRows.length === 0) {
+      return false;
+    }
+    return modelTestRows.every((row) =>
+      modelTestTargetModels.includes(row.model)
+    );
+  }, [modelTestRows, modelTestTargetModels]);
+  const isModelTestSignatureFresh =
+    modelTestedSignature !== '' &&
+    modelTestedSignature === currentModelTestSignature;
+  const modelTestingTargetSet = useMemo(
+    () => new Set(modelTestingTargets),
+    [modelTestingTargets]
+  );
+  const activeChannelTasksByModel = useMemo(() => {
+    const index = new Map();
+    normalizeAsyncTasks(channelTasks)
+      .filter(
+        (item) =>
+          item.type === 'channel_model_test' && isActiveAsyncTaskStatus(item.status)
+      )
+      .forEach((item) => {
+        if (!item.model) {
+          return;
+        }
+        const existing = index.get(item.model);
+        if (!existing || existing.status === 'pending') {
+          index.set(item.model, item);
+        }
+      });
+    return index;
+  }, [channelTasks]);
+  const activeRefreshModelsTask = useMemo(
+    () =>
+      normalizeAsyncTasks(channelTasks).find(
+        (item) =>
+          item.type === 'channel_refresh_models' &&
+          isActiveAsyncTaskStatus(item.status)
+      ) || null,
+    [channelTasks]
+  );
+  const selectedModelTestHasActiveTasks = useMemo(
+    () =>
+      modelTestTargetModels.some((modelName) =>
+        activeChannelTasksByModel.has(modelName)
+      ),
+    [activeChannelTasksByModel, modelTestTargetModels]
+  );
+  const getProviderOwnersForModel = useCallback(
+    (row) => {
+      const owners = new Set();
+      buildProviderLookupKeys(row).forEach((key) => {
+        (providerModelOwners[key] || []).forEach((providerId) => {
+          owners.add(providerId);
+        });
+      });
+      return Array.from(owners).sort((a, b) => a.localeCompare(b));
+    },
+    [providerModelOwners]
+  );
+  const inferAssignableProviderForRow = useCallback(
+    (row) => inferAssignableProviderForRowWithOptions(row, providerOptions),
+    [providerOptions]
+  );
+  const canSelectChannelModel = useCallback(
+    (row) =>
+      row?.inactive !== true && getProviderOwnersForModel(row).length > 0,
+    [getProviderOwnersForModel]
+  );
+  const activeModelConfigs = useMemo(
+    () => visibleModelConfigs.filter((row) => row.inactive !== true),
+    [visibleModelConfigs]
+  );
+  const detailModelStats = useMemo(() => {
+    return visibleModelConfigs.reduce(
+      (acc, row) => {
+        const owners = getProviderOwnersForModel(row);
+        if (owners.length > 0) {
+          acc.assigned += 1;
+          return acc;
+        }
+        acc.unassigned += 1;
+        const inferredProvider = inferAssignableProviderForRow(row);
+        if (inferredProvider !== '') {
+          acc.autoAssignable += 1;
+        } else {
+          acc.manualRequired += 1;
+        }
+        return acc;
+      },
+      {
+        assigned: 0,
+        unassigned: 0,
+        autoAssignable: 0,
+        manualRequired: 0,
+      }
+    );
+  }, [
+    getProviderOwnersForModel,
+    inferAssignableProviderForRow,
+    visibleModelConfigs,
+  ]);
+  const detailFilteredModelConfigs = useMemo(() => {
+    if (!isDetailMode) {
+      return visibleModelConfigs;
+    }
+    return visibleModelConfigs.filter((row) => {
+      const hasOwners = getProviderOwnersForModel(row).length > 0;
+      if (detailModelFilter === 'unassigned') {
+        return !hasOwners;
+      }
+      if (detailModelFilter === 'manual') {
+        return !hasOwners && inferAssignableProviderForRow(row) === '';
+      }
+      return true;
+    });
+  }, [
+    detailModelFilter,
+    getProviderOwnersForModel,
+    inferAssignableProviderForRow,
+    isDetailMode,
+    visibleModelConfigs,
+  ]);
+  const searchedModelConfigs = useMemo(() => {
+    const keyword = normalizeSearchKeyword(deferredModelSearchKeyword);
+    if (keyword === '') {
+      return detailFilteredModelConfigs;
+    }
+    return detailFilteredModelConfigs.filter((row) => {
+      const providerOwners = getProviderOwnersForModel(row).join(' ');
+      const candidates = [
+        row?.upstream_model,
+        row?.model,
+        row?.type,
+        providerOwners,
+      ].map(normalizeSearchKeyword);
+      return candidates.some((candidate) => candidate.includes(keyword));
+    });
+  }, [
+    deferredModelSearchKeyword,
+    detailFilteredModelConfigs,
+    getProviderOwnersForModel,
+  ]);
+  const detailModelTotalPages = useMemo(() => {
+    return Math.max(
+      1,
+      Math.ceil(searchedModelConfigs.length / CHANNEL_MODEL_PAGE_SIZE)
+    );
+  }, [searchedModelConfigs.length]);
+  const renderedModelConfigs = useMemo(() => {
+    const offset = (detailModelPage - 1) * CHANNEL_MODEL_PAGE_SIZE;
+    return searchedModelConfigs.slice(offset, offset + CHANNEL_MODEL_PAGE_SIZE);
+  }, [searchedModelConfigs, detailModelPage]);
+  const autoAssignableRows = useMemo(() => {
+    return visibleModelConfigs.filter((row) => {
+      const owners = getProviderOwnersForModel(row);
+      return owners.length === 0 && inferAssignableProviderForRow(row) !== '';
+    });
+  }, [
+    getProviderOwnersForModel,
+    inferAssignableProviderForRow,
+    visibleModelConfigs,
+  ]);
+  const modelSelectionSummaryText = useMemo(
+    () =>
+      t('channel.edit.model_selector.summary', {
+        selected: inputs.models.length,
+        total: activeModelConfigs.length,
+      }),
+    [activeModelConfigs.length, inputs.models.length, t]
+  );
+  const modelAssignmentSummaryText = useMemo(() => {
+    if (!isDetailMode) {
+      return '';
+    }
+    return t('channel.edit.model_selector.assignment_summary', {
+      assigned: detailModelStats.assigned,
+      unassigned: detailModelStats.unassigned,
+      auto: detailModelStats.autoAssignable,
+      manual: detailModelStats.manualRequired,
+    });
+  }, [detailModelStats, isDetailMode, t]);
+  const modelSectionMetaText = useMemo(() => {
+    const parts = [modelSelectionSummaryText];
+    if (modelAssignmentSummaryText) {
+      parts.push(modelAssignmentSummaryText);
+    }
+    return parts.filter(Boolean).join(' · ');
+  }, [modelAssignmentSummaryText, modelSelectionSummaryText]);
 
   const handleInputChange = (e, { name, value }) => {
-    const nextValue =
-      name === 'id' ? normalizeChannelIdentifier(value) : value;
+    const nextValue = name === 'id' ? normalizeChannelIdentifier(value) : value;
     setInputs((inputs) => ({ ...inputs, [name]: nextValue }));
   };
 
@@ -616,6 +1353,7 @@ const EditChannel = () => {
       return (
         <Form.Field>
           <Form.Input
+            className='router-section-input'
             label={t('channel.edit.base_url')}
             name='base_url'
             placeholder='请输入 AZURE_OPENAI_ENDPOINT，例如：https://docs-test-001.openai.azure.com'
@@ -631,6 +1369,7 @@ const EditChannel = () => {
       return (
         <Form.Field>
           <Form.Input
+            className='router-section-input'
             required
             label={t('channel.edit.proxy_url')}
             name='base_url'
@@ -647,6 +1386,7 @@ const EditChannel = () => {
       return (
         <Form.Field>
           <Form.Input
+            className='router-section-input'
             label={t('channel.edit.base_url')}
             name='base_url'
             placeholder={t('channel.edit.base_url_placeholder')}
@@ -662,6 +1402,7 @@ const EditChannel = () => {
       return (
         <Form.Field>
           <Form.Input
+            className='router-section-input'
             label={t('channel.edit.base_url')}
             name='base_url'
             placeholder={
@@ -681,6 +1422,7 @@ const EditChannel = () => {
       return (
         <Form.Field>
           <Form.Input
+            className='router-section-input'
             label={t('channel.edit.proxy_url')}
             name='base_url'
             placeholder={t('channel.edit.proxy_url_placeholder')}
@@ -708,6 +1450,7 @@ const EditChannel = () => {
     return (
       <Form.Field>
         <Form.Input
+          className='router-section-input'
           label={t('channel.edit.key')}
           name='key'
           type='password'
@@ -735,74 +1478,111 @@ const EditChannel = () => {
     t,
   ]);
 
-  const clearCreateDraft = useCallback(() => {
+  const clearCreateChannelCache = useCallback(() => {
     if (typeof window === 'undefined') {
       return;
     }
-    localStorage.removeItem(CHANNEL_CREATE_DRAFT_KEY);
+    localStorage.removeItem(CHANNEL_CREATE_CACHE_KEY);
   }, []);
 
-  const restoreCreateDraft = useCallback(() => {
+  const restoreCreateChannelCache = useCallback(() => {
     if (typeof window === 'undefined') {
       return false;
     }
-    const raw = localStorage.getItem(CHANNEL_CREATE_DRAFT_KEY);
+    const raw = localStorage.getItem(CHANNEL_CREATE_CACHE_KEY);
     if (!raw) {
       return false;
     }
     try {
-      const draft = JSON.parse(raw);
-      if (!draft || typeof draft !== 'object') {
+      const cachedState = JSON.parse(raw);
+      if (!cachedState || typeof cachedState !== 'object') {
         return false;
       }
-      if (!draft.inputs || typeof draft.inputs !== 'object') {
+      if (!cachedState.inputs || typeof cachedState.inputs !== 'object') {
         return false;
       }
 
       setInputs({
         ...CHANNEL_ORIGIN_INPUTS,
-        ...sanitizeDraftInputsForLocalStorage(draft.inputs),
+        ...sanitizeCreateInputsForLocalStorage(cachedState.inputs),
       });
-      if (draft.config && typeof draft.config === 'object') {
+      if (cachedState.config && typeof cachedState.config === 'object') {
         setConfig({
           ...CHANNEL_DEFAULT_CONFIG,
-          ...sanitizeDraftConfigForLocalStorage(draft.config),
+          ...sanitizeCreateConfigForLocalStorage(cachedState.config),
         });
       }
-      if (typeof draft.modelsSyncError === 'string') {
-        setModelsSyncError(draft.modelsSyncError);
+      if (typeof cachedState.modelsSyncError === 'string') {
+        setModelsSyncError(cachedState.modelsSyncError);
       }
-      if (Number.isFinite(draft.modelsLastSyncedAt)) {
-        setModelsLastSyncedAt(draft.modelsLastSyncedAt);
+      if (Number.isFinite(cachedState.modelsLastSyncedAt)) {
+        setModelsLastSyncedAt(cachedState.modelsLastSyncedAt);
       }
-      if (typeof draft.verifiedModelSignature === 'string') {
-        setVerifiedModelSignature(draft.verifiedModelSignature);
+      if (typeof cachedState.verifiedModelSignature === 'string') {
+        setVerifiedModelSignature(cachedState.verifiedModelSignature);
       }
-      if (Array.isArray(draft.capabilityResults)) {
-        setCapabilityResults(
-          normalizeCapabilityResults(draft.capabilityResults),
+      const restoredModelTestResults = Array.isArray(
+        cachedState.modelTestResults
+      )
+        ? cachedState.modelTestResults
+        : Array.isArray(cachedState.capabilityResults)
+        ? cachedState.capabilityResults
+        : [];
+      const restoredModelTestTargetModels = Array.isArray(
+        cachedState.modelTestTargetModels
+      )
+        ? cachedState.modelTestTargetModels
+        : Array.isArray(cachedState.capabilityTargetModels)
+        ? cachedState.capabilityTargetModels
+        : [];
+      const restoredModelTestError =
+        typeof cachedState.modelTestError === 'string'
+          ? cachedState.modelTestError
+          : typeof cachedState.capabilityTestError === 'string'
+          ? cachedState.capabilityTestError
+          : '';
+      const restoredModelTestedAt = Number.isFinite(cachedState.modelTestedAt)
+        ? cachedState.modelTestedAt
+        : Number.isFinite(cachedState.capabilityTestedAt)
+        ? cachedState.capabilityTestedAt
+        : 0;
+      const restoredModelTestedSignature =
+        typeof cachedState.modelTestedSignature === 'string'
+          ? cachedState.modelTestedSignature
+          : typeof cachedState.capabilityTestedSignature === 'string'
+          ? cachedState.capabilityTestedSignature
+          : '';
+      if (restoredModelTestResults.length > 0) {
+        setModelTestResults(
+          normalizeModelTestResults(restoredModelTestResults)
         );
       }
-      if (typeof draft.capabilityTestError === 'string') {
-        setCapabilityTestError(draft.capabilityTestError);
+      if (restoredModelTestTargetModels.length > 0) {
+        setModelTestTargetModels(
+          normalizeModelIDs(restoredModelTestTargetModels)
+        );
       }
-      if (Number.isFinite(draft.capabilityTestedAt)) {
-        setCapabilityTestedAt(draft.capabilityTestedAt);
+      if (restoredModelTestError !== '') {
+        setModelTestError(restoredModelTestError);
       }
-      if (typeof draft.capabilityTestedSignature === 'string') {
-        setCapabilityTestedSignature(draft.capabilityTestedSignature);
+      if (restoredModelTestedAt > 0) {
+        setModelTestedAt(restoredModelTestedAt);
       }
-      if (typeof draft.draft_channel_id === 'string') {
-        const restoredDraftID = draft.draft_channel_id.trim();
-        setDraftChannelId(restoredDraftID);
-        draftChannelIdRef.current = restoredDraftID;
+      if (restoredModelTestedSignature !== '') {
+        setModelTestedSignature(restoredModelTestedSignature);
       }
-      if (typeof draft.channel_key_set === 'boolean') {
-        setChannelKeySet(draft.channel_key_set);
+      if (typeof cachedState.channel_id === 'string') {
+        const restoredChannelID = cachedState.channel_id.trim();
+        setCreatingChannelId(restoredChannelID);
+        creatingChannelIdRef.current = restoredChannelID;
+        skipNextCreatingReloadRef.current = restoredChannelID;
+      }
+      if (typeof cachedState.channel_key_set === 'boolean') {
+        setChannelKeySet(cachedState.channel_key_set);
       } else {
         setChannelKeySet(false);
       }
-      setCreateStep(parseCreateStep(draft.step));
+      setCreateStep(parseCreateStep(cachedState.step));
       return true;
     } catch {
       return false;
@@ -816,7 +1596,7 @@ const EditChannel = () => {
       }
       setCreateStep(parseCreateStep(targetStep));
     },
-    [isCreateMode],
+    [isCreateMode]
   );
 
   const moveToPreviousCreateStep = useCallback(() => {
@@ -827,15 +1607,15 @@ const EditChannel = () => {
     const effectiveKey = buildEffectiveKey();
     const derivedModelState = buildChannelModelState(inputs.model_configs);
     let localInputs = { ...inputs, key: effectiveKey };
-    localInputs.id = normalizeChannelIdentifier(localInputs.id);
-    localInputs.name = (localInputs.name || '').trim();
+    localInputs.id = (localInputs.id || '').toString().trim();
+    localInputs.name = normalizeChannelIdentifier(localInputs.name);
     if (localInputs.key === 'undefined|undefined|undefined') {
       localInputs.key = '';
     }
     if (localInputs.base_url && localInputs.base_url.endsWith('/')) {
       localInputs.base_url = localInputs.base_url.slice(
         0,
-        localInputs.base_url.length - 1,
+        localInputs.base_url.length - 1
       );
     }
     if (localInputs.protocol === 'azure' && localInputs.other === '') {
@@ -848,10 +1628,9 @@ const EditChannel = () => {
     return localInputs;
   }, [buildEffectiveKey, config, inputs]);
 
-  const createDraftChannel = useCallback(async () => {
+  const createChannelRecord = useCallback(async () => {
     const payload = buildChannelPayload();
-    const res = await API.post('/api/v1/admin/channel/draft', {
-      id: payload.id,
+    const res = await API.post('/api/v1/admin/channel/create', {
       name: payload.name,
       protocol: payload.protocol,
       key: payload.key,
@@ -860,88 +1639,93 @@ const EditChannel = () => {
     });
     const { success, message, data } = res.data || {};
     if (!success) {
-      showError(message || t('channel.edit.messages.create_draft_failed'));
+      showError(message || t('channel.edit.messages.create_channel_failed'));
       return '';
     }
     const id = (data?.id || '').toString();
     if (id === '') {
-      showError(t('channel.edit.messages.create_draft_failed'));
+      showError(t('channel.edit.messages.create_channel_failed'));
       return '';
     }
-    setDraftChannelId(id);
-    draftChannelIdRef.current = id;
+    setCreatingChannelId(id);
+    creatingChannelIdRef.current = id;
+    skipNextCreatingReloadRef.current = id;
     if ((payload.key || '').trim() !== '') {
       setChannelKeySet(true);
     }
     return id;
   }, [buildChannelPayload, t]);
 
-  const saveDraftChannel = useCallback(async () => {
-    let targetDraftID = (
-      draftChannelIdRef.current ||
-      draftChannelId ||
-      ''
-    ).trim();
-    if (targetDraftID === '') {
-      if (!isCreateMode) {
-        return true;
+  const persistWorkingChannel = useCallback(
+    async ({ status } = {}) => {
+      let targetChannelID = (
+        (hasChannelID
+          ? channelId
+          : creatingChannelIdRef.current || creatingChannelId) || ''
+      ).trim();
+      if (targetChannelID === '') {
+        if (!isCreateMode) {
+          return '';
+        }
+        const createdID = await createChannelRecord();
+        if (createdID === '') {
+          return '';
+        }
+        targetChannelID = createdID;
       }
-      const createdID = await createDraftChannel();
-      if (createdID === '') {
-        return false;
+      const payload = buildChannelPayload();
+      const requestBody = {
+        ...payload,
+        id: targetChannelID,
+      };
+      if (typeof status === 'number') {
+        requestBody.status = status;
+      } else if (isCreateMode) {
+        requestBody.status = 4;
       }
-      targetDraftID = createdID;
-    }
-    const payload = buildChannelPayload();
-    const res = await API.put('/api/v1/admin/channel/', {
-      ...payload,
-      id: targetDraftID,
-      status: 4,
-    });
-    const { success, message } = res.data || {};
-    if (!success) {
-      showError(message || t('channel.edit.messages.update_draft_failed'));
-      return false;
-    }
-    if ((payload.key || '').trim() !== '') {
-      setChannelKeySet(true);
-    }
-    return true;
-  }, [
-    buildChannelPayload,
-    createDraftChannel,
-    draftChannelId,
-    isCreateMode,
-    t,
-  ]);
+      const res = await API.put('/api/v1/admin/channel/', requestBody);
+      const { success, message } = res.data || {};
+      if (!success) {
+        showError(message || t('channel.edit.messages.save_channel_failed'));
+        return '';
+      }
+      if ((payload.key || '').trim() !== '') {
+        setChannelKeySet(true);
+      }
+      return targetChannelID;
+    },
+    [
+      buildChannelPayload,
+      channelId,
+      createChannelRecord,
+      creatingChannelId,
+      hasChannelID,
+      isCreateMode,
+      t,
+    ]
+  );
 
-  const verifyDraftModelsPersisted = useCallback(
+  const saveCreatingChannel = useCallback(async () => {
+    const targetChannelID = await persistWorkingChannel({ status: 4 });
+    return targetChannelID !== '';
+  }, [persistWorkingChannel]);
+
+  const verifyChannelModelsPersisted = useCallback(
     async (expectedModels) => {
-      const targetDraftID = (
-        draftChannelIdRef.current ||
-        draftChannelId ||
+      const targetChannelID = (
+        creatingChannelIdRef.current ||
+        creatingChannelId ||
         ''
       ).trim();
-      if (targetDraftID === '') {
+      if (targetChannelID === '') {
         return false;
       }
       try {
-        const checkRes = await API.get(
-          `/api/v1/admin/channel/${targetDraftID}?select_all=1`,
-        );
-        const { success, data } = checkRes.data || {};
-        if (!success || !data) {
-          return false;
-        }
+        const remoteConfigs = await fetchAllChannelModelConfigs(targetChannelID);
         const remoteModels = normalizeModelIDs(
-          Array.isArray(data.model_configs) && data.model_configs.length > 0
-            ? data.model_configs
-                .filter((row) => row && row.selected !== false)
-                .map((row) => row.model)
-            : (data.models || '')
-                .split(',')
-                .map((item) => item.trim())
-                .filter((item) => item !== ''),
+          remoteConfigs
+            .filter((row) => row && row.selected === true)
+            .map((row) => row.model)
         );
         const localModels = normalizeModelIDs(expectedModels);
         if (remoteModels.length !== localModels.length) {
@@ -957,23 +1741,28 @@ const EditChannel = () => {
         return false;
       }
     },
-    [draftChannelId],
+    [creatingChannelId]
   );
 
-  const ensureDraftChannel = useCallback(async () => {
+  const ensureCreatingChannel = useCallback(async () => {
     if (!isCreateMode) {
       return true;
     }
-    if (draftChannelId) {
-      return saveDraftChannel();
+    if (creatingChannelId) {
+      return saveCreatingChannel();
     }
-    const createdID = await createDraftChannel();
+    const createdID = await createChannelRecord();
     return createdID !== '';
-  }, [createDraftChannel, draftChannelId, isCreateMode, saveDraftChannel]);
+  }, [
+    createChannelRecord,
+    creatingChannelId,
+    isCreateMode,
+    saveCreatingChannel,
+  ]);
 
   const moveToStepTwo = useCallback(async () => {
     const effectiveKey = buildEffectiveKey();
-    const identifierError = validateChannelIdentifier(inputs.id, t);
+    const identifierError = validateChannelIdentifier(inputs.name, t);
     if (identifierError) {
       showInfo(identifierError);
       return;
@@ -983,7 +1772,7 @@ const EditChannel = () => {
       return;
     }
     if (isCreateMode) {
-      const ok = await ensureDraftChannel();
+      const ok = await ensureCreatingChannel();
       if (!ok) {
         return;
       }
@@ -992,9 +1781,9 @@ const EditChannel = () => {
   }, [
     buildEffectiveKey,
     canReuseStoredKeyForCreate,
-    ensureDraftChannel,
+    ensureCreatingChannel,
     goToCreateStep,
-    inputs.id,
+    inputs.name,
     isCreateMode,
     t,
   ]);
@@ -1020,20 +1809,20 @@ const EditChannel = () => {
       return false;
     }
     if (isCreateMode) {
-      const ok = await saveDraftChannel();
+      const ok = await saveCreatingChannel();
       if (!ok) {
         return false;
       }
       const expectedModels = [...inputs.models];
-      const persisted = await verifyDraftModelsPersisted(expectedModels);
+      const persisted = await verifyChannelModelsPersisted(expectedModels);
       if (!persisted) {
-        showError(t('channel.edit.messages.update_draft_failed'));
+        showError(t('channel.edit.messages.save_channel_failed'));
         return false;
       }
     }
     return true;
   }, [
-    draftChannelId,
+    creatingChannelId,
     hasModelPreviewCredentials,
     inputs.models.length,
     inputs.models,
@@ -1042,9 +1831,9 @@ const EditChannel = () => {
     isCurrentSignatureVerified,
     requireVerificationBeforeProceed,
     requiresConnectionVerification,
-    saveDraftChannel,
+    saveCreatingChannel,
     t,
-    verifyDraftModelsPersisted,
+    verifyChannelModelsPersisted,
     visibleModelConfigs,
   ]);
 
@@ -1064,155 +1853,255 @@ const EditChannel = () => {
       }
     }
     goToCreateStep(4);
-  }, [createStep, ensureModelsStepCompleted, goToCreateStep]);
+  }, [
+    createStep,
+    ensureModelsStepCompleted,
+    goToCreateStep,
+  ]);
 
-  const loadChannelById = useCallback(
-    async (targetId, forCopy = false, selectAll = true, fromDraft = false) => {
-      const query = selectAll ? '?select_all=1' : '';
-      let res = await API.get(`/api/v1/admin/channel/${targetId}${query}`);
-      const { success, message, data } = res.data;
-      if (success) {
-        const keySet = !!data.key_set;
-        const selectedModels =
-          data.models === ''
-            ? []
-            : (data.models || '')
-                .split(',')
-                .map((item) => item.trim())
-                .filter((item) => item !== '');
-        const availableModels = Array.isArray(data.available_models)
-          ? data.available_models
-          : [];
-        const storedCapabilityResults = normalizeCapabilityResults(
-          data.capability_results,
+  const loadChannelModelConfigsFromServer = useCallback(
+    async (targetChannelId) => {
+      try {
+        return await fetchAllChannelModelConfigs(targetChannelId);
+      } catch (error) {
+        throw new Error(
+          error?.message || t('channel.edit.messages.fetch_models_failed')
         );
-        const storedCapabilityTestedAt =
-          Number(data.capability_last_tested_at || 0) > 0
-            ? Number(data.capability_last_tested_at) * 1000
-            : 0;
-        let parsedConfig = {};
-        if (data.config !== '') {
-          parsedConfig = JSON.parse(data.config);
-        }
-        const normalizedProtocol = resolveProtocolFromChannelPayload(data);
-        const modelState = buildChannelModelState(
-          buildModelConfigsFromLegacyFields({
-            modelConfigs: data.model_configs,
-            availableModels:
-              availableModels.length > 0 ? availableModels : selectedModels,
-            selectedModels,
-            modelMapping: data.model_mapping || '',
-            inputPrice: data.input_price || '',
-            outputPrice: data.output_price || '',
-            priceUnit: data.price_unit || '',
-            currency: data.currency || '',
-          }),
-        );
-        const loadedCapabilitySignature = buildChannelCapabilitySignature({
-          protocol: normalizedProtocol,
-          key: '',
-          baseURL: data.base_url || '',
-          draftID: data.id || targetId,
-          models: modelState.selectedModels,
-        });
-
-        if (forCopy) {
-          setInputs({
-            id: '',
-            name: data.name || '',
-            protocol: normalizedProtocol,
-            key: '',
-            base_url: data.base_url || '',
-            other: data.other || '',
-            model_configs: modelState.modelConfigs,
-            system_prompt: data.system_prompt || '',
-            models: modelState.selectedModels,
-            test_model: data.test_model || modelState.selectedModels[0] || '',
-          });
-          setCapabilityResults([]);
-          setCapabilityTestError('');
-          setCapabilityTestedAt(0);
-          setCapabilityTestedSignature('');
-        } else {
-          setInputs({
-            id: data.id,
-            name: data.name || '',
-            protocol: normalizedProtocol,
-            key: '',
-            base_url: data.base_url || '',
-            other: data.other || '',
-            model_configs: modelState.modelConfigs,
-            system_prompt: data.system_prompt || '',
-            models: modelState.selectedModels,
-            test_model: data.test_model || modelState.selectedModels[0] || '',
-            status: data.status,
-            weight: data.weight,
-            priority: data.priority,
-          });
-          setCapabilityResults(storedCapabilityResults);
-          setCapabilityTestError('');
-          setCapabilityTestedAt(storedCapabilityTestedAt);
-          setCapabilityTestedSignature(
-            storedCapabilityResults.length > 0 && storedCapabilityTestedAt > 0
-              ? loadedCapabilitySignature
-              : '',
-          );
-        }
-        setConfig((prev) => ({
-          ...prev,
-          ...parsedConfig,
-        }));
-        if (fromDraft || hasChannelID) {
-          setChannelKeySet(keySet);
-        } else {
-          setChannelKeySet(false);
-        }
-      } else {
-        showError(message);
       }
-      setLoading(false);
     },
-    [hasChannelID],
+    [t]
   );
 
-  const applyModelCandidates = useCallback(
-    (models, selectAll = false) => {
-      const nextConfigs = buildFetchedModelConfigs(
-        inputs.model_configs,
-        models,
-        selectAll,
-      );
-      const nextInputs = buildNextInputsWithModelConfigs(inputs, nextConfigs);
-      setInputs(nextInputs);
-      return nextInputs.models;
+  const loadChannelTestsFromServer = useCallback(
+    async (targetChannelId) => {
+      try {
+        return await fetchChannelTests(targetChannelId);
+      } catch (error) {
+        throw new Error(
+          error?.message || t('channel.edit.model_tester.test_failed')
+        );
+      }
     },
-    [inputs],
+    [t]
+  );
+
+  const loadChannelTasksFromServer = useCallback(
+    async (targetChannelId) => {
+      try {
+        return await fetchActiveChannelTasks(targetChannelId);
+      } catch (error) {
+        throw new Error(error?.message || 'fetch channel tasks failed');
+      }
+    },
+    []
+  );
+
+  const refreshChannelRuntimeState = useCallback(
+    async (targetChannelId) => {
+      const normalizedChannelId = (targetChannelId || '').toString().trim();
+      if (normalizedChannelId === '') {
+        return;
+      }
+      const [nextModelConfigs, nextTests, nextTasks] = await Promise.all([
+        loadChannelModelConfigsFromServer(normalizedChannelId),
+        loadChannelTestsFromServer(normalizedChannelId),
+        loadChannelTasksFromServer(normalizedChannelId),
+      ]);
+      const nextInputs = buildNextInputsWithModelConfigs(inputs, nextModelConfigs);
+      const nextSignature = buildChannelModelTestSignature({
+        protocol: inputs.protocol,
+        key: effectivePreviewKey,
+        baseURL: inputs.base_url,
+        channelID: normalizedChannelId,
+        models: nextInputs.models,
+        modelConfigs: nextInputs.model_configs,
+      });
+      setInputs(nextInputs);
+      setModelTestResults(normalizeModelTestResults(nextTests.items));
+      setModelTestError('');
+      setModelTestedAt(
+        Number(nextTests.lastTestedAt || 0) > 0
+          ? Number(nextTests.lastTestedAt) * 1000
+          : 0
+      );
+      setModelTestedSignature(
+        Number(nextTests.lastTestedAt || 0) > 0 ? nextSignature : ''
+      );
+      setChannelTasks(normalizeAsyncTasks(nextTasks));
+    },
+    [
+      effectivePreviewKey,
+      inputs,
+      inputs.base_url,
+      inputs.protocol,
+      loadChannelModelConfigsFromServer,
+      loadChannelTasksFromServer,
+      loadChannelTestsFromServer,
+    ]
+  );
+
+  const loadChannelById = useCallback(
+    async (targetId, forCopy = false, fromCreating = false) => {
+      try {
+        let res = await API.get(`/api/v1/admin/channel/${targetId}`);
+        const { success, message, data } = res.data;
+        if (success) {
+          const [remoteModelConfigs, channelTestsData, activeTasks] =
+            await Promise.all([
+            loadChannelModelConfigsFromServer(data.id || targetId),
+            forCopy
+              ? Promise.resolve({ items: [], lastTestedAt: 0 })
+              : loadChannelTestsFromServer(data.id || targetId),
+            forCopy
+              ? Promise.resolve([])
+              : loadChannelTasksFromServer(data.id || targetId),
+          ]);
+          const storedModelTestResults = normalizeModelTestResults(
+            channelTestsData.items
+          );
+          const storedModelTestedAt =
+            Number(channelTestsData.lastTestedAt || 0) > 0
+              ? Number(channelTestsData.lastTestedAt) * 1000
+              : 0;
+          let parsedConfig = {};
+          if (data.config !== '') {
+            parsedConfig = JSON.parse(data.config);
+          }
+          const normalizedProtocol = resolveProtocolFromChannelPayload(data);
+          const modelState = buildChannelModelState(remoteModelConfigs);
+          const loadedModelTestSignature = buildChannelModelTestSignature({
+            protocol: normalizedProtocol,
+            key: '',
+            baseURL: data.base_url || '',
+            channelID: data.id || targetId,
+            models: modelState.selectedModels,
+            modelConfigs: modelState.modelConfigs,
+          });
+
+          if (forCopy) {
+            pendingRefreshTaskIdRef.current = '';
+            pendingRefreshSignatureRef.current = '';
+            setInputs({
+              id: '',
+              name: '',
+              protocol: normalizedProtocol,
+              key: '',
+              base_url: data.base_url || '',
+              other: data.other || '',
+              model_configs: modelState.modelConfigs,
+              system_prompt: data.system_prompt || '',
+              models: modelState.selectedModels,
+              test_model: data.test_model || modelState.selectedModels[0] || '',
+            });
+            setModelTestResults([]);
+            setModelTestError('');
+            setModelTestedAt(0);
+            setModelTestedSignature('');
+            setModelTestTargetModels([]);
+            setChannelTasks([]);
+          } else {
+            pendingRefreshTaskIdRef.current = '';
+            pendingRefreshSignatureRef.current = '';
+            setInputs({
+              id: data.id,
+              name: data.name || '',
+              protocol: normalizedProtocol,
+              key: '',
+              base_url: data.base_url || '',
+              other: data.other || '',
+              model_configs: modelState.modelConfigs,
+              system_prompt: data.system_prompt || '',
+              models: modelState.selectedModels,
+              test_model: data.test_model || modelState.selectedModels[0] || '',
+              status: data.status,
+              weight: data.weight,
+              priority: data.priority,
+            });
+            setModelTestResults(storedModelTestResults);
+            setModelTestError('');
+            setModelTestedAt(storedModelTestedAt);
+            setModelTestedSignature(
+              storedModelTestResults.length > 0 && storedModelTestedAt > 0
+                ? loadedModelTestSignature
+                : ''
+            );
+            setModelTestTargetModels([]);
+            setChannelTasks(normalizeAsyncTasks(activeTasks));
+          }
+          setConfig((prev) => ({
+            ...prev,
+            ...parsedConfig,
+          }));
+          if (fromCreating || hasChannelID) {
+            setChannelKeySet(!!data.key_set);
+          } else {
+            setChannelKeySet(false);
+          }
+          if (fromCreating && !creatingStepProvidedRef.current) {
+            setCreateStep(
+              inferCreatingChannelStepFromPayload({
+                ...data,
+                model_configs: modelState.modelConfigs,
+                channel_tests: storedModelTestResults,
+                channel_tests_last_tested_at: channelTestsData.lastTestedAt,
+              })
+            );
+          }
+        } else {
+          showError(message);
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      hasChannelID,
+      loadChannelModelConfigsFromServer,
+      loadChannelTasksFromServer,
+      loadChannelTestsFromServer,
+    ]
   );
 
   const handleFetchModels = useCallback(
-    async ({ silent = false, selectAll = true } = {}) => {
+    async ({ silent = false } = {}) => {
       if (fetchingModelsRef.current) {
         return false;
       }
       fetchingModelsRef.current = true;
       setFetchModelsLoading(true);
       try {
-        let models = [];
+        const persistedChannelId = await persistWorkingChannel({
+          status: isCreateMode ? 4 : undefined,
+        });
+        if (persistedChannelId === '') {
+          return false;
+        }
+        const targetChannelId = (
+          persistedChannelId ||
+          previewChannelID ||
+          creatingChannelIdRef.current ||
+          creatingChannelId ||
+          ''
+        ).trim();
+        if (targetChannelId === '') {
+          const errorMessage = t('channel.edit.messages.save_channel_failed');
+          setModelsSyncError(errorMessage);
+          if (!silent) {
+            showError(errorMessage);
+          }
+          return false;
+        }
         const normalizedBaseURL = normalizeBaseURL(inputs.base_url);
         const key = buildEffectiveKey().trim();
         const requestSignature = buildChannelConnectionSignature({
           protocol: inputs.protocol,
           key,
           baseURL: normalizedBaseURL,
-          draftID: previewChannelID,
+          channelID: targetChannelId,
         });
-        const res = await API.post(`/api/v1/admin/channel/preview/models`, {
-          protocol: inputs.protocol,
-          key,
-          base_url: normalizedBaseURL,
-          draft_id: previewChannelID,
-          config,
-        });
+        const res = await API.post(
+          `/api/v1/admin/channel/${targetChannelId}/refresh`
+        );
         const { success, message, data } = res.data || {};
         if (!success) {
           const errorMessage =
@@ -1224,22 +2113,25 @@ const EditChannel = () => {
           }
           return false;
         }
-        models = Array.isArray(data) ? data.filter((model) => model) : [];
-
-        const ids = applyModelCandidates(models, selectAll);
-        if (ids.length === 0) {
-          const message = t('channel.edit.messages.models_empty');
-          setModelsSyncError(message);
+        const refreshTask = normalizeAsyncTasks([data?.task])[0];
+        if (!refreshTask?.id) {
+          const errorMessage = t('channel.edit.messages.fetch_models_failed');
+          setModelsSyncError(errorMessage);
           setVerifiedModelSignature('');
           if (!silent) {
-            showInfo(message);
+            showError(errorMessage);
           }
           return false;
         }
-
+        setChannelTasks((prev) =>
+          normalizeAsyncTasks([
+            ...normalizeAsyncTasks(prev),
+            refreshTask,
+          ])
+        );
+        pendingRefreshTaskIdRef.current = refreshTask.id;
+        pendingRefreshSignatureRef.current = requestSignature;
         setModelsSyncError('');
-        setModelsLastSyncedAt(Date.now());
-        setVerifiedModelSignature(requestSignature);
         if (!silent) {
           showSuccess(t('channel.messages.operation_success'));
         }
@@ -1259,14 +2151,18 @@ const EditChannel = () => {
       }
     },
     [
-      applyModelCandidates,
       buildEffectiveKey,
-      config,
+      creatingChannelId,
       inputs.base_url,
+      inputs,
       inputs.protocol,
+      isCreateMode,
+      loadChannelModelConfigsFromServer,
+      loadChannelTasksFromServer,
+      persistWorkingChannel,
       previewChannelID,
       t,
-    ],
+    ]
   );
 
   const fetchChannelTypes = useCallback(async () => {
@@ -1276,70 +2172,354 @@ const EditChannel = () => {
     }
   }, []);
 
-  const handleTestCapabilities = useCallback(async () => {
-    if (inputs.protocol === 'proxy') {
-      return;
-    }
-    if (inputs.models.length === 0) {
-      showInfo(t('channel.edit.messages.models_required'));
-      return;
-    }
-    const ok = isCreateMode ? await saveDraftChannel() : true;
-    if (!ok) {
-      return;
-    }
-    setCapabilityTesting(true);
-    try {
-      const res = await API.post('/api/v1/admin/channel/preview/capabilities', {
-        protocol: inputs.protocol,
-        key: effectivePreviewKey,
-        base_url: normalizeBaseURL(inputs.base_url),
-        draft_id: previewChannelID,
-        config,
-        models: inputs.models,
-        model_configs: visibleModelConfigs,
-        test_model: inputs.test_model || '',
+  const loadProviderCatalogIndex = useCallback(
+    async ({ silent = true, force = false } = {}) => {
+      if (providerCatalogLoading) {
+        return null;
+      }
+      if (providerCatalogLoaded && !force && providerOptions.length > 0) {
+        return {
+          providerOptions,
+          modelOwners: providerModelOwners,
+        };
+      }
+      setProviderCatalogLoading(true);
+      try {
+        const items = [];
+        let page = 0;
+        let total = 0;
+        while (page < 20) {
+          const res = await API.get('/api/v1/admin/providers', {
+            params: {
+              page: page + 1,
+              page_size: 100,
+            },
+          });
+          const { success, message, data } = res.data || {};
+          if (!success) {
+            if (!silent) {
+              showError(
+                message || t('channel.edit.model_selector.provider_load_failed')
+              );
+            }
+            return null;
+          }
+          const pageItems = Array.isArray(data?.items) ? data.items : [];
+          items.push(...pageItems);
+          total = Number(data?.total || pageItems.length || 0);
+          if (
+            pageItems.length === 0 ||
+            items.length >= total ||
+            pageItems.length < 100
+          ) {
+            break;
+          }
+          page += 1;
+        }
+        const nextCatalog = buildProviderCatalogIndex(items);
+        setProviderOptions(nextCatalog.providerOptions);
+        setProviderModelOwners(nextCatalog.modelOwners);
+        setProviderCatalogLoaded(true);
+        return nextCatalog;
+      } catch (error) {
+        if (!silent) {
+          showError(
+            error?.message ||
+              t('channel.edit.model_selector.provider_load_failed')
+          );
+        }
+        return null;
+      } finally {
+        setProviderCatalogLoading(false);
+      }
+    },
+    [
+      providerCatalogLoaded,
+      providerCatalogLoading,
+      providerModelOwners,
+      providerOptions,
+      t,
+    ]
+  );
+
+  const openAppendProviderModal = useCallback(
+    async (row) => {
+      const catalog = await loadProviderCatalogIndex({
+        silent: false,
+        force: true,
       });
-      const { success, message, data } = res.data || {};
-      if (!success) {
-        const errorMessage =
-          message || t('channel.edit.capability_tester.test_failed');
-        setCapabilityResults([]);
-        setCapabilityTestError(errorMessage);
-        setCapabilityTestedAt(0);
-        setCapabilityTestedSignature('');
-        showError(errorMessage);
+      if (!catalog) {
         return;
       }
-      setCapabilityResults(normalizeCapabilityResults(data?.results));
-      setCapabilityTestError('');
-      setCapabilityTestedAt(Date.now());
-      setCapabilityTestedSignature(currentCapabilitySignature);
-      showSuccess(t('channel.edit.capability_tester.test_success'));
+      if (catalog.providerOptions.length === 0) {
+        showInfo(t('channel.edit.model_selector.provider_no_options'));
+        return;
+      }
+      setAppendProviderForm({
+        provider: inferAssignableProviderForRowWithOptions(
+          row,
+          catalog.providerOptions
+        ),
+        model: (row?.upstream_model || row?.model || '').toString().trim(),
+        type: normalizeChannelModelType(row?.type),
+      });
+      setAppendProviderModalOpen(true);
+    },
+    [loadProviderCatalogIndex, t]
+  );
+
+  const closeAppendProviderModal = useCallback(() => {
+    if (appendingProviderModel) {
+      return;
+    }
+    setAppendProviderModalOpen(false);
+    setAppendProviderForm({
+      provider: '',
+      model: '',
+      type: 'text',
+    });
+  }, [appendingProviderModel]);
+
+  const handleAppendModelToProvider = useCallback(async () => {
+    const providerId = (appendProviderForm.provider || '').toString().trim();
+    const modelName = (appendProviderForm.model || '').toString().trim();
+    if (providerId === '' || modelName === '') {
+      showInfo(t('channel.edit.model_selector.provider_append_invalid'));
+      return;
+    }
+    setAppendingProviderModel(true);
+    try {
+      const res = await API.post(`/api/v1/admin/providers/${providerId}/model`, {
+        model: modelName,
+        type: normalizeChannelModelType(appendProviderForm.type),
+      });
+      const { success, message } = res.data || {};
+      if (!success) {
+        showError(
+          message || t('channel.edit.model_selector.provider_append_failed')
+        );
+        return;
+      }
+      await loadProviderCatalogIndex({ silent: true, force: true });
+      showSuccess(t('channel.edit.model_selector.provider_append_success'));
+      closeAppendProviderModal();
     } catch (error) {
-      const errorMessage =
-        error?.message || t('channel.edit.capability_tester.test_failed');
-      setCapabilityResults([]);
-      setCapabilityTestError(errorMessage);
-      setCapabilityTestedAt(0);
-      setCapabilityTestedSignature('');
-      showError(errorMessage);
+      showError(
+        error?.message ||
+          t('channel.edit.model_selector.provider_append_failed')
+      );
     } finally {
-      setCapabilityTesting(false);
+      setAppendingProviderModel(false);
     }
   }, [
-    config,
-    currentCapabilitySignature,
-    effectivePreviewKey,
-    inputs.base_url,
-    inputs.models,
-    inputs.protocol,
-    inputs.test_model,
-    isCreateMode,
-    previewChannelID,
-    saveDraftChannel,
+    appendProviderForm,
+    closeAppendProviderModal,
+    loadProviderCatalogIndex,
     t,
   ]);
+
+  const handleAutoAssignModels = useCallback(async () => {
+    const catalog = await loadProviderCatalogIndex({
+      silent: false,
+      force: true,
+    });
+    if (!catalog) {
+      return;
+    }
+    const assignableRows = visibleModelConfigs.filter((row) => {
+      const owners = getProviderOwnersForModel(row);
+      return (
+        owners.length === 0 &&
+        inferAssignableProviderForRowWithOptions(
+          row,
+          catalog.providerOptions
+        ) !== ''
+      );
+    });
+    if (assignableRows.length === 0) {
+      showInfo(t('channel.edit.model_selector.auto_assign_empty'));
+      return;
+    }
+    setAutoAssigningProviders(true);
+    let successCount = 0;
+    let failedCount = 0;
+    try {
+      for (const row of assignableRows) {
+        const providerId = inferAssignableProviderForRowWithOptions(
+          row,
+          catalog.providerOptions
+        );
+        const modelName = (row?.upstream_model || row?.model || '')
+          .toString()
+          .trim();
+        if (providerId === '' || modelName === '') {
+          failedCount += 1;
+          continue;
+        }
+        try {
+          const res = await API.post(
+            `/api/v1/admin/providers/${providerId}/model`,
+            {
+              model: modelName,
+              type: normalizeChannelModelType(row?.type),
+            }
+          );
+          if (res?.data?.success) {
+            successCount += 1;
+          } else {
+            failedCount += 1;
+          }
+        } catch {
+          failedCount += 1;
+        }
+      }
+      await loadProviderCatalogIndex({ silent: true, force: true });
+      if (successCount > 0) {
+        showSuccess(
+          t('channel.edit.model_selector.auto_assign_success', {
+            success: successCount,
+            failed: failedCount,
+          })
+        );
+      } else {
+        showInfo(t('channel.edit.model_selector.auto_assign_empty'));
+      }
+    } finally {
+      setAutoAssigningProviders(false);
+    }
+  }, [
+    getProviderOwnersForModel,
+    loadProviderCatalogIndex,
+    t,
+    visibleModelConfigs,
+  ]);
+
+  const handleRunModelTests = useCallback(
+    async ({ targetModels = [], scope = 'batch' } = {}) => {
+      if (inputs.protocol === 'proxy') {
+        return;
+      }
+      const normalizedTargets = normalizeModelIDs(
+        Array.isArray(targetModels) && targetModels.length > 0
+          ? targetModels
+          : modelTestTargetModels
+      );
+      if (normalizedTargets.length === 0) {
+        showInfo(t('channel.edit.messages.models_required'));
+        return;
+      }
+      const persistedChannelId = await persistWorkingChannel({
+        status: isCreateMode ? 4 : undefined,
+      });
+      if (persistedChannelId === '') {
+        return;
+      }
+      const targetChannelId = (
+        persistedChannelId ||
+        previewChannelID ||
+        creatingChannelIdRef.current ||
+        creatingChannelId ||
+        ''
+      ).trim();
+      setModelTesting(true);
+      setModelTestingScope(scope === 'single' ? 'single' : 'batch');
+      setModelTestingTargets(normalizedTargets);
+      try {
+        const res = await API.post(
+          `/api/v1/admin/channel/${targetChannelId}/tests`,
+          {
+            test_model: inputs.test_model || '',
+            target_models: normalizedTargets,
+          }
+        );
+        const { success, message, data, meta } = res.data || {};
+        if (!success) {
+          const errorMessage =
+            message || t('channel.edit.model_tester.test_failed');
+          setModelTestError(errorMessage);
+          showError(errorMessage);
+          return;
+        }
+        const nextTasks = normalizeAsyncTasks(data?.tasks);
+        setChannelTasks((prev) =>
+          normalizeAsyncTasks([...normalizeAsyncTasks(prev), ...nextTasks])
+        );
+        setModelTestError('');
+        showSuccess(
+          t('channel.edit.model_tester.task_created', {
+            count: Number(meta?.created || nextTasks.length || 0),
+            reused: Number(meta?.reused || 0),
+          })
+        );
+      } catch (error) {
+        const errorMessage =
+          error?.message || t('channel.edit.model_tester.test_failed');
+        setModelTestError(errorMessage);
+        showError(errorMessage);
+      } finally {
+        setModelTesting(false);
+        setModelTestingScope('');
+        setModelTestingTargets([]);
+      }
+    },
+    [
+      modelTestTargetModels,
+      creatingChannelId,
+      inputs.base_url,
+      inputs,
+      inputs.models,
+      inputs.protocol,
+      inputs.test_model,
+      isCreateMode,
+      persistWorkingChannel,
+      previewChannelID,
+      t,
+    ]
+  );
+
+  const toggleModelTestTarget = useCallback((modelName, checked) => {
+    setModelTestTargetModels((prev) => {
+      const normalized = (modelName || '').toString().trim();
+      if (normalized === '') {
+        return prev;
+      }
+      if (checked) {
+        return normalizeModelIDs([...prev, normalized]);
+      }
+      return prev.filter((item) => item !== normalized);
+    });
+  }, []);
+
+  const toggleAllModelTestTargets = useCallback(
+    (checked) => {
+      if (!checked) {
+        setModelTestTargetModels([]);
+        return;
+      }
+      setModelTestTargetModels(modelTestRows.map((row) => row.model));
+    },
+    [modelTestRows]
+  );
+
+  const updateModelTestEndpoint = useCallback(
+    (modelName, endpoint) => {
+      setInputs((prev) =>
+        buildNextInputsWithModelConfigs(
+          prev,
+          visibleModelConfigs.map((row) => {
+            if (row.model !== modelName) {
+              return row;
+            }
+            return {
+              ...row,
+              endpoint: normalizeChannelModelEndpoint(row.type, endpoint),
+            };
+          })
+        )
+      );
+    },
+    [visibleModelConfigs]
+  );
 
   const toggleModelSelection = useCallback(
     (upstreamModel, checked) => {
@@ -1347,14 +2527,14 @@ const EditChannel = () => {
         buildNextInputsWithModelConfigs(
           prev,
           visibleModelConfigs.map((row) =>
-            row.upstream_model === upstreamModel
+            row.upstream_model === upstreamModel && canSelectChannelModel(row)
               ? { ...row, selected: !!checked }
-              : row,
-          ),
-        ),
+              : row
+          )
+        )
       );
     },
-    [visibleModelConfigs],
+    [canSelectChannelModel, visibleModelConfigs]
   );
 
   const updateModelConfigField = useCallback(
@@ -1372,7 +2552,7 @@ const EditChannel = () => {
               const duplicated = visibleModelConfigs.some(
                 (item) =>
                   item.upstream_model !== upstreamModel &&
-                  item.model === targetAlias,
+                  item.model === targetAlias
               );
               if (duplicated) {
                 return row;
@@ -1392,28 +2572,31 @@ const EditChannel = () => {
               ...row,
               [field]: value,
             };
-          }),
-        ),
+          })
+        )
       );
     },
-    [visibleModelConfigs],
+    [visibleModelConfigs]
   );
 
   const selectAllModels = useCallback(() => {
     setInputs((prev) =>
       buildNextInputsWithModelConfigs(
         prev,
-        visibleModelConfigs.map((row) => ({ ...row, selected: true })),
-      ),
+        visibleModelConfigs.map((row) => ({
+          ...row,
+          selected: canSelectChannelModel(row),
+        }))
+      )
     );
-  }, [visibleModelConfigs]);
+  }, [canSelectChannelModel, visibleModelConfigs]);
 
   const clearSelectedModels = useCallback(() => {
     setInputs((prev) =>
       buildNextInputsWithModelConfigs(
         prev,
-        visibleModelConfigs.map((row) => ({ ...row, selected: false })),
-      ),
+        visibleModelConfigs.map((row) => ({ ...row, selected: false }))
+      )
     );
   }, [visibleModelConfigs]);
 
@@ -1433,41 +2616,124 @@ const EditChannel = () => {
 
   useEffect(() => {
     if (hasChannelID) {
+      creatingStepProvidedRef.current = false;
       return;
     }
-    if (draftIdFromQuery === draftChannelId) {
+    const query = new URLSearchParams(location.search);
+    creatingStepProvidedRef.current = query.get('step') !== null;
+  }, [hasChannelID, location.search]);
+
+  useEffect(() => {
+    if (hasChannelID) {
       return;
     }
-    setDraftChannelId(draftIdFromQuery);
-    draftChannelIdRef.current = draftIdFromQuery;
-  }, [draftIdFromQuery, draftChannelId, hasChannelID]);
+    if (creatingChannelIdFromQuery === creatingChannelId) {
+      return;
+    }
+    setCreatingChannelId(creatingChannelIdFromQuery);
+    creatingChannelIdRef.current = creatingChannelIdFromQuery;
+  }, [creatingChannelIdFromQuery, creatingChannelId, hasChannelID]);
 
   useEffect(() => {
     if (hasChannelID) {
       setLoading(true);
-      loadChannelById(channelId, false, true, false).then();
+      loadChannelById(channelId, false, false).then();
       return;
     }
     if (copyFromId !== '') {
       setLoading(true);
-      loadChannelById(copyFromId, true, true, false).then();
+      loadChannelById(copyFromId, true, false).then();
       return;
     }
-    if (draftIdFromQuery !== '') {
+    if (creatingChannelIdFromQuery !== '') {
+      if (skipNextCreatingReloadRef.current === creatingChannelIdFromQuery) {
+        skipNextCreatingReloadRef.current = '';
+        setLoading(false);
+        return;
+      }
       setLoading(true);
-      loadChannelById(draftIdFromQuery, true, true, true).then();
+      loadChannelById(creatingChannelIdFromQuery, false, true).then();
       return;
     }
     setChannelKeySet(false);
-    restoreCreateDraft();
+    restoreCreateChannelCache();
     setLoading(false);
   }, [
     channelId,
     copyFromId,
-    draftIdFromQuery,
+    creatingChannelIdFromQuery,
     hasChannelID,
     loadChannelById,
-    restoreCreateDraft,
+    restoreCreateChannelCache,
+  ]);
+
+  useEffect(() => {
+    const targetChannelId = (
+      (hasChannelID ? channelId : creatingChannelId) || ''
+    )
+      .toString()
+      .trim();
+    if (targetChannelId === '') {
+      return undefined;
+    }
+    const hasActiveTasks = channelTasks.some((item) =>
+      isActiveAsyncTaskStatus(item?.status)
+    );
+    if (!hasActiveTasks) {
+      return undefined;
+    }
+    const timer = window.setInterval(async () => {
+      try {
+        const nextTasks = await loadChannelTasksFromServer(targetChannelId);
+        const stillActive = nextTasks.some((item) =>
+          isActiveAsyncTaskStatus(item?.status)
+        );
+        setChannelTasks(normalizeAsyncTasks(nextTasks));
+        if (!stillActive) {
+          const refreshTaskId = pendingRefreshTaskIdRef.current;
+          let completedRefreshTask = null;
+          if (refreshTaskId !== '') {
+            try {
+              completedRefreshTask = await fetchTaskById(refreshTaskId);
+            } catch {
+              completedRefreshTask = null;
+            }
+          }
+          await refreshChannelRuntimeState(targetChannelId);
+          if (refreshTaskId !== '') {
+            pendingRefreshTaskIdRef.current = '';
+            if (
+              completedRefreshTask &&
+              normalizeAsyncTaskStatus(completedRefreshTask.status) ===
+                'succeeded'
+            ) {
+              setModelsSyncError('');
+              setModelsLastSyncedAt(Date.now());
+              if (pendingRefreshSignatureRef.current !== '') {
+                setVerifiedModelSignature(pendingRefreshSignatureRef.current);
+              }
+            } else {
+              setVerifiedModelSignature('');
+              setModelsSyncError(
+                completedRefreshTask?.error_message ||
+                  t('channel.edit.messages.fetch_models_failed')
+              );
+            }
+            pendingRefreshSignatureRef.current = '';
+          }
+        }
+      } catch {
+        // keep current local state and retry on next tick
+      }
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [
+    channelId,
+    channelTasks,
+    creatingChannelId,
+    hasChannelID,
+    loadChannelTasksFromServer,
+    refreshChannelRuntimeState,
   ]);
 
   useEffect(() => {
@@ -1507,7 +2773,7 @@ const EditChannel = () => {
         pathname: location.pathname,
         search: nextSearch ? `?${nextSearch}` : '',
       },
-      { replace: true },
+      { replace: true }
     );
   }, [createStep, hasChannelID, location.pathname, location.search, navigate]);
 
@@ -1516,15 +2782,15 @@ const EditChannel = () => {
       return;
     }
     const query = new URLSearchParams(location.search);
-    const currentDraftID = (query.get('draft_id') || '').trim();
-    const nextDraftID = (draftChannelId || '').trim();
-    if (currentDraftID === nextDraftID) {
+    const currentChannelID = (query.get('channel_id') || '').trim();
+    const nextChannelID = (creatingChannelId || '').trim();
+    if (currentChannelID === nextChannelID) {
       return;
     }
-    if (nextDraftID === '') {
-      query.delete('draft_id');
+    if (nextChannelID === '') {
+      query.delete('channel_id');
     } else {
-      query.set('draft_id', nextDraftID);
+      query.set('channel_id', nextChannelID);
     }
     const nextSearch = query.toString();
     navigate(
@@ -1532,10 +2798,10 @@ const EditChannel = () => {
         pathname: location.pathname,
         search: nextSearch ? `?${nextSearch}` : '',
       },
-      { replace: true },
+      { replace: true }
     );
   }, [
-    draftChannelId,
+    creatingChannelId,
     hasChannelID,
     location.pathname,
     location.search,
@@ -1548,32 +2814,34 @@ const EditChannel = () => {
     }
     const payload = {
       step: createStep,
-      inputs: sanitizeDraftInputsForLocalStorage(inputs),
-      config: sanitizeDraftConfigForLocalStorage(config),
+      inputs: sanitizeCreateInputsForLocalStorage(inputs),
+      config: sanitizeCreateConfigForLocalStorage(config),
       modelsSyncError,
       modelsLastSyncedAt,
       verifiedModelSignature,
-      capabilityResults,
-      capabilityTestError,
-      capabilityTestedAt,
-      capabilityTestedSignature,
-      draft_channel_id: draftChannelId,
+      modelTestResults,
+      modelTestTargetModels,
+      modelTestError,
+      modelTestedAt,
+      modelTestedSignature,
+      channel_id: creatingChannelId,
       channel_key_set: channelKeySet,
       savedAt: Date.now(),
     };
-    localStorage.setItem(CHANNEL_CREATE_DRAFT_KEY, JSON.stringify(payload));
+    localStorage.setItem(CHANNEL_CREATE_CACHE_KEY, JSON.stringify(payload));
   }, [
     channelKeySet,
     config,
     createStep,
-    draftChannelId,
+    creatingChannelId,
     inputs,
     hasChannelID,
     loading,
-    capabilityResults,
-    capabilityTestError,
-    capabilityTestedAt,
-    capabilityTestedSignature,
+    modelTestResults,
+    modelTestTargetModels,
+    modelTestError,
+    modelTestedAt,
+    modelTestedSignature,
     modelsLastSyncedAt,
     modelsSyncError,
     verifiedModelSignature,
@@ -1609,30 +2877,56 @@ const EditChannel = () => {
   }, [requiresConnectionVerification, verifiedModelSignature]);
 
   useEffect(() => {
-    if (capabilityTestedSignature === '') {
+    if (modelTestedSignature === '') {
       return;
     }
-    if (capabilityTestedSignature === currentCapabilitySignature) {
+    if (modelTestedSignature === currentModelTestSignature) {
       return;
     }
-    setCapabilityResults([]);
-    setCapabilityTestError(t('channel.edit.capability_tester.stale'));
-    setCapabilityTestedAt(0);
-    setCapabilityTestedSignature('');
-  }, [capabilityTestedSignature, currentCapabilitySignature, t]);
+    setModelTestResults([]);
+    setModelTestError(t('channel.edit.model_tester.stale'));
+    setModelTestedAt(0);
+    setModelTestedSignature('');
+  }, [modelTestedSignature, currentModelTestSignature, t]);
 
   useEffect(() => {
     fetchChannelTypes().then();
   }, [fetchChannelTypes]);
 
+  useEffect(() => {
+    if (!showStepTwo) {
+      return;
+    }
+    loadProviderCatalogIndex({ silent: true }).then();
+  }, [loadProviderCatalogIndex, showStepTwo]);
+
+  useEffect(() => {
+    if (detailModelPage <= detailModelTotalPages) {
+      return;
+    }
+    setDetailModelPage(detailModelTotalPages);
+  }, [detailModelPage, detailModelTotalPages]);
+
+  useEffect(() => {
+    setDetailModelPage(1);
+  }, [detailModelFilter, modelSearchKeyword]);
+
+  useEffect(() => {
+    if (modelTestRows.length === 0) {
+      setModelTestTargetModels([]);
+      return;
+    }
+    setModelTestTargetModels((prev) => {
+      const available = modelTestRows.map((row) => row.model);
+      return prev.filter((item) => available.includes(item));
+    });
+  }, [modelTestRows]);
+
   const submit = async () => {
     const effectiveKey = buildEffectiveKey();
     const modelConfigError = validateModelConfigs(visibleModelConfigs, t);
-    const identifierError = validateChannelIdentifier(inputs.id, t);
-    if (
-      isCreateMode &&
-      identifierError !== ''
-    ) {
+    const identifierError = validateChannelIdentifier(inputs.name, t);
+    if (!isDetailMode && identifierError !== '') {
       showInfo(identifierError);
       return;
     }
@@ -1669,10 +2963,10 @@ const EditChannel = () => {
         ...localInputs,
         id: channelId,
       });
-    } else if (draftChannelId) {
+    } else if (creatingChannelId) {
       res = await API.put(`/api/v1/admin/channel/`, {
         ...localInputs,
-        id: draftChannelId,
+        id: creatingChannelId,
         status: 1,
       });
     } else {
@@ -1684,7 +2978,7 @@ const EditChannel = () => {
         showSuccess(t('channel.edit.messages.update_success'));
       } else {
         showSuccess(t('channel.edit.messages.create_success'));
-        clearCreateDraft();
+        clearCreateChannelCache();
       }
       navigate('/admin/channel', { replace: true });
       return;
@@ -1695,45 +2989,119 @@ const EditChannel = () => {
 
   return (
     <div className='dashboard-container'>
+      <Modal
+        size='tiny'
+        open={appendProviderModalOpen}
+        onClose={closeAppendProviderModal}
+        closeOnDimmerClick={!appendingProviderModel}
+      >
+        <Modal.Header>
+          {t('channel.edit.model_selector.append_dialog.title')}
+        </Modal.Header>
+        <Modal.Content>
+          <Form>
+            <Form.Field>
+              <label>
+                {t('channel.edit.model_selector.append_dialog.provider')}
+              </label>
+              <Dropdown
+                selection
+                search={filterProviderOptionsByQuery}
+                className='router-modal-dropdown'
+                placeholder={t(
+                  'channel.edit.model_selector.append_dialog.provider_placeholder'
+                )}
+                options={providerOptions}
+                value={appendProviderForm.provider}
+                noResultsMessage={t('common.no_data')}
+                onChange={(e, { value }) =>
+                  setAppendProviderForm((prev) => ({
+                    ...prev,
+                    provider: (value || '').toString(),
+                  }))
+                }
+              />
+            </Form.Field>
+            <Form.Input
+              className='router-modal-input'
+              label={t('channel.edit.model_selector.append_dialog.model')}
+              value={appendProviderForm.model}
+              onChange={(e, { value }) =>
+                setAppendProviderForm((prev) => ({
+                  ...prev,
+                  model: value || '',
+                }))
+              }
+            />
+            <Form.Select
+              className='router-modal-dropdown'
+              label={t('channel.edit.model_selector.append_dialog.type')}
+              options={CHANNEL_MODEL_TYPE_OPTIONS}
+              value={appendProviderForm.type}
+              onChange={(e, { value }) =>
+                setAppendProviderForm((prev) => ({
+                  ...prev,
+                  type: normalizeChannelModelType(value),
+                }))
+              }
+            />
+          </Form>
+        </Modal.Content>
+        <Modal.Actions>
+          <Button
+            type='button'
+            className='router-modal-button'
+            onClick={closeAppendProviderModal}
+          >
+            {t('channel.edit.model_selector.append_dialog.cancel')}
+          </Button>
+          <Button
+            type='button'
+            className='router-modal-button'
+            color='blue'
+            loading={appendingProviderModel}
+            disabled={appendingProviderModel}
+            onClick={handleAppendModelToProvider}
+          >
+            {t('channel.edit.model_selector.append_dialog.confirm')}
+          </Button>
+        </Modal.Actions>
+      </Modal>
       <Card fluid className='chart-card'>
         <Card.Content>
           {isDetailMode && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                gap: '8px',
-                flexWrap: 'wrap',
-                marginBottom: 12,
-              }}
-            >
-              <Button type='button' onClick={handleCancel}>
+            <div className='router-toolbar-start router-block-gap-sm'>
+              <Button
+                type='button'
+                className='router-page-button'
+                onClick={handleCancel}
+              >
                 <Icon name='undo' />
                 {t('channel.edit.buttons.back')}
               </Button>
-              <Button type='button' color='blue' onClick={openEditPage}>
+              <Button
+                type='button'
+                className='router-page-button'
+                color='blue'
+                onClick={openEditPage}
+              >
                 <Icon name='edit' />
                 {t('channel.buttons.edit')}
               </Button>
             </div>
           )}
           {isEditMode && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                gap: '8px',
-                flexWrap: 'wrap',
-                marginBottom: 12,
-              }}
-            >
-              <Button type='button' onClick={handleCancel}>
+            <div className='router-toolbar-start router-block-gap-sm'>
+              <Button
+                type='button'
+                className='router-page-button'
+                onClick={handleCancel}
+              >
                 {t('channel.edit.buttons.cancel')}
               </Button>
               <Button
                 type='button'
+                className='router-page-button'
                 positive
                 onClick={submit}
                 disabled={
@@ -1745,27 +3113,67 @@ const EditChannel = () => {
               </Button>
             </div>
           )}
-          <Card.Header className='header'>
-            {isDetailMode
-              ? t('channel.edit.title_detail')
-              : isEditMode
-                ? t('channel.edit.title_edit')
-                : t('channel.edit.title_create')}
-          </Card.Header>
+          {isCreateMode && (
+            <div className='router-toolbar-start router-block-gap-sm'>
+              <Button
+                type='button'
+                className='router-page-button'
+                onClick={handleCancel}
+              >
+                {t('channel.edit.buttons.cancel')}
+              </Button>
+              {createStep > CREATE_CHANNEL_STEP_MIN && (
+                <Button
+                  type='button'
+                  className='router-page-button'
+                  onClick={moveToPreviousCreateStep}
+                >
+                  {t('channel.edit.buttons.previous_step')}
+                </Button>
+              )}
+              {createStep < CREATE_CHANNEL_STEP_MAX ? (
+                <Button
+                  type='button'
+                  className='router-page-button'
+                  positive
+                  onClick={
+                    createStep === 1
+                      ? moveToStepTwo
+                      : createStep === 2
+                      ? moveToStepThree
+                      : moveToStepFour
+                  }
+                >
+                  {t('channel.edit.buttons.next_step')}
+                </Button>
+              ) : (
+                <Button
+                  type='button'
+                  className='router-page-button'
+                  positive
+                  onClick={submit}
+                  disabled={
+                    requireVerificationBeforeProceed &&
+                    !isCurrentSignatureVerified
+                  }
+                >
+                  {t('channel.edit.buttons.submit')}
+                </Button>
+              )}
+            </div>
+          )}
+          {isEditMode && (
+            <Card.Header className='header router-page-title'>
+              {t('channel.edit.title_edit')}
+            </Card.Header>
+          )}
           <Form loading={loading} autoComplete='new-password'>
             {isCreateMode && (
-              <div style={{ marginBottom: '12px' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    flexWrap: 'wrap',
-                  }}
-                >
+              <div className='router-block-gap-sm'>
+                <div className='router-toolbar-start'>
                   <Button
                     type='button'
-                    size='tiny'
+                    className='router-page-button'
                     basic={createStep !== 1}
                     color={createStep === 1 ? 'blue' : undefined}
                     onClick={() => goToCreateStep(1)}
@@ -1774,7 +3182,7 @@ const EditChannel = () => {
                   </Button>
                   <Button
                     type='button'
-                    size='tiny'
+                    className='router-page-button'
                     basic={createStep !== 2}
                     color={createStep === 2 ? 'blue' : undefined}
                     onClick={moveToStepTwo}
@@ -1783,16 +3191,16 @@ const EditChannel = () => {
                   </Button>
                   <Button
                     type='button'
-                    size='tiny'
+                    className='router-page-button'
                     basic={createStep !== 3}
                     color={createStep === 3 ? 'blue' : undefined}
                     onClick={moveToStepThree}
                   >
-                    {t('channel.edit.wizard.step_capabilities')}
+                    {t('channel.edit.wizard.step_model_tests')}
                   </Button>
                   <Button
                     type='button'
-                    size='tiny'
+                    className='router-page-button'
                     basic={createStep !== 4}
                     color={createStep === 4 ? 'blue' : undefined}
                     onClick={moveToStepFour}
@@ -1804,40 +3212,31 @@ const EditChannel = () => {
             )}
             {showStepOne && (
               <>
-                <Form.Group widths='equal'>
-                  <Form.Field>
-                    <Form.Input
-                      label={t('channel.edit.identifier')}
-                      name='id'
-                      placeholder={t('channel.edit.identifier_placeholder')}
-                      onChange={handleInputChange}
-                      value={inputs.id}
-                      required
-                      maxLength={CHANNEL_IDENTIFIER_MAX_LENGTH}
-                      {...identifierReadonlyProps}
-                    />
-                  </Form.Field>
-                  <Form.Field>
-                    <Form.Input
-                      label={t('channel.edit.name')}
-                      name='name'
-                      placeholder={t('channel.edit.name_placeholder')}
-                      onChange={handleInputChange}
-                      value={inputs.name}
-                      readOnly={isDetailMode}
-                    />
-                  </Form.Field>
-                </Form.Group>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('channel.edit.identifier')}
+                  name='name'
+                  placeholder={t('channel.edit.identifier_placeholder')}
+                  onChange={handleInputChange}
+                  value={inputs.name}
+                  required
+                  maxLength={CHANNEL_IDENTIFIER_MAX_LENGTH}
+                  readOnly={isDetailMode}
+                />
                 <Form.Group widths='equal'>
                   <Form.Field>
                     {isDetailMode ? (
                       <Form.Input
+                        className='router-section-input'
                         label={t('channel.edit.type')}
-                        value={currentProtocolOption?.text || inputs.protocol || '-'}
+                        value={
+                          currentProtocolOption?.text || inputs.protocol || '-'
+                        }
                         readOnly
                       />
                     ) : (
                       <Form.Select
+                        className='router-section-dropdown'
                         label={t('channel.edit.type')}
                         name='protocol'
                         required
@@ -1863,7 +3262,7 @@ const EditChannel = () => {
                 {/* Azure OpenAI specific fields */}
                 {inputs.protocol === 'azure' && (
                   <>
-                    <Message>
+                    <Message className='router-section-message'>
                       注意，<strong>模型部署名称必须和模型名称保持一致</strong>
                       ，因为 Router 会把请求体中的 model
                       参数替换为你的部署名称（模型名称中的点会被剔除），
@@ -1878,6 +3277,7 @@ const EditChannel = () => {
                     </Message>
                     <Form.Field>
                       <Form.Input
+                        className='router-section-input'
                         label='默认 API 版本'
                         name='other'
                         placeholder='请输入默认 API 版本，例如：2024-03-01-preview，该配置可以被实际的请求查询参数所覆盖'
@@ -1893,6 +3293,7 @@ const EditChannel = () => {
                 {inputs.protocol === 'xunfei' && (
                   <Form.Field>
                     <Form.Input
+                      className='router-section-input'
                       label={t('channel.edit.spark_version')}
                       name='other'
                       placeholder={t('channel.edit.spark_version_placeholder')}
@@ -1906,6 +3307,7 @@ const EditChannel = () => {
                 {inputs.protocol === 'aiproxy-library' && (
                   <Form.Field>
                     <Form.Input
+                      className='router-section-input'
                       label={t('channel.edit.knowledge_id')}
                       name='other'
                       placeholder={t('channel.edit.knowledge_id_placeholder')}
@@ -1919,6 +3321,7 @@ const EditChannel = () => {
                 {inputs.protocol === 'ali' && (
                   <Form.Field>
                     <Form.Input
+                      className='router-section-input'
                       label={t('channel.edit.plugin_param')}
                       name='other'
                       placeholder={t('channel.edit.plugin_param_placeholder')}
@@ -1930,10 +3333,12 @@ const EditChannel = () => {
                   </Form.Field>
                 )}
                 {inputs.protocol === 'coze' && (
-                  <Message>{t('channel.edit.coze_notice')}</Message>
+                  <Message className='router-section-message'>
+                    {t('channel.edit.coze_notice')}
+                  </Message>
                 )}
                 {inputs.protocol === 'doubao' && (
-                  <Message>
+                  <Message className='router-section-message'>
                     {t('channel.edit.douban_notice')}
                     <a
                       target='_blank'
@@ -1949,46 +3354,94 @@ const EditChannel = () => {
             )}
             {showStepTwo && inputs.protocol !== 'proxy' && (
               <Form.Field>
-                <label>{t('channel.edit.models')}</label>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '8px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <span style={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-                    {t('channel.edit.model_selector.summary', {
-                      selected: inputs.models.length,
-                      total: visibleModelConfigs.length,
-                    })}
-                  </span>
-                  {!isDetailMode && (
-                    <div
-                      style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}
-                    >
+                <div className='router-toolbar router-block-gap-xs'>
+                  <div className='router-toolbar-start'>
+                    <span className='router-section-title router-section-title-inline'>
+                      {t('channel.edit.models')}
+                    </span>
+                    <span className='router-toolbar-meta'>
+                      ({modelSectionMetaText})
+                    </span>
+                  </div>
+                  {isDetailMode ? (
+                    <div className='router-toolbar-end'>
+                      <Dropdown
+                        selection
+                        className='router-section-dropdown router-dropdown-min-170'
+                        compact
+                        options={[
+                          {
+                            key: 'all',
+                            value: 'all',
+                            text: t('channel.edit.model_selector.filters.all'),
+                          },
+                          {
+                            key: 'unassigned',
+                            value: 'unassigned',
+                            text: t(
+                              'channel.edit.model_selector.filters.unassigned'
+                            ),
+                          },
+                          {
+                            key: 'manual',
+                            value: 'manual',
+                            text: t(
+                              'channel.edit.model_selector.filters.manual'
+                            ),
+                          },
+                        ]}
+                        value={detailModelFilter}
+                        onChange={(e, { value }) =>
+                          setDetailModelFilter((value || 'all').toString())
+                        }
+                      />
                       <Button
                         type='button'
-                        size='tiny'
+                        className='router-section-button'
+                        color='blue'
+                        loading={autoAssigningProviders}
+                        disabled={
+                          autoAssigningProviders ||
+                          providerCatalogLoading ||
+                          autoAssignableRows.length === 0
+                        }
+                        onClick={handleAutoAssignModels}
+                      >
+                        {t('channel.edit.model_selector.auto_assign')}
+                      </Button>
+                      <Form.Input
+                        className='router-inline-input router-search-form-sm'
+                        icon='search'
+                        iconPosition='left'
+                        placeholder={t(
+                          'channel.edit.model_selector.search_placeholder'
+                        )}
+                        value={modelSearchKeyword}
+                        onChange={(e, { value }) =>
+                          setModelSearchKeyword(value || '')
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div className='router-toolbar-end'>
+                      <Button
+                        type='button'
+                        className='router-page-button'
                         color='green'
-                        loading={fetchModelsLoading}
+                        loading={fetchModelsLoading || !!activeRefreshModelsTask}
                         disabled={
                           fetchModelsLoading ||
+                          !!activeRefreshModelsTask ||
                           (requiresConnectionVerification &&
                             !hasModelPreviewCredentials)
                         }
-                        onClick={() =>
-                          handleFetchModels({ silent: false, selectAll: true })
-                        }
+                        onClick={() => handleFetchModels({ silent: false })}
                       >
                         {fetchModelsButtonText}
                       </Button>
                       <Button
                         type='button'
-                        size='tiny'
+                        className='router-page-button'
                         onClick={selectAllModels}
                         disabled={visibleModelConfigs.length === 0}
                       >
@@ -1996,139 +3449,321 @@ const EditChannel = () => {
                       </Button>
                       <Button
                         type='button'
-                        size='tiny'
+                        className='router-page-button'
                         onClick={clearSelectedModels}
                         disabled={inputs.models.length === 0}
                       >
                         {t('channel.edit.buttons.clear')}
                       </Button>
+                      <Button
+                        type='button'
+                        className='router-page-button'
+                        color='blue'
+                        loading={autoAssigningProviders}
+                        disabled={
+                          autoAssigningProviders ||
+                          providerCatalogLoading ||
+                          autoAssignableRows.length === 0
+                        }
+                        onClick={handleAutoAssignModels}
+                      >
+                        {t('channel.edit.model_selector.auto_assign')}
+                      </Button>
+                      <Form.Input
+                        className='router-inline-input router-search-form-sm'
+                        icon='search'
+                        iconPosition='left'
+                        placeholder={t(
+                          'channel.edit.model_selector.search_placeholder'
+                        )}
+                        value={modelSearchKeyword}
+                        onChange={(e, { value }) =>
+                          setModelSearchKeyword(value || '')
+                        }
+                      />
                     </div>
                   )}
                 </div>
-                <Table celled stackable size='small'>
+                <Table
+                  celled
+                  stackable
+                  className='router-detail-table'
+                  compact={isDetailMode ? 'very' : undefined}
+                  style={isDetailMode ? { tableLayout: 'fixed' } : undefined}
+                >
                   <Table.Header>
                     <Table.Row>
-                      <Table.HeaderCell collapsing textAlign='center'>
+                      <Table.HeaderCell width={1} textAlign='center'>
                         {t('channel.edit.model_selector.table.selected')}
                       </Table.HeaderCell>
-                      <Table.HeaderCell width={5}>
+                      <Table.HeaderCell width={isDetailMode ? 3 : 5}>
                         {t('channel.edit.model_selector.table.name')}
                       </Table.HeaderCell>
-                      <Table.HeaderCell width={5}>
+                      <Table.HeaderCell width={isDetailMode ? 1 : 2}>
+                        {t('channel.edit.model_selector.table.type')}
+                      </Table.HeaderCell>
+                      <Table.HeaderCell width={isDetailMode ? 2 : 4}>
+                        {t('channel.edit.model_selector.table.providers')}
+                      </Table.HeaderCell>
+                      <Table.HeaderCell width={isDetailMode ? 3 : 5}>
                         {t('channel.edit.model_selector.table.alias')}
                       </Table.HeaderCell>
-                      <Table.HeaderCell width={3}>
+                      <Table.HeaderCell width={2}>
                         {t('channel.edit.model_selector.table.price_unit')}
                       </Table.HeaderCell>
-                      <Table.HeaderCell width={3}>
+                      <Table.HeaderCell width={2}>
                         {t('channel.edit.model_selector.table.input_price')}
                       </Table.HeaderCell>
-                      <Table.HeaderCell width={3}>
+                      <Table.HeaderCell width={2}>
                         {t('channel.edit.model_selector.table.output_price')}
                       </Table.HeaderCell>
+                      {isDetailMode && (
+                        <Table.HeaderCell width={1}>
+                          {t('channel.edit.model_selector.table.actions')}
+                        </Table.HeaderCell>
+                      )}
                     </Table.Row>
                   </Table.Header>
                   <Table.Body>
-                    {visibleModelConfigs.length === 0 ? (
+                    {searchedModelConfigs.length === 0 ? (
                       <Table.Row>
-                        <Table.Cell colSpan='6'>
-                          {t('channel.edit.model_selector.empty')}
+                        <Table.Cell
+                          className='router-empty-cell'
+                          colSpan={isDetailMode ? 9 : 8}
+                        >
+                          {modelSearchKeyword.trim() !== ''
+                            ? t('channel.edit.model_selector.empty_search')
+                            : isDetailMode && visibleModelConfigs.length > 0
+                            ? t('channel.edit.model_selector.empty_filtered')
+                            : t('channel.edit.model_selector.empty')}
                         </Table.Cell>
                       </Table.Row>
                     ) : (
-                      visibleModelConfigs.map((row) => (
-                        <Table.Row key={`${row.upstream_model}-${row.model}`}>
-                          <Table.Cell textAlign='center' collapsing>
-                            <Checkbox
-                              checked={!!row.selected}
-                              disabled={isDetailMode}
-                              onChange={(e, { checked }) =>
-                                toggleModelSelection(
-                                  row.upstream_model,
-                                  checked,
-                                )
+                      renderedModelConfigs.map((row) => {
+                        const providerOwners = getProviderOwnersForModel(row);
+                        const isUnassigned = providerOwners.length === 0;
+                        const canSelectRow = providerOwners.length > 0;
+                        return (
+                          <Table.Row key={`${row.upstream_model}-${row.model}`}>
+                            <Table.Cell
+                              textAlign='center'
+                              className={
+                                isDetailMode
+                                  ? 'router-cell-checkbox'
+                                  : undefined
                               }
-                            />
-                          </Table.Cell>
-                          <Table.Cell>{row.upstream_model}</Table.Cell>
-                          <Table.Cell>
-                            {isDetailMode ? (
-                              row.model
-                            ) : (
-                              <Form.Input
-                                transparent
-                                style={{ minWidth: 220 }}
-                                value={row.model}
-                                onChange={(e, { value }) =>
-                                  updateModelConfigField(
+                            >
+                              <Checkbox
+                                checked={!!row.selected}
+                                disabled={
+                                  isDetailMode ||
+                                  providerCatalogLoading ||
+                                  (!canSelectRow && !row.selected)
+                                }
+                                onChange={(e, { checked }) =>
+                                  toggleModelSelection(
                                     row.upstream_model,
-                                    'model',
-                                    value || row.upstream_model,
+                                    checked
                                   )
                                 }
                               />
+                            </Table.Cell>
+                            <Table.Cell
+                              title={row.upstream_model}
+                              className={
+                                isDetailMode
+                                  ? 'router-cell-truncate'
+                                  : undefined
+                              }
+                            >
+                              <span className='router-nowrap'>
+                                {row.upstream_model}
+                              </span>
+                              {row.inactive && (
+                                <Label
+                                  basic
+                                  color='grey'
+                                  className='router-tag'
+                                >
+                                  {t('channel.edit.model_selector.inactive')}
+                                </Label>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {t(
+                                `channel.model_types.${normalizeChannelModelType(
+                                  row.type
+                                )}`
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {providerOwners.length > 0 ? (
+                                providerOwners.map((providerId) => (
+                                  <Label
+                                    key={`${row.upstream_model}-${providerId}`}
+                                    basic
+                                    className='router-tag'
+                                  >
+                                    {providerId}
+                                  </Label>
+                                ))
+                              ) : providerCatalogLoading ? (
+                                <Label basic className='router-tag'>
+                                  {t(
+                                    'channel.edit.model_selector.provider_loading'
+                                  )}
+                                </Label>
+                              ) : !isDetailMode ? (
+                                <Button
+                                  type='button'
+                                  className='router-inline-button'
+                                  basic
+                                  onClick={() => openAppendProviderModal(row)}
+                                >
+                                  {t(
+                                    'channel.edit.model_selector.provider_add'
+                                  )}
+                                </Button>
+                              ) : (
+                                <Label
+                                  basic
+                                  color='orange'
+                                  className='router-tag'
+                                >
+                                  {t(
+                                    'channel.edit.model_selector.provider_unassigned'
+                                  )}
+                                </Label>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell
+                              title={isDetailMode ? row.model : undefined}
+                              className={
+                                isDetailMode
+                                  ? 'router-cell-truncate'
+                                  : undefined
+                              }
+                            >
+                              {isDetailMode ? (
+                                row.model
+                              ) : (
+                                <Form.Input
+                                  className='router-inline-input router-inline-input-wide'
+                                  transparent
+                                  value={row.model}
+                                  onChange={(e, { value }) =>
+                                    updateModelConfigField(
+                                      row.upstream_model,
+                                      'model',
+                                      value || row.upstream_model
+                                    )
+                                  }
+                                />
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {isDetailMode ? (
+                                <span className='router-nowrap'>
+                                  {row.price_unit}
+                                </span>
+                              ) : (
+                                <Form.Input
+                                  className='router-inline-input'
+                                  transparent
+                                  readOnly
+                                  value={row.price_unit}
+                                />
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {isDetailMode ? (
+                                <span className='router-nowrap'>
+                                  {row.input_price ?? '-'}
+                                </span>
+                              ) : (
+                                <Form.Input
+                                  className='router-inline-input'
+                                  type='number'
+                                  min='0'
+                                  step='0.01'
+                                  transparent
+                                  placeholder='-'
+                                  value={row.input_price ?? ''}
+                                  onChange={(e, { value }) =>
+                                    updateModelConfigField(
+                                      row.upstream_model,
+                                      'input_price',
+                                      value
+                                    )
+                                  }
+                                />
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {isDetailMode ? (
+                                <span className='router-nowrap'>
+                                  {row.output_price ?? '-'}
+                                </span>
+                              ) : (
+                                <Form.Input
+                                  className='router-inline-input'
+                                  type='number'
+                                  min='0'
+                                  step='0.01'
+                                  transparent
+                                  placeholder='-'
+                                  value={row.output_price ?? ''}
+                                  onChange={(e, { value }) =>
+                                    updateModelConfigField(
+                                      row.upstream_model,
+                                      'output_price',
+                                      value
+                                    )
+                                  }
+                                />
+                              )}
+                            </Table.Cell>
+                            {isDetailMode && (
+                              <Table.Cell
+                                collapsing
+                                className='router-nowrap router-cell-shrink'
+                              >
+                                {isUnassigned ? (
+                                  <Button
+                                    type='button'
+                                    className='router-inline-button'
+                                    basic
+                                    onClick={() => openAppendProviderModal(row)}
+                                  >
+                                    {t(
+                                      'channel.edit.model_selector.provider_add'
+                                    )}
+                                  </Button>
+                                ) : (
+                                  '-'
+                                )}
+                              </Table.Cell>
                             )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            {isDetailMode ? (
-                              row.price_unit
-                            ) : (
-                              <Form.Input
-                                transparent
-                                readOnly
-                                value={row.price_unit}
-                              />
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            {isDetailMode ? (
-                              row.input_price ?? '-'
-                            ) : (
-                              <Form.Input
-                                type='number'
-                                min='0'
-                                step='0.01'
-                                transparent
-                                placeholder='-'
-                                value={row.input_price ?? ''}
-                                onChange={(e, { value }) =>
-                                  updateModelConfigField(
-                                    row.upstream_model,
-                                    'input_price',
-                                    value,
-                                  )
-                                }
-                              />
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            {isDetailMode ? (
-                              row.output_price ?? '-'
-                            ) : (
-                              <Form.Input
-                                type='number'
-                                min='0'
-                                step='0.01'
-                                transparent
-                                placeholder='-'
-                                value={row.output_price ?? ''}
-                                onChange={(e, { value }) =>
-                                  updateModelConfigField(
-                                    row.upstream_model,
-                                    'output_price',
-                                    value,
-                                  )
-                                }
-                              />
-                            )}
-                          </Table.Cell>
-                        </Table.Row>
-                      ))
+                          </Table.Row>
+                        );
+                      })
                     )}
                   </Table.Body>
                 </Table>
+                {detailModelTotalPages > 1 && (
+                  <div className='router-pagination-wrap'>
+                    <Pagination
+                      className='router-section-pagination'
+                      activePage={detailModelPage}
+                      totalPages={detailModelTotalPages}
+                      onPageChange={(e, { activePage }) =>
+                        setDetailModelPage(Number(activePage) || 1)
+                      }
+                    />
+                  </div>
+                )}
                 {modelsSyncError && (
-                  <div style={{ color: '#d9534f', marginTop: '8px' }}>
+                  <div className='router-error-text router-error-text-top'>
                     {modelsSyncError}
                   </div>
                 )}
@@ -2136,102 +3771,252 @@ const EditChannel = () => {
             )}
             {showStepThree && inputs.protocol !== 'proxy' && (
               <Form.Field>
-                <label>{t('channel.edit.capability_tester.title')}</label>
-                <Message info>
-                  {t('channel.edit.capability_tester.hint')}
+                <label>{t('channel.edit.model_tester.title')}</label>
+                <Message info className='router-section-message'>
+                  {t('channel.edit.model_tester.hint')}
+                </Message>
+                <Message className='router-section-message'>
+                  {t('channel.edit.model_tester.selection_notice')}
                 </Message>
                 <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: isDetailMode ? 'flex-end' : 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '8px',
-                    marginBottom: '12px',
-                  }}
+                  className={`${
+                    isDetailMode ? 'router-toolbar-end' : 'router-toolbar'
+                  } router-block-gap-sm`}
                 >
                   {!isDetailMode && (
-                    <Button
-                      type='button'
-                      color='blue'
-                      loading={capabilityTesting}
-                      disabled={capabilityTesting || inputs.models.length === 0}
-                      onClick={handleTestCapabilities}
-                    >
-                      {t('channel.edit.capability_tester.button')}
-                    </Button>
+                    <>
+                      <Button
+                        type='button'
+                        className='router-section-button'
+                        color='blue'
+                        loading={modelTesting && modelTestingScope === 'batch'}
+                        disabled={
+                          modelTesting ||
+                          modelTestTargetModels.length === 0 ||
+                          selectedModelTestHasActiveTasks
+                        }
+                        onClick={() =>
+                          handleRunModelTests({
+                            targetModels: modelTestTargetModels,
+                            scope: 'batch',
+                          })
+                        }
+                      >
+                        {t('channel.edit.model_tester.button')}
+                      </Button>
+                      <Label basic className='router-tag'>
+                        {t('channel.edit.model_tester.selection', {
+                          selected: modelTestTargetModels.length,
+                          total: modelTestRows.length,
+                        })}
+                      </Label>
+                    </>
                   )}
-                  {capabilityTestedAt > 0 && (
-                    <span style={{ color: 'rgba(0, 0, 0, 0.6)' }}>
-                      {t('channel.edit.capability_tester.last_tested', {
-                        time: new Date(capabilityTestedAt).toLocaleString(),
+                  <Button
+                    type='button'
+                    className='router-page-button'
+                    basic
+                    onClick={() => openChannelTaskView()}
+                  >
+                    {t('task.title')}
+                  </Button>
+                  <Button
+                    type='button'
+                    className='router-page-button'
+                    basic
+                    onClick={() =>
+                      openChannelTaskView({
+                        type: 'channel_model_test',
+                      })
+                    }
+                  >
+                    {t('task.buttons.model_tests')}
+                  </Button>
+                  <Button
+                    type='button'
+                    className='router-page-button'
+                    basic
+                    onClick={() =>
+                      openChannelTaskView({
+                        status: 'pending,running',
+                      })
+                    }
+                  >
+                    {t('task.buttons.running')}
+                  </Button>
+                  {modelTestedAt > 0 && (
+                    <span className='router-toolbar-meta'>
+                      {t('channel.edit.model_tester.last_tested', {
+                        time: new Date(modelTestedAt).toLocaleString(),
                       })}
                     </span>
                   )}
                 </div>
-                {capabilityTestError && (
-                  <div style={{ color: '#d9534f', marginBottom: '12px' }}>
-                    {capabilityTestError}
+                {modelTestError && (
+                  <div className='router-error-text router-block-gap-sm'>
+                    {modelTestError}
                   </div>
                 )}
-                <Table celled stackable>
+                <Table celled stackable className='router-detail-table'>
                   <Table.Header>
                     <Table.Row>
+                      {!isDetailMode && (
+                        <Table.HeaderCell collapsing textAlign='center'>
+                          <Checkbox
+                            checked={allModelTestTargetsSelected}
+                            onChange={(e, { checked }) =>
+                              toggleAllModelTestTargets(!!checked)
+                            }
+                          />
+                        </Table.HeaderCell>
+                      )}
                       <Table.HeaderCell>
-                        {t('channel.edit.capability_tester.table.capability')}
+                        {t('channel.edit.model_tester.table.model')}
                       </Table.HeaderCell>
                       <Table.HeaderCell>
-                        {t('channel.edit.capability_tester.table.endpoint')}
+                        {t('channel.edit.model_tester.table.type')}
                       </Table.HeaderCell>
                       <Table.HeaderCell>
-                        {t('channel.edit.capability_tester.table.model')}
+                        {t('channel.edit.model_tester.table.endpoint')}
                       </Table.HeaderCell>
                       <Table.HeaderCell collapsing>
-                        {t('channel.edit.capability_tester.table.status')}
+                        {t('channel.edit.model_tester.table.status')}
                       </Table.HeaderCell>
                       <Table.HeaderCell collapsing>
-                        {t('channel.edit.capability_tester.table.latency')}
+                        {t('channel.edit.model_tester.table.latency')}
                       </Table.HeaderCell>
                       <Table.HeaderCell>
-                        {t('channel.edit.capability_tester.table.message')}
+                        {t('channel.edit.model_tester.table.message')}
                       </Table.HeaderCell>
+                      {!isDetailMode && (
+                        <Table.HeaderCell collapsing>
+                          {t('channel.edit.model_tester.table.actions')}
+                        </Table.HeaderCell>
+                      )}
                     </Table.Row>
                   </Table.Header>
                   <Table.Body>
-                    {capabilityResults.length === 0 ? (
+                    {modelTestRows.length === 0 ? (
                       <Table.Row>
-                        <Table.Cell colSpan='6'>
-                          {t('channel.edit.capability_tester.empty')}
+                        <Table.Cell
+                          className='router-empty-cell'
+                          colSpan={isDetailMode ? '6' : '8'}
+                        >
+                          {t('channel.edit.model_tester.empty')}
                         </Table.Cell>
                       </Table.Row>
                     ) : (
-                      capabilityResults.map((item) => {
+                      modelTestRows.map((row) => {
+                        const item = modelTestResultsByModel.get(row.model);
+                        const activeTask =
+                          activeChannelTasksByModel.get(row.model) || null;
+                        const effectiveStatus =
+                          activeTask?.status || item?.status || 'unsupported';
                         const labelColor =
-                          item.status === 'supported'
+                          effectiveStatus === 'running'
+                            ? 'blue'
+                            : effectiveStatus === 'pending'
+                            ? 'orange'
+                            : effectiveStatus === 'supported'
                             ? 'green'
-                            : item.status === 'skipped'
-                              ? 'grey'
-                              : 'red';
+                            : effectiveStatus === 'skipped'
+                            ? 'grey'
+                            : 'red';
                         return (
-                          <Table.Row
-                            key={`${item.capability}-${item.endpoint}-${item.model}`}
-                          >
-                            <Table.Cell>{item.label}</Table.Cell>
-                            <Table.Cell>{item.endpoint || '-'}</Table.Cell>
-                            <Table.Cell>{item.model || '-'}</Table.Cell>
+                          <Table.Row key={row.model}>
+                            {!isDetailMode && (
+                              <Table.Cell textAlign='center'>
+                                <Checkbox
+                                  checked={modelTestTargetModels.includes(
+                                    row.model
+                                  )}
+                                  onChange={(e, { checked }) =>
+                                    toggleModelTestTarget(row.model, !!checked)
+                                  }
+                                />
+                              </Table.Cell>
+                            )}
+                            <Table.Cell>{row.model || '-'}</Table.Cell>
+                            <Table.Cell>{row.type || '-'}</Table.Cell>
                             <Table.Cell>
-                              <Label basic color={labelColor}>
+                              {isDetailMode ? (
+                                row.endpoint || '-'
+                              ) : row.type === 'text' ? (
+                                <Dropdown
+                                  selection
+                                  className='router-mini-dropdown'
+                                  options={TEXT_MODEL_ENDPOINT_OPTIONS}
+                                  value={
+                                    row.endpoint ||
+                                    defaultChannelModelEndpoint(row.type)
+                                  }
+                                  onChange={(e, { value }) =>
+                                    updateModelTestEndpoint(row.model, value)
+                                  }
+                                />
+                              ) : row.type === 'image' ? (
+                                <Dropdown
+                                  selection
+                                  className='router-mini-dropdown'
+                                  options={IMAGE_MODEL_ENDPOINT_OPTIONS}
+                                  value={
+                                    row.endpoint ||
+                                    defaultChannelModelEndpoint(row.type)
+                                  }
+                                  onChange={(e, { value }) =>
+                                    updateModelTestEndpoint(row.model, value)
+                                  }
+                                />
+                              ) : (
+                                row.endpoint || '-'
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Label
+                                basic
+                                color={labelColor}
+                                className='router-tag'
+                              >
                                 {t(
-                                  `channel.edit.capability_tester.status.${item.status}`,
+                                  `channel.edit.model_tester.status.${
+                                    effectiveStatus
+                                  }`
                                 )}
                               </Label>
                             </Table.Cell>
                             <Table.Cell>
-                              {item.latency_ms > 0
+                              {item?.latency_ms > 0
                                 ? `${item.latency_ms} ms`
                                 : '-'}
                             </Table.Cell>
-                            <Table.Cell>{item.message || '-'}</Table.Cell>
+                            <Table.Cell>{item?.message || '-'}</Table.Cell>
+                            {!isDetailMode && (
+                              <Table.Cell collapsing>
+                                <Button
+                                  type='button'
+                                  className='router-inline-button'
+                                  basic
+                                  loading={
+                                    (modelTesting &&
+                                      modelTestingScope === 'single' &&
+                                      modelTestingTargetSet.has(row.model)) ||
+                                    !!activeTask
+                                  }
+                                  disabled={
+                                    modelTesting ||
+                                    activeChannelTasksByModel.has(row.model)
+                                  }
+                                  onClick={() =>
+                                    handleRunModelTests({
+                                      targetModels: [row.model],
+                                      scope: 'single',
+                                    })
+                                  }
+                                >
+                                  {t('channel.edit.model_tester.single')}
+                                </Button>
+                              </Table.Cell>
+                            )}
                           </Table.Row>
                         );
                       })
@@ -2243,15 +4028,12 @@ const EditChannel = () => {
             {showStepFour && inputs.protocol !== 'proxy' && (
               <Form.Field>
                 <Form.TextArea
+                  className='router-section-textarea router-code-textarea router-code-textarea-md'
                   label={t('channel.edit.system_prompt')}
                   placeholder={t('channel.edit.system_prompt_placeholder')}
                   name='system_prompt'
                   onChange={handleInputChange}
                   value={inputs.system_prompt}
-                  style={{
-                    minHeight: 150,
-                    fontFamily: 'JetBrains Mono, Consolas',
-                  }}
                   autoComplete='new-password'
                   {...textAreaReadonlyProps}
                 />
@@ -2260,6 +4042,7 @@ const EditChannel = () => {
             {showStepOne && inputs.protocol === 'awsclaude' && (
               <Form.Field>
                 <Form.Input
+                  className='router-section-input'
                   label='Region'
                   name='region'
                   required
@@ -2270,6 +4053,7 @@ const EditChannel = () => {
                   {...inputReadonlyProps}
                 />
                 <Form.Input
+                  className='router-section-input'
                   label='AK'
                   name='ak'
                   required
@@ -2280,6 +4064,7 @@ const EditChannel = () => {
                   {...inputReadonlyProps}
                 />
                 <Form.Input
+                  className='router-section-input'
                   label='SK'
                   name='sk'
                   required
@@ -2294,6 +4079,7 @@ const EditChannel = () => {
             {showStepOne && inputs.protocol === 'vertexai' && (
               <Form.Field>
                 <Form.Input
+                  className='router-section-input'
                   label='Region'
                   name='region'
                   required
@@ -2304,6 +4090,7 @@ const EditChannel = () => {
                   {...inputReadonlyProps}
                 />
                 <Form.Input
+                  className='router-section-input'
                   label={t('channel.edit.vertex_project_id')}
                   name='vertex_ai_project_id'
                   required
@@ -2314,6 +4101,7 @@ const EditChannel = () => {
                   {...inputReadonlyProps}
                 />
                 <Form.Input
+                  className='router-section-input'
                   label={t('channel.edit.vertex_credentials')}
                   name='vertex_ai_adc'
                   required
@@ -2327,6 +4115,7 @@ const EditChannel = () => {
             )}
             {showStepOne && inputs.protocol === 'coze' && (
               <Form.Input
+                className='router-section-input'
                 label={t('channel.edit.user_id')}
                 name='user_id'
                 required
@@ -2340,6 +4129,7 @@ const EditChannel = () => {
             {showStepOne && inputs.protocol === 'cloudflare' && (
               <Form.Field>
                 <Form.Input
+                  className='router-section-input'
                   label='Account ID'
                   name='user_id'
                   required
@@ -2352,45 +4142,6 @@ const EditChannel = () => {
                   {...inputReadonlyProps}
                 />
               </Form.Field>
-            )}
-            {isDetailMode || isEditMode ? null : (
-              <>
-                <Button type='button' onClick={handleCancel}>
-                  {t('channel.edit.buttons.cancel')}
-                </Button>
-                {createStep > CREATE_CHANNEL_STEP_MIN && (
-                  <Button type='button' onClick={moveToPreviousCreateStep}>
-                    {t('channel.edit.buttons.previous_step')}
-                  </Button>
-                )}
-                {createStep < CREATE_CHANNEL_STEP_MAX ? (
-                  <Button
-                    type='button'
-                    positive
-                    onClick={
-                      createStep === 1
-                        ? moveToStepTwo
-                        : createStep === 2
-                          ? moveToStepThree
-                          : moveToStepFour
-                    }
-                  >
-                    {t('channel.edit.buttons.next_step')}
-                  </Button>
-                ) : (
-                  <Button
-                    type='button'
-                    positive
-                    onClick={submit}
-                    disabled={
-                      requireVerificationBeforeProceed &&
-                      !isCurrentSignatureVerified
-                    }
-                  >
-                    {t('channel.edit.buttons.submit')}
-                  </Button>
-                )}
-              </>
             )}
           </Form>
         </Card.Content>

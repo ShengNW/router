@@ -27,12 +27,15 @@ import EditToken from './pages/Token/EditToken';
 import EditChannel from './pages/Channel/EditChannel';
 import Redemption from './pages/Redemption';
 import EditRedemption from './pages/Redemption/EditRedemption';
+import RedemptionDetail from './pages/Redemption/RedemptionDetail';
 import TopUp from './pages/TopUp';
 import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Dashboard from './pages/Dashboard';
-import ModelProviders from './pages/ModelProviders';
+import Providers from './pages/Providers';
 import Group from './pages/Group';
+import Task from './pages/Task';
+import TaskDetail from './pages/Task/Detail';
 import AdminLayout from './layouts/AdminLayout';
 import UserLayout from './layouts/UserLayout';
 
@@ -323,7 +326,7 @@ function App() {
         />
         <Route
           path='/admin/provider'
-          element={<ModelProviders />}
+          element={<Providers />}
         />
         <Route
           path='/admin/group'
@@ -338,6 +341,14 @@ function App() {
           element={
             <Suspense fallback={<Loading />}>
               <EditRedemption />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/admin/redemption/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <RedemptionDetail />
             </Suspense>
           }
         />
@@ -384,6 +395,18 @@ function App() {
         <Route
           path='/admin/log'
           element={<Log />}
+        />
+        <Route
+          path='/admin/task'
+          element={<Task />}
+        />
+        <Route
+          path='/admin/task/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <TaskDetail />
+            </Suspense>
+          }
         />
         <Route
           path='/admin/setting'

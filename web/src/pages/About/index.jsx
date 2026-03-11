@@ -37,8 +37,8 @@ const About = () => {
         <div className='dashboard-container'>
           <Card fluid className='chart-card'>
             <Card.Content>
-              <Card.Header className='header'>{t('about.title')}</Card.Header>
-              <p>{t('about.description')}</p>
+              <Card.Header className='header router-page-title'>{t('about.title')}</Card.Header>
+              <p className='router-page-copy'>{t('about.description')}</p>
               {t('about.repository')}
               <a href='https://github.com/yeying-community/router'>
                 https://github.com/yeying-community/router
@@ -52,14 +52,14 @@ const About = () => {
             <iframe
               src={about}
               title='about'
-              style={{ width: '100%', height: '100vh', border: 'none' }}
+              className='router-embed-frame'
             />
           ) : (
             <div className='dashboard-container'>
               <Card fluid className='chart-card'>
                 <Card.Content>
                   <div
-                    style={{ fontSize: 'larger' }}
+                    className='router-content-rendered'
                     dangerouslySetInnerHTML={{ __html: about }}
                   ></div>
                 </Card.Content>

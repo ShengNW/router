@@ -64,6 +64,22 @@ definitions:
         example: 0x1111111111111111111111111111111111111111
         type: string
     type: object
+  docs.ChannelCreateRecordRequest:
+    properties:
+      base_url:
+        example: https://api.openai.com
+        type: string
+      config: {}
+      key:
+        example: sk-***
+        type: string
+      name:
+        example: openai-main
+        type: string
+      protocol:
+        example: openai
+        type: string
+    type: object
   docs.ChannelCreateRequest:
     properties:
       base_url:
@@ -134,6 +150,18 @@ definitions:
         example: gpt-4o-mini
         type: string
     type: object
+  docs.ChannelModelTestsRequest:
+    properties:
+      target_models:
+        example:
+        - gpt-4o-mini
+        items:
+          type: string
+        type: array
+      test_model:
+        example: gpt-4o-mini
+        type: string
+    type: object
   docs.ChannelModelsMeta:
     properties:
       id:
@@ -165,47 +193,6 @@ definitions:
       success:
         example: true
         type: boolean
-    type: object
-  docs.ChannelPreviewCapabilitiesRequest:
-    properties:
-      base_url:
-        example: https://api.openai.com
-        type: string
-      config: {}
-      draft_id:
-        example: cad8bd65524a4d0c8f345a8c86ea9685
-        type: string
-      key:
-        example: sk-***
-        type: string
-      models:
-        example:
-        - gpt-4o-mini
-        items:
-          type: string
-        type: array
-      protocol:
-        example: openai
-        type: string
-      test_model:
-        example: gpt-4o-mini
-        type: string
-    type: object
-  docs.ChannelPreviewModelsRequest:
-    properties:
-      base_url:
-        example: https://api.openai.com
-        type: string
-      config: {}
-      draft_id:
-        example: cad8bd65524a4d0c8f345a8c86ea9685
-        type: string
-      key:
-        example: sk-***
-        type: string
-      protocol:
-        example: openai
-        type: string
     type: object
   docs.ChannelUpdateRequest:
     properties:
@@ -259,82 +246,6 @@ definitions:
       success:
         type: boolean
       timestamp:
-        type: integer
-    type: object
-  docs.ModelProviderCatalogItem:
-    properties:
-      base_url:
-        example: https://api.openai.com
-        type: string
-      id:
-        example: openai
-        type: string
-      model_details:
-        items:
-          $ref: '#/definitions/docs.ModelProviderModelDetail'
-        type: array
-      models:
-        items:
-          type: string
-        type: array
-      name:
-        example: OpenAI
-        type: string
-      sort_order:
-        example: 10
-        type: integer
-      source:
-        example: manual
-        type: string
-      updated_at:
-        example: 1710000000
-        type: integer
-    type: object
-  docs.ModelProviderCatalogResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/docs.ModelProviderCatalogItem'
-        type: array
-      message:
-        example: ""
-        type: string
-      success:
-        example: true
-        type: boolean
-    type: object
-  docs.ModelProviderCatalogUpdateRequest:
-    properties:
-      providers:
-        items:
-          $ref: '#/definitions/docs.ModelProviderCatalogItem'
-        type: array
-    type: object
-  docs.ModelProviderModelDetail:
-    properties:
-      currency:
-        example: USD
-        type: string
-      input_price:
-        example: 0.00015
-        type: number
-      model:
-        example: gpt-4o-mini
-        type: string
-      output_price:
-        example: 0.0006
-        type: number
-      price_unit:
-        example: per_1k_tokens
-        type: string
-      source:
-        example: default
-        type: string
-      type:
-        example: text
-        type: string
-      updated_at:
-        example: 1710000000
         type: integer
     type: object
   docs.OpenAIAudioOutput:
@@ -1193,8 +1104,8 @@ definitions:
   docs.RedemptionUpdateRequest:
     properties:
       id:
-        example: 1
-        type: integer
+        example: 2d66a0b2d8c44efda9c7f5f21a4e2c4d
+        type: string
       name:
         example: InviteBonus
         type: string
@@ -1659,7 +1570,7 @@ definitions:
     type: object
   docs.UserTopUpRequest:
     properties:
-      key:
+      code:
         example: redeem-xxxx-xxxx
         type: string
     type: object
@@ -1717,28 +1628,6 @@ info:
   version: v1
 paths:
   /api/v1/admin/channel:
-    get:
-      parameters:
-      - description: Page index
-        in: query
-        name: p
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/docs.StandardResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/docs.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List channels (admin)
-      tags:
-      - admin
     post:
       consumes:
       - application/json
@@ -1838,6 +1727,125 @@ paths:
       summary: Get channel by ID (admin)
       tags:
       - admin
+  /api/v1/admin/channel/{id}/models:
+    get:
+      parameters:
+      - description: Channel ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page index
+        in: query
+        name: p
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Keyword
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List channel models (admin)
+      tags:
+      - admin
+  /api/v1/admin/channel/{id}/models/refresh:
+    post:
+      parameters:
+      - description: Channel ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh channel models from upstream (admin)
+      tags:
+      - admin
+  /api/v1/admin/channel/{id}/tests:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Channel ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Channel model test payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/docs.ChannelModelTestsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Test channel models (admin)
+      tags:
+      - admin
+  /api/v1/admin/channel/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Channel create payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/docs.ChannelCreateRecordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create channel record (admin)
+      tags:
+      - admin
   /api/v1/admin/channel/disabled:
     delete:
       produces:
@@ -1854,80 +1862,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Delete disabled channels (admin)
-      tags:
-      - admin
-  /api/v1/admin/channel/draft:
-    post:
-      consumes:
-      - application/json
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/docs.StandardResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/docs.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create channel draft (admin)
-      tags:
-      - admin
-  /api/v1/admin/channel/preview/capabilities:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Preview payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/docs.ChannelPreviewCapabilitiesRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/docs.StandardResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/docs.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Preview channel capabilities (admin)
-      tags:
-      - admin
-  /api/v1/admin/channel/preview/models:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Preview payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/docs.ChannelPreviewModelsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/docs.StandardResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/docs.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Preview models for channel protocol (admin)
       tags:
       - admin
   /api/v1/admin/channel/protocols:
@@ -2005,6 +1939,10 @@ paths:
       - description: Model name
         in: query
         name: model
+        type: string
+      - description: Test mode (batch|model)
+        in: query
+        name: mode
         type: string
       produces:
       - application/json
@@ -2089,6 +2027,41 @@ paths:
       security:
       - BearerAuth: []
       summary: Update channel balance (admin)
+      tags:
+      - admin
+  /api/v1/admin/channels:
+    get:
+      parameters:
+      - description: Page (1-based)
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Keyword
+        in: query
+        name: keyword
+        type: string
+      - description: Compact mode (1=true)
+        in: query
+        name: compact
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List channels with pagination (admin)
       tags:
       - admin
   /api/v1/admin/group:
@@ -2203,8 +2176,14 @@ paths:
       summary: Update group channel bindings (admin)
       tags:
       - admin
-  /api/v1/admin/group/catalog:
+  /api/v1/admin/group/{id}/model-configs:
     get:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -2218,7 +2197,87 @@ paths:
             $ref: '#/definitions/docs.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List groups catalog (admin)
+      summary: List group model configs (admin)
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update group model configs (admin)
+      tags:
+      - admin
+  /api/v1/admin/group/{id}/models:
+    get:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List group model summaries (admin)
+      tags:
+      - admin
+  /api/v1/admin/groups:
+    get:
+      parameters:
+      - description: Page (1-based)
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Keyword
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List groups with pagination (admin)
       tags:
       - admin
   /api/v1/admin/log:
@@ -2417,40 +2476,131 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/docs.ModelProviderCatalogResponse'
+            $ref: '#/definitions/docs.StandardResponse'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/docs.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get model provider catalog (admin)
+      summary: Get paged provider catalog (admin)
       tags:
       - admin
-    put:
+    post:
       consumes:
       - application/json
-      parameters:
-      - description: Model provider catalog payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/docs.ModelProviderCatalogUpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/docs.ModelProviderCatalogResponse'
+            $ref: '#/definitions/docs.StandardResponse'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/docs.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Update model provider catalog (admin)
+      summary: Create provider (admin)
+      tags:
+      - admin
+  /api/v1/admin/provider/{id}:
+    delete:
+      parameters:
+      - description: Provider ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete provider (admin)
+      tags:
+      - admin
+    get:
+      parameters:
+      - description: Provider ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get provider detail (admin)
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update provider (admin)
+      tags:
+      - admin
+  /api/v1/admin/provider/{id}/model:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Append one model detail into provider catalog (admin)
       tags:
       - admin
   /api/v1/admin/redemption:
@@ -2539,7 +2689,7 @@ paths:
         in: path
         name: id
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -2562,7 +2712,7 @@ paths:
         in: path
         name: id
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -3132,17 +3282,17 @@ paths:
       - public
   /api/v1/public/channel/models:
     get:
-      description: When provider is specified, the response shape becomes docs.ChannelModelsProviderResponse
-        (data is string[] and meta is an object). model_provider filters by model
-        naming rules.
+      description: When channel is specified, the response shape becomes docs.ChannelModelsProviderResponse
+        (data is string[] and meta is an object). provider filters by model naming
+        rules.
       parameters:
-      - description: Provider name
+      - description: Channel name
+        in: query
+        name: channel
+        type: string
+      - description: Provider filter (gpt/gemini/claude/deepseek/qwen)
         in: query
         name: provider
-        type: string
-      - description: Model provider filter (gpt/gemini/claude/deepseek/qwen)
-        in: query
-        name: model_provider
         type: string
       produces:
       - application/json

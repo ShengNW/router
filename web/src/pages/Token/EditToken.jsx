@@ -26,7 +26,7 @@ const EditToken = () => {
   const originInputs = {
     name: '',
     remain_quota: isEdit ? 0 : 500000,
-    expired_time: -1,
+    expired_time: '',
     unlimited_quota: false,
     models: [],
     subnet: '',
@@ -51,7 +51,7 @@ const EditToken = () => {
       timestamp += seconds;
       setInputs({ ...inputs, expired_time: timestamp2string(timestamp) });
     } else {
-      setInputs({ ...inputs, expired_time: -1 });
+      setInputs({ ...inputs, expired_time: '' });
     }
   };
 
@@ -66,6 +66,8 @@ const EditToken = () => {
       if (success && data) {
         if (data.expired_time !== -1) {
           data.expired_time = timestamp2string(data.expired_time);
+        } else {
+          data.expired_time = '';
         }
         if (
           data.models === '' ||
@@ -123,13 +125,15 @@ const EditToken = () => {
     if (!isEdit && inputs.name === '') return;
     let localInputs = inputs;
     localInputs.remain_quota = parseInt(localInputs.remain_quota);
-    if (localInputs.expired_time !== -1) {
+    if (localInputs.expired_time) {
       let time = Date.parse(localInputs.expired_time);
       if (isNaN(time)) {
         showError(t('token.edit.messages.expire_time_invalid'));
         return;
       }
       localInputs.expired_time = Math.ceil(time / 1000);
+    } else {
+      localInputs.expired_time = -1;
     }
     localInputs.models = localInputs.models.join(',');
     let res;
@@ -159,12 +163,13 @@ const EditToken = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header'>
+          <Card.Header className='header router-page-title'>
             {isEdit ? t('token.edit.title_edit') : t('token.edit.title_create')}
           </Card.Header>
           <Form loading={loading} autoComplete='new-password'>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('token.edit.name')}
                 name='name'
                 placeholder={t('token.edit.name_placeholder')}
@@ -176,6 +181,7 @@ const EditToken = () => {
             </Form.Field>
             <Form.Field>
               <Form.Dropdown
+                className='router-section-dropdown'
                 label={t('token.edit.models')}
                 placeholder={t('token.edit.models_placeholder')}
                 name='models'
@@ -194,6 +200,7 @@ const EditToken = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('token.edit.ip_limit')}
                 name='subnet'
                 placeholder={t('token.edit.ip_limit_placeholder')}
@@ -204,6 +211,7 @@ const EditToken = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('token.edit.expire_time')}
                 name='expired_time'
                 placeholder={t('token.edit.expire_time_placeholder')}
@@ -213,8 +221,9 @@ const EditToken = () => {
                 type='datetime-local'
               />
             </Form.Field>
-            <div style={{ lineHeight: '40px' }}>
+            <div className='router-toolbar-start router-block-gap-xs'>
               <Button
+                className='router-inline-button'
                 type={'button'}
                 onClick={() => {
                   setExpiredTime(0, 0, 0, 0);
@@ -223,6 +232,7 @@ const EditToken = () => {
                 {t('token.edit.buttons.never_expire')}
               </Button>
               <Button
+                className='router-inline-button'
                 type={'button'}
                 onClick={() => {
                   setExpiredTime(1, 0, 0, 0);
@@ -231,6 +241,7 @@ const EditToken = () => {
                 {t('token.edit.buttons.expire_1_month')}
               </Button>
               <Button
+                className='router-inline-button'
                 type={'button'}
                 onClick={() => {
                   setExpiredTime(0, 1, 0, 0);
@@ -239,6 +250,7 @@ const EditToken = () => {
                 {t('token.edit.buttons.expire_1_day')}
               </Button>
               <Button
+                className='router-inline-button'
                 type={'button'}
                 onClick={() => {
                   setExpiredTime(0, 0, 1, 0);
@@ -247,6 +259,7 @@ const EditToken = () => {
                 {t('token.edit.buttons.expire_1_hour')}
               </Button>
               <Button
+                className='router-inline-button'
                 type={'button'}
                 onClick={() => {
                   setExpiredTime(0, 0, 0, 1);
@@ -255,9 +268,10 @@ const EditToken = () => {
                 {t('token.edit.buttons.expire_1_minute')}
               </Button>
             </div>
-            <Message>{t('token.edit.quota_notice')}</Message>
+            <Message className='router-section-message'>{t('token.edit.quota_notice')}</Message>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={`${t('token.edit.quota')}${renderQuotaWithPrompt(
                   remain_quota,
                   t
@@ -272,6 +286,7 @@ const EditToken = () => {
               />
             </Form.Field>
             <Button
+              className='router-inline-button'
               type={'button'}
               onClick={() => {
                 setUnlimitedQuota();
@@ -281,12 +296,14 @@ const EditToken = () => {
                 ? t('token.edit.buttons.cancel_unlimited')
                 : t('token.edit.buttons.unlimited_quota')}
             </Button>
-            <Button floated='right' positive onClick={submit}>
-              {t('token.edit.buttons.submit')}
-            </Button>
-            <Button floated='right' onClick={handleCancel}>
-              {t('token.edit.buttons.cancel')}
-            </Button>
+            <div className='router-toolbar-end router-block-top-sm'>
+              <Button className='router-page-button' onClick={handleCancel}>
+                {t('token.edit.buttons.cancel')}
+              </Button>
+              <Button className='router-page-button' positive onClick={submit}>
+                {t('token.edit.buttons.submit')}
+              </Button>
+            </div>
           </Form>
         </Card.Content>
       </Card>

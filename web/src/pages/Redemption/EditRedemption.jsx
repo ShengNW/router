@@ -53,7 +53,7 @@ const EditRedemption = () => {
     if (isEdit) {
       res = await API.put(`/api/v1/admin/redemption/`, {
         ...localInputs,
-        id: parseInt(redemptionId),
+        id: redemptionId,
       });
     } else {
       res = await API.post(`/api/v1/admin/redemption/`, {
@@ -86,12 +86,13 @@ const EditRedemption = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header'>
+          <Card.Header className='header router-page-title'>
             {isEdit ? t('redemption.edit.title_edit') : t('redemption.edit.title_create')}
           </Card.Header>
           <Form loading={loading} autoComplete='new-password'>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={t('redemption.edit.name')}
                 name='name'
                 placeholder={t('redemption.edit.name_placeholder')}
@@ -103,6 +104,7 @@ const EditRedemption = () => {
             </Form.Field>
             <Form.Field>
               <Form.Input
+                className='router-section-input'
                 label={`${t('redemption.edit.quota')}${renderQuotaWithPrompt(quota, t)}`}
                 name='quota'
                 placeholder={t('redemption.edit.quota_placeholder')}
@@ -116,6 +118,7 @@ const EditRedemption = () => {
               <>
                 <Form.Field>
                   <Form.Input
+                    className='router-section-input'
                     label={t('redemption.edit.count')}
                     name='count'
                     placeholder={t('redemption.edit.count_placeholder')}
@@ -127,12 +130,14 @@ const EditRedemption = () => {
                 </Form.Field>
               </>
             )}
-            <Button positive onClick={submit}>
-              {t('redemption.edit.buttons.submit')}
-            </Button>
-            <Button onClick={handleCancel}>
-              {t('redemption.edit.buttons.cancel')}
-            </Button>
+            <div className='router-toolbar-start router-block-gap-sm'>
+              <Button className='router-page-button' onClick={handleCancel}>
+                {t('redemption.edit.buttons.cancel')}
+              </Button>
+              <Button className='router-page-button' positive onClick={submit}>
+                {t('redemption.edit.buttons.submit')}
+              </Button>
+            </div>
           </Form>
         </Card.Content>
       </Card>

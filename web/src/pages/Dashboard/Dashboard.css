@@ -354,24 +354,6 @@
     }
 }
 
-/* 设置页面的 Tab 样式 */
-.settings-tab {
-    margin-top: 1rem !important;
-    border-bottom: none !important;
-}
-
-.settings-tab .item {
-    color: #000 !important;
-    font-weight: 500 !important;
-    padding: 0.8rem 1.2rem !important;
-}
-
-.settings-tab .active.item {
-    color: #000 !important;
-    font-weight: 600 !important;
-    border-color: #000 !important;
-}
-
 .ui.tab.segment {
     border: none !important;
     box-shadow: none !important;
