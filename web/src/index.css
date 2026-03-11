@@ -1190,6 +1190,43 @@ code {
     min-width: 170px;
 }
 
+.router-token-model-search {
+    max-width: 320px;
+    margin-bottom: 10px;
+}
+
+.router-token-model-table-wrap {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 10px;
+}
+
+.ui.table.router-token-model-table thead th:first-child,
+.ui.table.router-token-model-table tbody td:first-child {
+    width: 72px !important;
+}
+
+.ui.table.router-token-model-table thead th,
+.ui.table.router-token-model-table tbody td {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+}
+
+.router-token-expire-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.router-token-expire-actions .ui.button.router-inline-button,
+.router-token-expire-actions .ui.buttons .button.router-inline-button {
+    min-height: 28px !important;
+    padding: 0.44em 0.74em !important;
+}
+
 .router-compact-stack {
     display: flex;
     flex-direction: column;

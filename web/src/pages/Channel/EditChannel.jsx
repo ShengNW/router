@@ -1994,7 +1994,9 @@ const EditChannel = () => {
         modelConfigs: nextInputs.model_configs,
       });
       setInputs(nextInputs);
-      setModelTestResults(normalizeModelTestResults(nextTests.items));
+      setModelTestResults((prev) =>
+        mergeModelTestResults(prev, nextTests.items)
+      );
       setModelTestError('');
       setModelTestedAt(
         Number(nextTests.lastTestedAt || 0) > 0
