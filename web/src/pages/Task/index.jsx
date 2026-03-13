@@ -410,7 +410,6 @@ const Task = () => {
                     ? t('task.table.updated_at')
                     : t('task.table.finished_at')}
                 </Table.HeaderCell>
-                <Table.HeaderCell>{t('task.table.message')}</Table.HeaderCell>
                 <Table.HeaderCell>{t('task.table.actions')}</Table.HeaderCell>
               </Table.Row>
             </Table.Header>
@@ -418,7 +417,7 @@ const Task = () => {
               {items.length === 0 ? (
                 <Table.Row>
                   <Table.Cell
-                    colSpan={isAdminPage && isUserScope ? '9' : '8'}
+                    colSpan={isAdminPage && isUserScope ? '8' : '7'}
                     className='router-empty-cell'
                   >
                     {loading ? t('common.loading') : t('task.empty')}
@@ -438,15 +437,6 @@ const Task = () => {
                   const canRetry =
                     !isUserScope &&
                     (status === 'failed' || status === 'canceled');
-                  const message = isUserScope
-                    ? item?.result_url ||
-                      item?.request_id ||
-                      item?.source ||
-                      '-'
-                    : item?.error_message ||
-                      item?.result ||
-                      item?.payload ||
-                      '-';
                   const detailSearch =
                     isAdminPage && isUserScope ? '?scope=user' : '';
                   return (
@@ -491,11 +481,6 @@ const Task = () => {
                           : item.finished_at
                             ? timestamp2string(item.finished_at)
                             : '-'}
-                      </Table.Cell>
-                      <Table.Cell
-                        style={{ maxWidth: 420, wordBreak: 'break-word' }}
-                      >
-                        {message}
                       </Table.Cell>
                       <Table.Cell collapsing>
                         {isUserScope ? (
@@ -549,7 +534,7 @@ const Task = () => {
             <Table.Footer>
               <Table.Row>
                 <Table.HeaderCell
-                  colSpan={isAdminPage && isUserScope ? '9' : '8'}
+                  colSpan={isAdminPage && isUserScope ? '8' : '7'}
                 >
                   <div className='router-toolbar router-task-footer-toolbar'>
                     <div className='router-toolbar-start'>

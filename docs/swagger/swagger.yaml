@@ -1842,6 +1842,40 @@ paths:
       summary: Test channel models (admin)
       tags:
       - admin
+  /api/v1/admin/channel/{id}/tests/artifact:
+    get:
+      parameters:
+      - description: Channel ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Model
+        in: query
+        name: model
+        required: true
+        type: string
+      - description: Endpoint
+        in: query
+        name: endpoint
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download channel test artifact (admin)
+      tags:
+      - admin
   /api/v1/admin/channel/create:
     post:
       consumes:
@@ -2352,6 +2386,16 @@ paths:
       security:
       - BearerAuth: []
       summary: List logs (admin)
+      tags:
+      - admin
+  /api/v1/admin/log/{id}:
+    get:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Get log by ID (admin)
       tags:
       - admin
   /api/v1/admin/log/search:
@@ -3823,7 +3867,7 @@ paths:
       summary: OpenAI-compatible endpoint not implemented
       tags:
       - public
-  /api/v1/public/log/self:
+  /api/v1/public/log:
     get:
       parameters:
       - description: Page (1-based)
@@ -3866,7 +3910,17 @@ paths:
       summary: List user logs
       tags:
       - public
-  /api/v1/public/log/self/search:
+  /api/v1/public/log/{id}:
+    get:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Get current user log by ID
+      tags:
+      - public
+  /api/v1/public/log/search:
     get:
       parameters:
       - description: Keyword
@@ -3889,7 +3943,7 @@ paths:
       summary: Search user logs
       tags:
       - public
-  /api/v1/public/log/self/stat:
+  /api/v1/public/log/stat:
     get:
       parameters:
       - description: Log type
@@ -4851,6 +4905,26 @@ paths:
       security:
       - BearerAuth: []
       summary: Update current user
+      tags:
+      - public
+  /api/v1/public/user/self/password:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docs.StandardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update current user password with current password verification
       tags:
       - public
   /api/v1/public/user/spend/overview:

@@ -667,6 +667,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/admin/channel/{id}/tests/artifact": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Download channel test artifact (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Channel ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Model",
+                        "name": "model",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Endpoint",
+                        "name": "endpoint",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/channels": {
             "get": {
                 "security": [
@@ -1300,6 +1353,23 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/admin/log/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get log by ID (admin)",
+                "responses": {}
             }
         },
         "/api/v1/admin/option": {
@@ -3577,7 +3647,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/public/log/self": {
+        "/api/v1/public/log": {
             "get": {
                 "security": [
                     {
@@ -3645,7 +3715,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/public/log/self/search": {
+        "/api/v1/public/log/search": {
             "get": {
                 "security": [
                     {
@@ -3683,7 +3753,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/public/log/self/stat": {
+        "/api/v1/public/log/stat": {
             "get": {
                 "security": [
                     {
@@ -3749,6 +3819,23 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/public/log/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Get current user log by ID",
+                "responses": {}
             }
         },
         "/api/v1/public/models": {
@@ -5233,6 +5320,39 @@ const docTemplate = `{
                     "public"
                 ],
                 "summary": "Delete current user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docs.StandardResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/user/self/password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Update current user password with current password verification",
                 "responses": {
                     "200": {
                         "description": "OK",

@@ -62,6 +62,33 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return tx.AutoMigrate(&Redemption{})
 			},
 		},
+		{
+			Version:     "202603131930_fix_channel_test_task_status",
+			Description: "mark unsupported channel model test tasks as failed",
+			Up: func(tx *gorm.DB) error {
+				rows := make([]AsyncTask, 0)
+				if err := tx.
+					Where("type = ? AND status = ?", AsyncTaskTypeChannelModelTest, AsyncTaskStatusSucceeded).
+					Find(&rows).Error; err != nil {
+					return err
+				}
+				for _, row := range rows {
+					status, message, ok := ResolveAsyncTaskBusinessOutcome(row.Type, row.Result)
+					if !ok || status == AsyncTaskStatusSucceeded {
+						continue
+					}
+					if err := tx.Model(&AsyncTask{}).
+						Where("id = ?", row.Id).
+						Updates(map[string]any{
+							"status":        status,
+							"error_message": strings.TrimSpace(message),
+						}).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

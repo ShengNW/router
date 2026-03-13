@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -132,6 +133,59 @@ func normalizeAsyncTaskRow(row *AsyncTask) {
 	}
 	if row.Status == "" {
 		row.Status = AsyncTaskStatusPending
+	}
+	applyAsyncTaskBusinessStatus(row)
+}
+
+type channelModelTestTaskResult struct {
+	Status    string `json:"status"`
+	Supported *bool  `json:"supported"`
+	Message   string `json:"message"`
+}
+
+func ResolveAsyncTaskBusinessOutcome(taskType string, result string) (string, string, bool) {
+	switch NormalizeAsyncTaskType(taskType) {
+	case AsyncTaskTypeChannelModelTest:
+		payload := strings.TrimSpace(result)
+		if payload == "" {
+			return "", "", false
+		}
+		parsed := channelModelTestTaskResult{}
+		if err := json.Unmarshal([]byte(payload), &parsed); err != nil {
+			return "", "", false
+		}
+		supported := parsed.Supported != nil && *parsed.Supported
+		status := NormalizeChannelTestStatus(parsed.Status)
+		if supported && status == ChannelTestStatusSupported {
+			return AsyncTaskStatusSucceeded, "", true
+		}
+		message := strings.TrimSpace(parsed.Message)
+		if message == "" {
+			message = "模型测试未通过"
+		}
+		return AsyncTaskStatusFailed, message, true
+	default:
+		return "", "", false
+	}
+}
+
+func applyAsyncTaskBusinessStatus(row *AsyncTask) {
+	if row == nil {
+		return
+	}
+	resolvedStatus, resolvedMessage, ok := ResolveAsyncTaskBusinessOutcome(row.Type, row.Result)
+	if !ok {
+		return
+	}
+	if NormalizeAsyncTaskStatus(row.Status) != AsyncTaskStatusSucceeded {
+		return
+	}
+	if resolvedStatus == AsyncTaskStatusSucceeded {
+		return
+	}
+	row.Status = resolvedStatus
+	if strings.TrimSpace(row.ErrorMessage) == "" {
+		row.ErrorMessage = resolvedMessage
 	}
 }
 

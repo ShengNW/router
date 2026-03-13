@@ -85,7 +85,7 @@ const TopUp = () => {
   const getTopupLogs = async () => {
     setLoadingLogs(true);
     try {
-      const res = await API.get('/api/v1/public/log/self/?page=1&type=1');
+      const res = await API.get('/api/v1/public/log?page=1&type=1');
       const { success, message, data } = res.data;
       if (success) {
         setTopupLogs(Array.isArray(data) ? data : []);

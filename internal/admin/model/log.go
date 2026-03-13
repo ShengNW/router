@@ -61,6 +61,14 @@ func GetUserLogs(userId string, logType int, startTimestamp int64, endTimestamp 
 	return mustLogRepo().GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, startIdx, num)
 }
 
+func GetLogByID(logID string) (*Log, error) {
+	return mustLogRepo().GetLogByID(logID)
+}
+
+func GetUserLogByID(userId string, logID string) (*Log, error) {
+	return mustLogRepo().GetUserLogByID(userId, logID)
+}
+
 func SearchAllLogs(keyword string) ([]*Log, error) {
 	return mustLogRepo().SearchAllLogs(keyword)
 }

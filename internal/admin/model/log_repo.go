@@ -9,6 +9,8 @@ type LogRepository struct {
 	RecordTestLog              func(ctx context.Context, log *Log)
 	GetAllLogs                 func(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel string) ([]*Log, error)
 	GetUserLogs                func(userId string, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int) ([]*Log, error)
+	GetLogByID                 func(logID string) (*Log, error)
+	GetUserLogByID             func(userId string, logID string) (*Log, error)
 	SearchAllLogs              func(keyword string) ([]*Log, error)
 	SearchUserLogs             func(userId string, keyword string) ([]*Log, error)
 	SumUsedQuota               func(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel string) int64

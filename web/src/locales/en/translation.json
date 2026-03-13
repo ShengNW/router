@@ -723,6 +723,34 @@
       "query": "Action",
       "submit": "Query",
       "refresh": "Refresh"
+    },
+    "messages": {
+      "load_failed": "Failed to load log detail"
+    },
+    "detail": {
+      "buttons": {
+        "back": "Back"
+      },
+      "sections": {
+        "basic": "Basic Info",
+        "content": "Detail Content"
+      },
+      "fields": {
+        "id": "Log ID",
+        "time": "Time",
+        "type": "Type",
+        "channel": "Channel",
+        "model": "Model",
+        "username": "Username",
+        "token_name": "Token Name",
+        "trace_id": "Trace ID",
+        "prompt_tokens": "Prompt Tokens",
+        "completion_tokens": "Completion Tokens",
+        "quota": "Quota",
+        "elapsed_time": "Elapsed Time",
+        "is_stream": "Stream Output",
+        "system_prompt_reset": "System Prompt Reset"
+      }
     }
   },
   "task": {

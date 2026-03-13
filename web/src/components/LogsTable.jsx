@@ -23,12 +23,13 @@ import { useTranslation } from 'react-i18next';
 
 import { ITEMS_PER_PAGE } from '../constants';
 import { renderColorLabel, renderQuota } from '../helpers/render';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 function renderTimestamp(timestamp, trace_id) {
   return (
     <code
-      onClick={async () => {
+      onClick={async (e) => {
+        e.stopPropagation();
         if (await copy(trace_id)) {
           showSuccess(`已复制 Trace ID：${trace_id}`);
         } else {
@@ -152,6 +153,8 @@ function renderFilterSummary(filterKey, inputs, t) {
 
 const LogsTable = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
@@ -284,7 +287,7 @@ const LogsTable = () => {
       if (isAdminUser) {
         url = `/api/v1/admin/log/?page=${normalizedPage}&type=${logType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}`;
       } else {
-        url = `/api/v1/public/log/self/?page=${normalizedPage}&type=${logType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
+        url = `/api/v1/public/log?page=${normalizedPage}&type=${logType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
       }
       const res = await API.get(url);
       const { success, message, data } = res.data;
@@ -382,6 +385,15 @@ const LogsTable = () => {
       return haystacks.some((item) => item.includes(keyword));
     });
   }, [logs, searchKeyword]);
+
+  const detailBasePath = isAdminUser ? '/admin/log' : '/workspace/log';
+  const tableColSpan = isAdminUser
+    ? showUserTokenQuota()
+      ? 9
+      : 4
+    : showUserTokenQuota()
+      ? 7
+      : 3;
 
   return (
     <>
@@ -594,7 +606,6 @@ const LogsTable = () => {
                 </Table.HeaderCell>
               </>
             )}
-            <Table.HeaderCell>{t('log.table.detail')}</Table.HeaderCell>
           </Table.Row>
         </Table.Header>
 
@@ -605,9 +616,19 @@ const LogsTable = () => {
               activePage * ITEMS_PER_PAGE
             )
             .map((log, idx) => {
-              if (log.deleted) return <></>;
+              if (log.deleted) return null;
               return (
-                <Table.Row key={log.id}>
+                <Table.Row
+                  key={log.id || idx}
+                  className='router-row-clickable'
+                  onClick={() =>
+                    log.id
+                      ? navigate(
+                          `${detailBasePath}/${log.id}${location.search || ''}`
+                        )
+                      : undefined
+                  }
+                >
                   <Table.Cell>
                     {renderTimestamp(log.created_at, log.trace_id)}
                   </Table.Cell>
@@ -619,6 +640,7 @@ const LogsTable = () => {
                           className='router-tag'
                           as={Link}
                           to={`/channel/detail/${log.channel}`}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {getLogChannelLabel(log)}
                         </Label>
@@ -641,6 +663,7 @@ const LogsTable = () => {
                               className='router-tag'
                               as={Link}
                               to={`/user/edit/${log.user_id}`}
+                              onClick={(e) => e.stopPropagation()}
                             >
                               {log.username}
                             </Label>
@@ -665,7 +688,6 @@ const LogsTable = () => {
                     </>
                   )}
 
-                  <Table.Cell>{renderDetail(log)}</Table.Cell>
                 </Table.Row>
               );
             })}
@@ -673,7 +695,7 @@ const LogsTable = () => {
 
         <Table.Footer>
           <Table.Row>
-            <Table.HeaderCell colSpan={'10'}>
+            <Table.HeaderCell colSpan={tableColSpan}>
               <div className='router-toolbar'>
                 <div className='router-toolbar-start'>
                   <Select

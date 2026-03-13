@@ -13,6 +13,14 @@ func GetUser(userId string, logType int, startTimestamp int64, endTimestamp int6
 	return logrepo.GetUser(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, startIdx, num)
 }
 
+func GetByID(logID string) (*model.Log, error) {
+	return logrepo.GetByID(logID)
+}
+
+func GetUserByID(userId string, logID string) (*model.Log, error) {
+	return logrepo.GetUserByID(userId, logID)
+}
+
 func SearchAll(keyword string) ([]*model.Log, error) {
 	return logrepo.SearchAll(keyword)
 }

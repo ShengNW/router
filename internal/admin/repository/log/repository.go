@@ -63,6 +63,8 @@ func init() {
 		RecordTestLog:              RecordTestLog,
 		GetAllLogs:                 GetAll,
 		GetUserLogs:                GetUser,
+		GetLogByID:                 GetByID,
+		GetUserLogByID:             GetUserByID,
 		SearchAllLogs:              SearchAll,
 		SearchUserLogs:             SearchUser,
 		SumUsedQuota:               SumUsedQuota,
@@ -183,8 +185,45 @@ func GetUser(userId string, logType int, startTimestamp int64, endTimestamp int6
 		tx = tx.Where("created_at <= ?", endTimestamp)
 	}
 	var logs []*model.Log
-	err := tx.Order("created_at desc").Limit(num).Offset(startIdx).Omit("id").Find(&logs).Error
-	return logs, err
+	err := tx.Order("created_at desc").Limit(num).Offset(startIdx).Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+	if err := hydrateLogsWithChannelNames(logs); err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+func GetByID(logID string) (*model.Log, error) {
+	logID = strings.TrimSpace(logID)
+	if logID == "" {
+		return nil, fmt.Errorf("日志不存在")
+	}
+	row := &model.Log{}
+	if err := model.LOG_DB.Where("id = ?", logID).First(row).Error; err != nil {
+		return nil, err
+	}
+	if err := hydrateLogsWithChannelNames([]*model.Log{row}); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+func GetUserByID(userId string, logID string) (*model.Log, error) {
+	userId = strings.TrimSpace(userId)
+	logID = strings.TrimSpace(logID)
+	if userId == "" || logID == "" {
+		return nil, fmt.Errorf("日志不存在")
+	}
+	row := &model.Log{}
+	if err := model.LOG_DB.Where("id = ? AND user_id = ?", logID, userId).First(row).Error; err != nil {
+		return nil, err
+	}
+	if err := hydrateLogsWithChannelNames([]*model.Log{row}); err != nil {
+		return nil, err
+	}
+	return row, nil
 }
 
 func SearchAll(keyword string) ([]*model.Log, error) {
@@ -201,8 +240,14 @@ func SearchAll(keyword string) ([]*model.Log, error) {
 
 func SearchUser(userId string, keyword string) ([]*model.Log, error) {
 	var logs []*model.Log
-	err := model.LOG_DB.Where("user_id = ? and type = ?", userId, keyword).Order("created_at desc").Limit(config.MaxRecentItems).Omit("id").Find(&logs).Error
-	return logs, err
+	err := model.LOG_DB.Where("user_id = ? and type = ?", userId, keyword).Order("created_at desc").Limit(config.MaxRecentItems).Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+	if err := hydrateLogsWithChannelNames(logs); err != nil {
+		return nil, err
+	}
+	return logs, nil
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel string) int64 {

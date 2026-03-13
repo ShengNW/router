@@ -96,9 +96,10 @@ func SetApiRouter(engine *gin.Engine) {
 		publicLogRoute := publicRouter.Group("/log")
 		publicLogRoute.Use(middleware.UserAuth())
 		{
-			publicLogRoute.GET("/self/stat", log.GetLogsSelfStat)
-			publicLogRoute.GET("/self", log.GetUserLogs)
-			publicLogRoute.GET("/self/search", log.SearchUserLogs)
+			publicLogRoute.GET("/stat", log.GetLogsSelfStat)
+			publicLogRoute.GET("", log.GetUserLogs)
+			publicLogRoute.GET("/search", log.SearchUserLogs)
+			publicLogRoute.GET("/:id", log.GetCurrentUserLog)
 		}
 
 		publicChannelRoute := publicRouter.Group("/channel")
@@ -255,6 +256,7 @@ func SetApiRouter(engine *gin.Engine) {
 			adminLogRoute.DELETE("/", log.DeleteHistoryLogs)
 			adminLogRoute.GET("/stat", log.GetLogsStat)
 			adminLogRoute.GET("/search", log.SearchAllLogs)
+			adminLogRoute.GET("/:id", log.GetLog)
 		}
 
 		adminGroupRoute := adminRouter.Group("/group")

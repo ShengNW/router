@@ -723,6 +723,34 @@
       "query": "操作",
       "submit": "查询",
       "refresh": "刷新"
+    },
+    "messages": {
+      "load_failed": "加载日志详情失败"
+    },
+    "detail": {
+      "buttons": {
+        "back": "返回"
+      },
+      "sections": {
+        "basic": "基础信息",
+        "content": "详情内容"
+      },
+      "fields": {
+        "id": "日志 ID",
+        "time": "时间",
+        "type": "类型",
+        "channel": "渠道",
+        "model": "模型",
+        "username": "用户名",
+        "token_name": "令牌名称",
+        "trace_id": "Trace ID",
+        "prompt_tokens": "提示词消耗",
+        "completion_tokens": "补全消耗",
+        "quota": "额度",
+        "elapsed_time": "耗时",
+        "is_stream": "流式输出",
+        "system_prompt_reset": "重置系统提示词"
+      }
     }
   },
   "task": {

@@ -30,6 +30,7 @@ import EditRedemption from './pages/Redemption/EditRedemption';
 import RedemptionDetail from './pages/Redemption/RedemptionDetail';
 import TopUp from './pages/TopUp';
 import Log from './pages/Log';
+import LogDetail from './pages/Log/Detail';
 import Chat from './pages/Chat';
 import Dashboard from './pages/Dashboard';
 import Providers from './pages/Providers';
@@ -254,6 +255,14 @@ function App() {
           }
         />
         <Route path='/workspace/log' element={<Log />} />
+        <Route
+          path='/workspace/log/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <LogDetail />
+            </Suspense>
+          }
+        />
         <Route path='/workspace/task' element={<Task />} />
         <Route
           path='/workspace/task/:id'
@@ -362,6 +371,14 @@ function App() {
         />
         <Route path='/admin/dashboard' element={<Dashboard />} />
         <Route path='/admin/log' element={<Log />} />
+        <Route
+          path='/admin/log/:id'
+          element={
+            <Suspense fallback={<Loading />}>
+              <LogDetail />
+            </Suspense>
+          }
+        />
         <Route path='/admin/task' element={<Task />} />
         <Route
           path='/admin/task/:id'

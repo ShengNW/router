@@ -75,7 +75,7 @@ func GetAllLogs(c *gin.Context) {
 // @Param model_name query string false "Model name"
 // @Success 200 {object} docs.UserLogListResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/log/self [get]
+// @Router /api/v1/public/log [get]
 func GetUserLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page < 1 {
@@ -99,6 +99,55 @@ func GetUserLogs(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    logs,
+	})
+	return
+}
+
+// GetLog godoc
+// @Summary Get log by ID (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Router /api/v1/admin/log/{id} [get]
+func GetLog(c *gin.Context) {
+	logID := c.Param("id")
+	logRow, err := logsvc.GetByID(logID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "日志不存在",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    logRow,
+	})
+	return
+}
+
+// GetCurrentUserLog godoc
+// @Summary Get current user log by ID
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Router /api/v1/public/log/{id} [get]
+func GetCurrentUserLog(c *gin.Context) {
+	logID := c.Param("id")
+	userId := c.GetString(ctxkey.Id)
+	logRow, err := logsvc.GetUserByID(userId, logID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "日志不存在",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    logRow,
 	})
 	return
 }
@@ -138,7 +187,7 @@ func SearchAllLogs(c *gin.Context) {
 // @Param keyword query string false "Keyword"
 // @Success 200 {object} docs.UserLogListResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/log/self/search [get]
+// @Router /api/v1/public/log/search [get]
 func SearchUserLogs(c *gin.Context) {
 	keyword := c.Query("keyword")
 	userId := c.GetString(ctxkey.Id)
@@ -207,7 +256,7 @@ func GetLogsStat(c *gin.Context) {
 // @Param channel query int false "Channel ID"
 // @Success 200 {object} docs.UserLogStatResponse
 // @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/log/self/stat [get]
+// @Router /api/v1/public/log/stat [get]
 func GetLogsSelfStat(c *gin.Context) {
 	username := c.GetString(ctxkey.Username)
 	logType, _ := strconv.Atoi(c.Query("type"))
