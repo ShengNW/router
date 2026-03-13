@@ -69,6 +69,55 @@ func TestBuildDefaultProviderCatalogSeeds_OpenAIIncludesGPTImage1ComplexPricing(
 	t.Fatalf("expected openai provider to exist")
 }
 
+func TestBuildDefaultProviderCatalogSeeds_OpenAIIncludesGPT51Pricing(t *testing.T) {
+	seeds := BuildDefaultProviderCatalogSeeds(1700000000)
+	expected := map[string]struct {
+		input  float64
+		output float64
+	}{
+		"gpt-5.1":            {input: 0.00125, output: 0.01},
+		"gpt-5.1-codex":      {input: 0.00125, output: 0.01},
+		"gpt-5.1-codex-max":  {input: 0.00125, output: 0.01},
+		"gpt-5.1-codex-mini": {input: 0.00025, output: 0.002},
+	}
+
+	for _, seed := range seeds {
+		if seed.Provider != "openai" {
+			continue
+		}
+		found := make(map[string]bool, len(expected))
+		for _, detail := range seed.ModelDetails {
+			want, ok := expected[detail.Model]
+			if !ok {
+				continue
+			}
+			if detail.Type != ProviderModelTypeText {
+				t.Fatalf("%s type=%q, want %q", detail.Model, detail.Type, ProviderModelTypeText)
+			}
+			if detail.InputPrice != want.input {
+				t.Fatalf("%s input_price=%v, want %v", detail.Model, detail.InputPrice, want.input)
+			}
+			if detail.OutputPrice != want.output {
+				t.Fatalf("%s output_price=%v, want %v", detail.Model, detail.OutputPrice, want.output)
+			}
+			if detail.PriceUnit != ProviderPriceUnitPer1KTokens {
+				t.Fatalf("%s price_unit=%q, want %q", detail.Model, detail.PriceUnit, ProviderPriceUnitPer1KTokens)
+			}
+			if detail.Currency != ProviderPriceCurrencyUSD {
+				t.Fatalf("%s currency=%q, want %q", detail.Model, detail.Currency, ProviderPriceCurrencyUSD)
+			}
+			found[detail.Model] = true
+		}
+		for modelName := range expected {
+			if !found[modelName] {
+				t.Fatalf("expected openai seed to include %s", modelName)
+			}
+		}
+		return
+	}
+	t.Fatalf("expected openai provider to exist")
+}
+
 func TestBuildDefaultProviderCatalogSeeds_ModelDetailsMeta(t *testing.T) {
 	seeds := BuildDefaultProviderCatalogSeeds(1700000000)
 	if len(seeds) == 0 {
