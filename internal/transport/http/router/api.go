@@ -72,6 +72,7 @@ func SetApiRouter(engine *gin.Engine) {
 				publicSelfRoute.GET("/dashboard", user.GetUserDashboard)
 				publicSelfRoute.GET("/spend/overview", user.GetUserSpendOverview)
 				publicSelfRoute.GET("/available_models", admin.GetUserAvailableModels)
+				publicSelfRoute.GET("/tasks/options", task.GetCurrentUserTaskFilterOptions)
 				publicSelfRoute.GET("/tasks", task.GetCurrentUserTasks)
 				publicSelfRoute.GET("/tasks/:id", task.GetCurrentUserTask)
 				publicSelfRoute.PUT("/self", user.UpdateSelf)
@@ -182,6 +183,7 @@ func SetApiRouter(engine *gin.Engine) {
 		adminUserRoute := adminRouter.Group("/user")
 		adminUserRoute.Use(middleware.AdminAuth())
 		{
+			adminUserRoute.GET("/tasks/options", task.GetAdminUserTaskFilterOptions)
 			adminUserRoute.GET("/tasks", task.GetUserTasks)
 			adminUserRoute.GET("/tasks/:id", task.GetUserTask)
 			adminUserRoute.GET("/", user.GetAllUsers)
@@ -229,6 +231,7 @@ func SetApiRouter(engine *gin.Engine) {
 		adminTasksRoute := adminRouter.Group("/tasks")
 		adminTasksRoute.Use(middleware.AdminAuth())
 		{
+			adminTasksRoute.GET("/options", task.GetTaskFilterOptions)
 			adminTasksRoute.GET("/", task.GetTasks)
 			adminTasksRoute.GET("/:id", task.GetTask)
 			adminTasksRoute.POST("/:id/cancel", task.CancelTask)

@@ -217,7 +217,6 @@ const RedemptionsTable = () => {
             className='router-page-button'
             as={Link}
             to='/redemption/add'
-            loading={loading}
           >
             {t('redemption.buttons.add')}
           </Button>

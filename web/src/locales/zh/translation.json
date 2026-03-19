@@ -773,6 +773,10 @@
       "user": "用户任务"
     },
     "filters": {
+      "add": "添加条件",
+      "none": "未添加条件",
+      "not_set": "未设置",
+      "value_required": "请先设置条件值",
       "type_all": "全部类型",
       "status_all": "全部状态",
       "channel_id": "筛选渠道 ID",
@@ -808,6 +812,7 @@
     },
     "buttons": {
       "refresh": "刷新",
+      "query": "查询",
       "model_tests": "测试任务",
       "running": "运行中",
       "view": "查看",

@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
+  Dropdown,
   Form,
   Label,
   Menu,
   Pagination,
-  Select,
+  Popup,
   Table,
 } from 'semantic-ui-react';
 import { useTranslation } from 'react-i18next';
@@ -64,6 +65,15 @@ const getTaskEndpoint = (isAdminPage, scope) => {
   return '/api/v1/public/user/tasks';
 };
 
+const getTaskOptionsEndpoint = (isAdminPage, scope) => {
+  if (isAdminPage) {
+    return scope === 'user'
+      ? '/api/v1/admin/user/tasks/options'
+      : '/api/v1/admin/tasks/options';
+  }
+  return '/api/v1/public/user/tasks/options';
+};
+
 const getTaskId = (item) => item?.id || item?.task_id || '';
 
 const getTaskTypeOptions = (t, scope) => {
@@ -105,6 +115,17 @@ const getTaskStatusOptions = (t) => [
   { key: 'canceled', value: 'canceled', text: t('task.status.canceled') },
 ];
 
+const renderTaskFilterSummary = (filterKey, filters, t, optionResolvers = {}) => {
+  const value = (filters?.[filterKey] || '').toString().trim();
+  if (value === '') {
+    return t('task.filters.not_set');
+  }
+  if (typeof optionResolvers[filterKey] === 'function') {
+    return optionResolvers[filterKey](value) || value;
+  }
+  return value;
+};
+
 const Task = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -134,6 +155,33 @@ const Task = () => {
     model: (initialQuery.get('model') || '').trim(),
     user_keyword: (initialQuery.get('user_keyword') || '').trim(),
   }));
+  const [activeFilterKeys, setActiveFilterKeys] = useState(() => {
+    const keys = [];
+    if ((initialQuery.get('type') || '').trim() !== '') {
+      keys.push('type');
+    }
+    if ((initialQuery.get('status') || '').trim() !== '') {
+      keys.push('status');
+    }
+    if ((initialQuery.get('channel_id') || '').trim() !== '') {
+      keys.push('channel_id');
+    }
+    if ((initialQuery.get('model') || '').trim() !== '') {
+      keys.push('model');
+    }
+    if ((initialQuery.get('user_keyword') || '').trim() !== '') {
+      keys.push('user_keyword');
+    }
+    return keys;
+  });
+  const [addFilterPopupOpen, setAddFilterPopupOpen] = useState(false);
+  const [draftFilterKey, setDraftFilterKey] = useState('');
+  const [draftFilterValue, setDraftFilterValue] = useState('');
+  const [filterOptions, setFilterOptions] = useState({
+    models: [],
+    channels: [],
+    users: [],
+  });
 
   useEffect(() => {
     if (!isAdminPage) {
@@ -156,21 +204,210 @@ const Task = () => {
     () => getTaskEndpoint(isAdminPage, scope),
     [isAdminPage, scope],
   );
+  const optionsEndpoint = useMemo(
+    () => getTaskOptionsEndpoint(isAdminPage, scope),
+    [isAdminPage, scope],
+  );
+  const conditionalFilterConfig = useMemo(() => {
+    const items = [
+      {
+        key: 'type',
+        label: t('task.table.type'),
+        type: 'select',
+        options: taskTypeOptions.filter((item) => (item.value || '') !== ''),
+      },
+      {
+        key: 'status',
+        label: t('task.table.status'),
+        type: 'select',
+        options: taskStatusOptions.filter((item) => (item.value || '') !== ''),
+      },
+      {
+        key: 'model',
+        label: t('task.table.model'),
+        type: filterOptions.models.length > 0 ? 'select' : 'text',
+        options: filterOptions.models.map((item) => ({
+          key: item.value,
+          text: item.label,
+          value: item.value,
+        })),
+        placeholder: t('task.filters.model'),
+      },
+    ];
+    if (isAdminPage) {
+      items.push({
+        key: 'channel_id',
+        label: t('task.table.channel'),
+        type: filterOptions.channels.length > 0 ? 'select' : 'text',
+        options: filterOptions.channels.map((item) => ({
+          key: item.value,
+          text: item.label,
+          value: item.value,
+        })),
+        placeholder: t('task.filters.channel_id'),
+      });
+    }
+    if (isAdminPage && isUserScope) {
+      items.push({
+        key: 'user_keyword',
+        label: t('task.table.user'),
+        type: filterOptions.users.length > 0 ? 'select' : 'text',
+        options: filterOptions.users.map((item) => ({
+          key: item.value,
+          text: item.label,
+          value: item.value,
+        })),
+        placeholder: t('task.filters.user_keyword'),
+      });
+    }
+    return items;
+  }, [
+    filterOptions.channels,
+    filterOptions.models,
+    filterOptions.users,
+    isAdminPage,
+    isUserScope,
+    t,
+    taskStatusOptions,
+    taskTypeOptions,
+  ]);
+  const conditionalFilterOptions = useMemo(
+    () =>
+      conditionalFilterConfig.map((item) => ({
+        key: item.key,
+        text: item.label,
+        value: item.key,
+      })),
+    [conditionalFilterConfig],
+  );
+  const visibleFilterConfig = useMemo(
+    () =>
+      conditionalFilterConfig.filter((item) =>
+        activeFilterKeys.includes(item.key),
+      ),
+    [activeFilterKeys, conditionalFilterConfig],
+  );
+  const availableConditionalFilterOptions = useMemo(
+    () =>
+      conditionalFilterOptions.filter(
+        (item) => !activeFilterKeys.includes(item.value),
+      ),
+    [activeFilterKeys, conditionalFilterOptions],
+  );
+
+  const closeFilterDraft = useCallback(() => {
+    setAddFilterPopupOpen(false);
+    setDraftFilterKey('');
+    setDraftFilterValue('');
+  }, []);
+
+  const openFilterDraft = useCallback(
+    (filterKey) => {
+      const config = conditionalFilterConfig.find((item) => item.key === filterKey);
+      if (!config) {
+        return;
+      }
+      setDraftFilterKey(filterKey);
+      setDraftFilterValue((filters?.[filterKey] || '').toString());
+      setAddFilterPopupOpen(true);
+    },
+    [conditionalFilterConfig, filters],
+  );
+
+  const applyFilterDraft = useCallback(() => {
+    const nextFilterKey = (draftFilterKey || '').trim();
+    if (nextFilterKey === '') {
+      return;
+    }
+    const nextValue = (draftFilterValue || '').toString().trim();
+    if (nextValue === '') {
+      showError(t('task.filters.value_required'));
+      return;
+    }
+    setFilters((prev) => ({
+      ...prev,
+      [nextFilterKey]: nextValue,
+    }));
+    setActiveFilterKeys((prev) =>
+      prev.includes(nextFilterKey) ? prev : [...prev, nextFilterKey],
+    );
+    setPage(1);
+    closeFilterDraft();
+  }, [closeFilterDraft, draftFilterKey, draftFilterValue, t]);
+
+  const removeConditionalFilter = useCallback((filterKey) => {
+    setActiveFilterKeys((prev) => prev.filter((item) => item !== filterKey));
+    setFilters((prev) => ({
+      ...prev,
+      [filterKey]: '',
+    }));
+    setPage(1);
+  }, []);
+
+  const resolveTypeLabel = useCallback(
+    (value) =>
+      taskTypeOptions.find((item) => item.value === value)?.text || value,
+    [taskTypeOptions],
+  );
+
+  const resolveStatusLabel = useCallback(
+    (value) =>
+      taskStatusOptions.find((item) => item.value === value)?.text || value,
+    [taskStatusOptions],
+  );
+
+  const loadFilterOptions = useCallback(async () => {
+    setFilterOptions({
+      models: [],
+      channels: [],
+      users: [],
+    });
+    try {
+      const res = await API.get(optionsEndpoint);
+      const { success, message, data } = res.data || {};
+      if (!success) {
+        setFilterOptions({
+          models: [],
+          channels: [],
+          users: [],
+        });
+        showError(message || t('task.messages.load_failed'));
+        return;
+      }
+      setFilterOptions({
+        models: Array.isArray(data?.models) ? data.models : [],
+        channels: Array.isArray(data?.channels) ? data.channels : [],
+        users: Array.isArray(data?.users) ? data.users : [],
+      });
+    } catch (error) {
+      setFilterOptions({
+        models: [],
+        channels: [],
+        users: [],
+      });
+      showError(error?.message || t('task.messages.load_failed'));
+    }
+  }, [optionsEndpoint, t]);
 
   const loadTasks = useCallback(
-    async (targetPage = page) => {
+    async (targetPage = 1) => {
       setLoading(true);
       try {
+        const enabledFilters = new Set(activeFilterKeys);
         const res = await API.get(endpoint, {
           params: {
             page: targetPage,
             page_size: PAGE_SIZE,
-            type: filters.type,
-            status: filters.status,
-            channel_id: filters.channel_id.trim(),
-            model: filters.model.trim(),
+            type: enabledFilters.has('type') ? filters.type : '',
+            status: enabledFilters.has('status') ? filters.status : '',
+            channel_id: enabledFilters.has('channel_id')
+              ? filters.channel_id.trim()
+              : '',
+            model: enabledFilters.has('model') ? filters.model.trim() : '',
             user_keyword:
-              isAdminPage && isUserScope ? filters.user_keyword.trim() : '',
+              isAdminPage && isUserScope && enabledFilters.has('user_keyword')
+                ? filters.user_keyword.trim()
+                : '',
           },
         });
         const { success, message, data } = res.data || {};
@@ -188,13 +425,13 @@ const Task = () => {
       }
     },
     [
+      activeFilterKeys,
       endpoint,
       filters.channel_id,
       filters.model,
       filters.status,
       filters.type,
       filters.user_keyword,
-      page,
       t,
     ],
   );
@@ -204,6 +441,10 @@ const Task = () => {
   }, [loadTasks]);
 
   useEffect(() => {
+    loadFilterOptions().then();
+  }, [loadFilterOptions]);
+
+  useEffect(() => {
     const query = new URLSearchParams();
     if (isAdminPage && scope !== 'admin') {
       query.set('scope', scope);
@@ -211,19 +452,28 @@ const Task = () => {
     if (page > 1) {
       query.set('page', String(page));
     }
-    if (filters.type) {
+    if (activeFilterKeys.includes('type') && filters.type) {
       query.set('type', filters.type);
     }
-    if (filters.status) {
+    if (activeFilterKeys.includes('status') && filters.status) {
       query.set('status', filters.status);
     }
-    if (filters.model.trim()) {
+    if (activeFilterKeys.includes('model') && filters.model.trim()) {
       query.set('model', filters.model.trim());
     }
-    if (isAdminPage && isUserScope && filters.user_keyword.trim()) {
+    if (
+      isAdminPage &&
+      isUserScope &&
+      activeFilterKeys.includes('user_keyword') &&
+      filters.user_keyword.trim()
+    ) {
       query.set('user_keyword', filters.user_keyword.trim());
     }
-    if (isAdminPage && filters.channel_id.trim()) {
+    if (
+      isAdminPage &&
+      activeFilterKeys.includes('channel_id') &&
+      filters.channel_id.trim()
+    ) {
       query.set('channel_id', filters.channel_id.trim());
     }
     const nextSearch = query.toString();
@@ -235,6 +485,7 @@ const Task = () => {
       { replace: true },
     );
   }, [
+    activeFilterKeys,
     filters.channel_id,
     filters.model,
     filters.status,
@@ -246,6 +497,60 @@ const Task = () => {
     navigate,
     page,
     scope,
+  ]);
+
+  useEffect(() => {
+    setActiveFilterKeys((prev) =>
+      prev.filter((item) => (filters?.[item] || '').toString().trim() !== ''),
+    );
+  }, [
+    filters.channel_id,
+    filters.model,
+    filters.status,
+    filters.type,
+    filters.user_keyword,
+  ]);
+
+  useEffect(() => {
+    const allowedFilterKeys = new Set(
+      conditionalFilterConfig.map((item) => item.key),
+    );
+    setActiveFilterKeys((prev) =>
+      prev.filter((item) => allowedFilterKeys.has(item)),
+    );
+    if (!allowedFilterKeys.has('user_keyword') && filters.user_keyword !== '') {
+      setFilters((prev) => ({
+        ...prev,
+        user_keyword: '',
+      }));
+    }
+    if (!allowedFilterKeys.has('channel_id') && filters.channel_id !== '') {
+      setFilters((prev) => ({
+        ...prev,
+        channel_id: '',
+      }));
+    }
+    if (
+      filters.type !== '' &&
+      !taskTypeOptions.some((item) => item.value === filters.type)
+    ) {
+      setFilters((prev) => ({
+        ...prev,
+        type: '',
+      }));
+      setActiveFilterKeys((prev) => prev.filter((item) => item !== 'type'));
+    }
+    if (draftFilterKey !== '' && !allowedFilterKeys.has(draftFilterKey)) {
+      closeFilterDraft();
+    }
+  }, [
+    closeFilterDraft,
+    conditionalFilterConfig,
+    draftFilterKey,
+    filters.channel_id,
+    filters.type,
+    filters.user_keyword,
+    taskTypeOptions,
   ]);
 
   useEffect(() => {
@@ -293,6 +598,34 @@ const Task = () => {
   };
 
   const detailBasePath = isAdminPage ? '/admin/task' : '/workspace/task';
+  const resolveFilterOptionLabel = useCallback(
+    (filterKey, value) => {
+      const normalizedValue = (value || '').toString().trim();
+      if (normalizedValue === '') {
+        return '';
+      }
+      if (filterKey === 'model') {
+        return (
+          filterOptions.models.find((item) => item.value === normalizedValue)
+            ?.label || normalizedValue
+        );
+      }
+      if (filterKey === 'channel_id') {
+        return (
+          filterOptions.channels.find((item) => item.value === normalizedValue)
+            ?.label || normalizedValue
+        );
+      }
+      if (filterKey === 'user_keyword') {
+        return (
+          filterOptions.users.find((item) => item.value === normalizedValue)
+            ?.label || normalizedValue
+        );
+      }
+      return normalizedValue;
+    },
+    [filterOptions.channels, filterOptions.models, filterOptions.users],
+  );
 
   return (
     <div className='dashboard-container'>
@@ -321,76 +654,159 @@ const Task = () => {
             </Menu>
           ) : null}
 
-          <div className='router-toolbar router-block-gap-sm'>
-            <div className='router-toolbar-start'>
+          <Form className='router-toolbar router-log-toolbar router-block-gap-sm'>
+            <div className='router-toolbar-start router-log-toolbar-start'>
+              <Popup
+                open={addFilterPopupOpen}
+                on='click'
+                position='bottom left'
+                onClose={closeFilterDraft}
+                trigger={
+                  <Button
+                    type='button'
+                    className='router-page-button'
+                    disabled={availableConditionalFilterOptions.length === 0}
+                    onClick={() => setAddFilterPopupOpen(true)}
+                  >
+                    {t('task.filters.add')}
+                  </Button>
+                }
+                content={
+                  <div className='router-log-filter-picker'>
+                    <div className='router-log-filter-picker-options'>
+                      {availableConditionalFilterOptions.map((item) => (
+                        <Button
+                          key={item.value}
+                          type='button'
+                          size='mini'
+                          className='router-inline-button'
+                          primary={draftFilterKey === item.value}
+                          onClick={() => openFilterDraft(item.value)}
+                        >
+                          {item.text}
+                        </Button>
+                      ))}
+                    </div>
+                    {draftFilterKey !== '' && (
+                      <div className='router-log-filter-editor'>
+                        <div className='router-log-filter-editor-title'>
+                          {
+                            conditionalFilterConfig.find(
+                              (item) => item.key === draftFilterKey,
+                            )?.label
+                          }
+                        </div>
+                        {conditionalFilterConfig.find(
+                          (item) => item.key === draftFilterKey,
+                        )?.type === 'select' ? (
+                          <Dropdown
+                            className='router-section-dropdown router-log-filter-select'
+                            fluid
+                            search
+                            selection
+                            clearable
+                            options={
+                              conditionalFilterConfig.find(
+                                (item) => item.key === draftFilterKey,
+                              )?.options || []
+                            }
+                            value={draftFilterValue}
+                            onChange={(e, { value }) =>
+                              setDraftFilterValue(value ? String(value) : '')
+                            }
+                          />
+                        ) : (
+                          <input
+                            className='router-log-filter-editor-input'
+                            type='text'
+                            value={draftFilterValue}
+                            placeholder={
+                              conditionalFilterConfig.find(
+                                (item) => item.key === draftFilterKey,
+                              )?.placeholder || ''
+                            }
+                            onChange={(e) =>
+                              setDraftFilterValue(e.target.value)
+                            }
+                          />
+                        )}
+                        <div className='router-log-filter-editor-actions'>
+                          <Button
+                            type='button'
+                            size='mini'
+                            className='router-inline-button'
+                            onClick={closeFilterDraft}
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                          <Button
+                            type='button'
+                            size='mini'
+                            className='router-inline-button'
+                            primary
+                            onClick={applyFilterDraft}
+                          >
+                            {t('common.confirm')}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+            </div>
+            <div className='router-toolbar-end router-log-query-wrap'>
+              <div className='router-log-query-box router-log-query-box-inline'>
+                <div className='router-log-query-fields'>
+                  {visibleFilterConfig.length === 0 ? (
+                    <div className='router-log-filter-chip router-log-filter-chip-static'>
+                      <span className='router-log-filter-chip-label'>
+                        {t('task.filters.none')}
+                      </span>
+                    </div>
+                  ) : (
+                    visibleFilterConfig.map((item) => (
+                      <div
+                        key={item.key}
+                        className='router-log-filter-chip router-log-filter-chip-static'
+                      >
+                        <span className='router-log-filter-chip-label'>
+                          {item.label}
+                        </span>
+                        <span className='router-log-filter-chip-value'>
+                          {renderTaskFilterSummary(item.key, filters, t, {
+                            type: resolveTypeLabel,
+                            status: resolveStatusLabel,
+                            model: (value) =>
+                              resolveFilterOptionLabel('model', value),
+                            channel_id: (value) =>
+                              resolveFilterOptionLabel('channel_id', value),
+                            user_keyword: (value) =>
+                              resolveFilterOptionLabel('user_keyword', value),
+                          })}
+                        </span>
+                        <button
+                          type='button'
+                          className='router-log-filter-chip-remove'
+                          onClick={() => removeConditionalFilter(item.key)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
               <Button
-                className='router-page-button'
+                type='button'
+                className='router-page-button router-log-query-button'
                 onClick={() => loadTasks(page)}
                 loading={loading}
               >
-                {t('task.buttons.refresh')}
+                {t('task.buttons.query')}
               </Button>
             </div>
-            <div className='router-toolbar-end'>
-              <Form>
-                <Form.Group widths='equal'>
-                  {isAdminPage ? (
-                    <Form.Input
-                      className='router-section-input'
-                      placeholder={t('task.filters.channel_id')}
-                      value={filters.channel_id}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          channel_id: e.target.value,
-                        }))
-                      }
-                    />
-                  ) : null}
-                  {isAdminPage && isUserScope ? (
-                    <Form.Input
-                      className='router-section-input'
-                      placeholder={t('task.filters.user_keyword')}
-                      value={filters.user_keyword}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          user_keyword: e.target.value,
-                        }))
-                      }
-                    />
-                  ) : null}
-                  <Form.Input
-                    className='router-section-input'
-                    placeholder={t('task.filters.model')}
-                    value={filters.model}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        model: e.target.value,
-                      }))
-                    }
-                  />
-                  <Select
-                    className='router-section-dropdown'
-                    options={taskTypeOptions}
-                    value={filters.type}
-                    onChange={(e, { value }) =>
-                      setFilters((prev) => ({ ...prev, type: value || '' }))
-                    }
-                  />
-                  <Select
-                    className='router-section-dropdown'
-                    options={taskStatusOptions}
-                    value={filters.status}
-                    onChange={(e, { value }) =>
-                      setFilters((prev) => ({ ...prev, status: value || '' }))
-                    }
-                  />
-                </Form.Group>
-              </Form>
-            </div>
-          </div>
+          </Form>
 
           <Table basic='very' compact className='router-list-table'>
             <Table.Header>

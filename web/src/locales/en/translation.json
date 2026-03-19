@@ -773,6 +773,10 @@
       "user": "User Tasks"
     },
     "filters": {
+      "add": "Add Filter",
+      "none": "No filters",
+      "not_set": "Not set",
+      "value_required": "Please set a filter value first",
       "type_all": "All types",
       "status_all": "All statuses",
       "channel_id": "Filter by channel ID",
@@ -808,6 +812,7 @@
     },
     "buttons": {
       "refresh": "Refresh",
+      "query": "Query",
       "model_tests": "Test Tasks",
       "running": "Running",
       "view": "View",
