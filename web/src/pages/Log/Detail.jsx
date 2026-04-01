@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Label } from 'semantic-ui-react';
+import { Breadcrumb, Card, Label } from 'semantic-ui-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { API, showError, timestamp2string } from '../../helpers';
@@ -139,25 +139,23 @@ const LogDetail = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header router-page-title'>
-            {t('log.detail.title')}
-          </Card.Header>
-          <div className='router-toolbar router-block-gap-sm'>
-            <div className='router-toolbar-start'>
-              <Button
-                type='button'
-                className='router-page-button'
-                onClick={() => navigate(listPath)}
-              >
-                {t('log.detail.buttons.back')}
-              </Button>
+          <div className='router-entity-detail-page'>
+            <div className='router-entity-detail-breadcrumb'>
+              <Breadcrumb size='small'>
+                <Breadcrumb.Section link onClick={() => navigate(listPath)}>
+                  {t('header.log')}
+                </Breadcrumb.Section>
+                <Breadcrumb.Divider icon='right chevron' />
+                <Breadcrumb.Section active>
+                  {renderText(log?.id || id)}
+                </Breadcrumb.Section>
+              </Breadcrumb>
             </div>
-          </div>
 
-          {loading ? (
-            <div className='router-empty-cell'>{t('common.loading')}</div>
-          ) : (
-            <>
+            {loading ? (
+              <div className='router-empty-cell'>{t('common.loading')}</div>
+            ) : (
+              <>
               <div className='router-detail-section'>
                 <div className='router-detail-section-title'>
                   {t('log.detail.sections.basic')}
@@ -196,7 +194,7 @@ const LogDetail = () => {
                             basic
                             className='router-tag'
                             as={Link}
-                            to={`/channel/detail/${log.channel}`}
+                            to={`/admin/channel/detail/${log.channel}`}
                             state={{ from: currentPagePath }}
                           >
                             {log?.channel_name || log?.channel}
@@ -434,8 +432,9 @@ const LogDetail = () => {
                 </div>
                 <pre className='router-detail-pre'>{renderText(log?.content)}</pre>
               </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </Card.Content>
       </Card>
     </div>

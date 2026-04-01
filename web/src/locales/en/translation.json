@@ -231,6 +231,7 @@
         "title_create": "Add Provider",
         "title_edit": "Edit Provider",
         "title_detail": "Provider Details",
+        "detail_basic_title": "Basic Information",
         "delete_title": "Confirm Delete Provider",
         "delete_content": "Are you sure you want to delete provider {{provider}}?",
         "delete_confirm": "Delete",
@@ -679,6 +680,10 @@
     },
     "detail": {
       "title": "Token Detail",
+      "sections": {
+        "models": "Model Scope",
+        "limits": "Limits"
+      },
       "buttons": {
         "back": "Back"
       }
@@ -744,8 +749,11 @@
     "loading": "Loading...",
     "no_data": "No data",
     "download": "Download",
+    "basic_info": "Basic Information",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "edit": "Edit",
+    "save": "Save",
     "unlimited": "Unlimited",
     "quota": {
       "display": "Equivalent: ${{amount}}",

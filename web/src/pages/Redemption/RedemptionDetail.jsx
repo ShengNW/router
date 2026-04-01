@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Form, Label } from 'semantic-ui-react';
+import { Breadcrumb, Button, Card, Form, Header, Label } from 'semantic-ui-react';
 import {
   useLocation,
   useNavigate,
@@ -160,127 +160,136 @@ const RedemptionDetail = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
-          <Card.Header className='header router-page-title'>
-            {t('redemption.detail.title')}
-          </Card.Header>
-          <div className='router-toolbar router-block-gap-sm'>
-            <div className='router-toolbar-start'>
-              {isEditing ? (
-                <>
-                  <Button
-                    className='router-page-button'
-                    onClick={handleCancelEdit}
-                    disabled={saving}
-                  >
-                    {t('redemption.edit.buttons.cancel')}
-                  </Button>
-                  <Button
-                    className='router-page-button'
-                    primary
-                    loading={saving}
-                    disabled={saving}
-                    onClick={submitEdit}
-                  >
-                    {t('redemption.edit.buttons.submit')}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button className='router-page-button' onClick={handleBack}>
-                    {t('redemption.detail.buttons.back')}
-                  </Button>
-                  <Button
-                    className='router-page-button'
-                    primary
-                    onClick={() => setEditMode(true)}
-                  >
-                    {t('redemption.buttons.edit')}
-                  </Button>
-                </>
-              )}
+          <div className='router-entity-detail-page'>
+            <div className='router-entity-detail-breadcrumb'>
+              <Breadcrumb size='small'>
+                <Breadcrumb.Section link onClick={handleBack}>
+                  {t('header.redemption')}
+                </Breadcrumb.Section>
+                <Breadcrumb.Divider icon='right chevron' />
+                <Breadcrumb.Section active>
+                  {redemption?.name || redemption?.code || id}
+                </Breadcrumb.Section>
+              </Breadcrumb>
             </div>
-            <div className='router-toolbar-end'>
-              <div className='router-action-group'>
-                {redemption ? renderStatus(redemption.status, t) : null}
-              </div>
-            </div>
-          </div>
 
-          <Form loading={loading}>
-            <Form.Group widths='equal'>
-              {isEditing ? (
-                <Form.Input
-                  className='router-section-input'
-                  label={t('redemption.edit.name')}
-                  name='name'
-                  value={inputs.name}
-                  placeholder={t('redemption.edit.name_placeholder')}
-                  onChange={handleInputChange}
-                />
-              ) : (
-                <Form.Input
-                  className='router-section-input'
-                  label={t('redemption.table.name')}
-                  value={redemption?.name || t('redemption.table.no_name')}
-                  readOnly
-                />
-              )}
-              <Form.Input
-                className='router-section-input'
-                label={t('redemption.detail.code')}
-                value={redemption?.code || ''}
-                readOnly
-              />
-            </Form.Group>
-            <Form.Group widths='equal'>
-              {isEditing ? (
-                <Form.Input
-                  className='router-section-input'
-                  label={`${t('redemption.edit.quota')}${renderQuotaWithPrompt(inputs.quota, t)}`}
-                  name='quota'
-                  type='number'
-                  value={inputs.quota}
-                  placeholder={t('redemption.edit.quota_placeholder')}
-                  onChange={handleInputChange}
-                />
-              ) : (
-                <Form.Input
-                  className='router-section-input'
-                  label={t('redemption.table.quota')}
-                  value={redemption ? formatYYCValue(redemption.yyc_value ?? redemption.quota) : ''}
-                  readOnly
-                />
-              )}
-              <Form.Input
-                className='router-section-input'
-                label={t('redemption.detail.redeemed_by')}
-                value={redeemedByValue}
-                readOnly
-              />
-            </Form.Group>
-            <Form.Group widths='equal'>
-              <Form.Input
-                className='router-section-input'
-                label={t('redemption.table.created_time')}
-                value={
-                  redemption?.created_time
-                    ? timestamp2string(redemption.created_time)
-                    : ''
-                }
-                readOnly
-              />
-              <Form.Input
-                className='router-section-input'
-                label={t('redemption.table.redeemed_time')}
-                value={
-                  redemption?.redeemed_time
-                    ? timestamp2string(redemption.redeemed_time)
-                    : t('redemption.table.not_redeemed')
-                }
-                readOnly
-              />
-            </Form.Group>
-          </Form>
+            <section className='router-entity-detail-section'>
+              <div className='router-entity-detail-section-header'>
+                <div className='router-toolbar-start'>
+                  <Header as='h3' className='router-entity-detail-section-title'>
+                    {t('common.basic_info')}
+                  </Header>
+                  {redemption ? renderStatus(redemption.status, t) : null}
+                </div>
+                <div className='router-toolbar-start'>
+                  {isEditing ? (
+                    <>
+                      <Button
+                        className='router-page-button'
+                        onClick={handleCancelEdit}
+                        disabled={saving}
+                      >
+                        {t('redemption.edit.buttons.cancel')}
+                      </Button>
+                      <Button
+                        className='router-page-button'
+                        primary
+                        loading={saving}
+                        disabled={saving}
+                        onClick={submitEdit}
+                      >
+                        {t('redemption.edit.buttons.submit')}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      className='router-page-button'
+                      primary
+                      onClick={() => setEditMode(true)}
+                    >
+                      {t('redemption.buttons.edit')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <Form loading={loading}>
+                <Form.Group widths='equal'>
+                  {isEditing ? (
+                    <Form.Input
+                      className='router-section-input'
+                      label={t('redemption.edit.name')}
+                      name='name'
+                      value={inputs.name}
+                      placeholder={t('redemption.edit.name_placeholder')}
+                      onChange={handleInputChange}
+                    />
+                  ) : (
+                    <Form.Input
+                      className='router-section-input'
+                      label={t('redemption.table.name')}
+                      value={redemption?.name || t('redemption.table.no_name')}
+                      readOnly
+                    />
+                  )}
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('redemption.detail.code')}
+                    value={redemption?.code || ''}
+                    readOnly
+                  />
+                </Form.Group>
+                <Form.Group widths='equal'>
+                  {isEditing ? (
+                    <Form.Input
+                      className='router-section-input'
+                      label={`${t('redemption.edit.quota')}${renderQuotaWithPrompt(inputs.quota, t)}`}
+                      name='quota'
+                      type='number'
+                      value={inputs.quota}
+                      placeholder={t('redemption.edit.quota_placeholder')}
+                      onChange={handleInputChange}
+                    />
+                  ) : (
+                    <Form.Input
+                      className='router-section-input'
+                      label={t('redemption.table.quota')}
+                      value={redemption ? formatYYCValue(redemption.yyc_value ?? redemption.quota) : ''}
+                      readOnly
+                    />
+                  )}
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('redemption.detail.redeemed_by')}
+                    value={redeemedByValue}
+                    readOnly
+                  />
+                </Form.Group>
+                <Form.Group widths='equal'>
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('redemption.table.created_time')}
+                    value={
+                      redemption?.created_time
+                        ? timestamp2string(redemption.created_time)
+                        : ''
+                    }
+                    readOnly
+                  />
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('redemption.table.redeemed_time')}
+                    value={
+                      redemption?.redeemed_time
+                        ? timestamp2string(redemption.redeemed_time)
+                        : t('redemption.table.not_redeemed')
+                    }
+                    readOnly
+                  />
+                </Form.Group>
+              </Form>
+            </section>
+          </div>
         </Card.Content>
       </Card>
     </div>

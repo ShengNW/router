@@ -231,6 +231,7 @@
         "title_create": "新增供应商",
         "title_edit": "编辑供应商",
         "title_detail": "供应商详情",
+        "detail_basic_title": "基础信息",
         "delete_title": "确认删除供应商",
         "delete_content": "确定要删除供应商 {{provider}} 吗？",
         "delete_confirm": "确认删除",
@@ -679,6 +680,10 @@
     },
     "detail": {
       "title": "令牌详情",
+      "sections": {
+        "models": "模型范围",
+        "limits": "限制设置"
+      },
       "buttons": {
         "back": "返回"
       }
@@ -744,8 +749,11 @@
     "loading": "加载中...",
     "no_data": "暂无数据",
     "download": "下载",
+    "basic_info": "基础信息",
     "cancel": "取消",
     "confirm": "确认",
+    "edit": "编辑",
+    "save": "保存",
     "unlimited": "不限额",
     "quota": {
       "display": "等价金额：${{amount}}",

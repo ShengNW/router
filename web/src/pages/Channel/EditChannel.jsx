@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Breadcrumb,
   Button,
   Card,
   Checkbox,
@@ -3606,52 +3607,16 @@ const EditChannel = () => {
       <Card fluid className='chart-card'>
         <Card.Content>
           {isDetailMode && (
-            <Card.Header className='header router-page-title'>
-              {t('channel.edit.title_detail')}
-            </Card.Header>
-          )}
-          {isDetailMode && (
-            <div className='router-toolbar-start router-block-gap-sm'>
-              {detailBasicEditing ? (
-                <>
-                  <Button
-                    type='button'
-                    className='router-page-button'
-                    onClick={cancelDetailBasicEdit}
-                    disabled={detailBasicSaving}
-                  >
-                    {t('channel.edit.buttons.cancel')}
-                  </Button>
-                  <Button
-                    type='button'
-                    className='router-page-button'
-                    color='blue'
-                    loading={detailBasicSaving}
-                    disabled={detailBasicSaving}
-                    onClick={saveDetailBasicInfo}
-                  >
-                    {t('channel.edit.buttons.save')}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type='button'
-                    className='router-page-button'
-                    onClick={handleCancel}
-                  >
-                    {t('channel.edit.buttons.back')}
-                  </Button>
-                  <Button
-                    type='button'
-                    className='router-page-button'
-                    color='blue'
-                    onClick={() => setDetailBasicEditing(true)}
-                  >
-                    {t('channel.edit.buttons.edit_basic')}
-                  </Button>
-                </>
-              )}
+            <div className='router-entity-detail-breadcrumb router-block-gap-sm'>
+              <Breadcrumb size='small'>
+                <Breadcrumb.Section link onClick={handleCancel}>
+                  {t('header.channel')}
+                </Breadcrumb.Section>
+                <Breadcrumb.Divider icon='right chevron' />
+                <Breadcrumb.Section active>
+                  {inputs.name || channelId || '-'}
+                </Breadcrumb.Section>
+              </Breadcrumb>
             </div>
           )}
           {isCreateMode && (
@@ -3751,9 +3716,42 @@ const EditChannel = () => {
                 {isDetailMode && (
                   <div className='router-toolbar router-block-gap-xs'>
                     <div className='router-toolbar-start'>
-                      <span className='router-section-title router-section-title-inline'>
+                      <span className='router-entity-detail-section-title'>
                         {t('channel.edit.detail_basic_title')}
                       </span>
+                    </div>
+                    <div className='router-toolbar-end'>
+                      {detailBasicEditing ? (
+                        <>
+                          <Button
+                            type='button'
+                            className='router-page-button'
+                            onClick={cancelDetailBasicEdit}
+                            disabled={detailBasicSaving}
+                          >
+                            {t('channel.edit.buttons.cancel')}
+                          </Button>
+                          <Button
+                            type='button'
+                            className='router-page-button'
+                            color='blue'
+                            loading={detailBasicSaving}
+                            disabled={detailBasicSaving}
+                            onClick={saveDetailBasicInfo}
+                          >
+                            {t('channel.edit.buttons.save')}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type='button'
+                          className='router-page-button'
+                          color='blue'
+                          onClick={() => setDetailBasicEditing(true)}
+                        >
+                          {t('channel.edit.buttons.edit_basic')}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -3901,7 +3899,7 @@ const EditChannel = () => {
               <Form.Field>
                 <div className='router-toolbar router-block-gap-xs'>
                   <div className='router-toolbar-start router-block-gap-sm'>
-                    <span className='router-section-title router-section-title-inline'>
+                    <span className='router-entity-detail-section-title'>
                       {isDetailMode
                         ? t('channel.edit.detail_models_title')
                         : t('channel.edit.models')}
@@ -4384,7 +4382,7 @@ const EditChannel = () => {
               <Form.Field>
                 <div className='router-toolbar router-block-gap-xs'>
                   <div className='router-toolbar-start'>
-                    <span className='router-section-title router-section-title-inline'>
+                    <span className='router-entity-detail-section-title'>
                       {t('channel.edit.model_tester.title')}
                     </span>
                   </div>
@@ -4678,7 +4676,7 @@ const EditChannel = () => {
                 {isDetailMode && (
                   <div className='router-toolbar router-block-gap-xs'>
                     <div className='router-toolbar-start'>
-                      <span className='router-section-title router-section-title-inline'>
+                      <span className='router-entity-detail-section-title'>
                         {t('channel.edit.wizard.step_advanced')}
                       </span>
                     </div>

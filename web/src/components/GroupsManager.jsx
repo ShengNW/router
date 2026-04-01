@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Label, Modal, Table } from 'semantic-ui-react';
+import { Breadcrumb, Button, Form, Header, Label, Modal, Table } from 'semantic-ui-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../helpers';
 const MODE_LIST = 'list';
@@ -167,6 +167,14 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     () => `${location.pathname}${location.search}${location.hash}`,
     [location.hash, location.pathname, location.search]
   );
+  const returnPath = useMemo(() => {
+    const from = location.state?.from;
+    if (typeof from !== 'string') {
+      return '';
+    }
+    const normalized = from.trim();
+    return normalized.startsWith('/') ? normalized : '';
+  }, [location.state]);
 
   const formModelChannelLookup = useMemo(
     () => buildChannelLookup(formModelChannels),
@@ -421,6 +429,10 @@ const GroupsManager = ({ detailGroupId = '' }) => {
   const backToList = () => {
     if (submitting) return;
     if (isDetailRoute) {
+      if (returnPath !== '') {
+        navigate(-1);
+        return;
+      }
       navigate('/admin/group');
       return;
     }
@@ -780,9 +792,11 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     </>
   );
 
-  const renderBoundChannelsField = (items, loadingState) => (
-    <Form.Field className='router-block-top-sm'>
-      <label>{t('group_manage.detail.bound_channels')}</label>
+  const renderBoundChannelsField = (items, loadingState, options = {}) => (
+    <Form.Field className={options.hideLabel ? '' : 'router-block-top-sm'}>
+      {options.hideLabel ? null : (
+        <label>{t('group_manage.detail.bound_channels')}</label>
+      )}
       <div className='ui fluid multiple selection dropdown router-section-dropdown router-readonly-dropdown'>
         {loadingState ? (
           <div className='router-readonly-dropdown-empty'>
@@ -811,7 +825,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     </Form.Field>
   );
 
-  const renderModelSummaryTable = (items, loadingState) => {
+  const renderModelSummaryTable = (items, loadingState, options = {}) => {
     const keyword = detailModelSearchKeyword.trim().toLowerCase();
     const visibleItems =
       keyword === ''
@@ -829,11 +843,23 @@ const GroupsManager = ({ detailGroupId = '' }) => {
           });
 
     return (
-      <div className='router-block-top-sm'>
-        <div className='router-toolbar router-block-gap-xs'>
-          <div className='router-toolbar-title'>
-            {t('group_manage.detail.supported_models')}
-          </div>
+      <div className={options.hideTitle ? '' : 'router-block-top-sm'}>
+        <div
+          className={
+            options.hideTitle
+              ? 'router-entity-detail-section-header'
+              : 'router-toolbar router-block-gap-xs'
+          }
+        >
+          {options.hideTitle ? (
+            <Header as='h3' className='router-entity-detail-section-title'>
+              {t('group_manage.detail.supported_models')}
+            </Header>
+          ) : (
+            <div className='router-toolbar-title'>
+              {t('group_manage.detail.supported_models')}
+            </div>
+          )}
           <Form.Input
             className='router-inline-input router-search-form-sm'
             icon='search'
@@ -1128,63 +1154,96 @@ const GroupsManager = ({ detailGroupId = '' }) => {
   const renderView = () => {
     if (!activeGroup) return null;
     return (
-      <div>
-        <div className='router-toolbar-start router-block-gap-sm'>
-          <Button type='button' className='router-page-button' onClick={backToList} disabled={submitting}>
-            {t('group_manage.buttons.back')}
-          </Button>
-          <Button type='button' className='router-page-button' color='blue' disabled={submitting} onClick={() => openEditPanel()}>
-            {t('group_manage.buttons.edit')}
-          </Button>
+      <div className='router-entity-detail-page'>
+        <div className='router-entity-detail-breadcrumb'>
+          <Breadcrumb size='small'>
+            <Breadcrumb.Section link onClick={backToList}>
+              {t('header.group')}
+            </Breadcrumb.Section>
+            <Breadcrumb.Divider icon='right chevron' />
+            <Breadcrumb.Section active>
+              {activeGroup.name || activeGroup.id || '-'}
+            </Breadcrumb.Section>
+          </Breadcrumb>
         </div>
-        <Form>
-          <Form.Input
-            className='router-section-input'
-            label={t('group_manage.form.id')}
-            value={activeGroup.name || ''}
-            readOnly
-          />
-          <Form.TextArea
-            className='router-section-textarea'
-            label={t('group_manage.form.description')}
-            value={activeGroup.description || ''}
-            readOnly
-          />
-          <Form.Group widths='equal'>
+        <section className='router-entity-detail-section'>
+          <div className='router-entity-detail-section-header'>
+            <Header as='h3' className='router-entity-detail-section-title'>
+              {t('common.basic_info')}
+            </Header>
+            <div className='router-toolbar-start'>
+              {renderGroupStatus(activeGroup.enabled)}
+              <Button
+                type='button'
+                className='router-page-button'
+                color='blue'
+                disabled={submitting}
+                onClick={() => openEditPanel()}
+              >
+                {t('group_manage.buttons.edit')}
+              </Button>
+            </div>
+          </div>
+          <Form>
             <Form.Input
               className='router-section-input'
-              label={t('group_manage.form.billing_ratio')}
-              value={Number(activeGroup.billing_ratio ?? 1).toFixed(2)}
+              label={t('group_manage.form.id')}
+              value={activeGroup.name || ''}
               readOnly
             />
-            <Form.Input
-              className='router-section-input'
-              label={t('group_manage.table.status')}
-              value={
-                activeGroup.enabled
-                  ? t('group_manage.status.enabled')
-                  : t('group_manage.status.disabled')
-              }
+            <Form.TextArea
+              className='router-section-textarea'
+              label={t('group_manage.form.description')}
+              value={activeGroup.description || ''}
               readOnly
             />
-          </Form.Group>
-          <Form.Group widths='equal'>
-            <Form.Input
-              className='router-section-input'
-              label={t('group_manage.form.sort_order')}
-              value={activeGroup.sort_order || 0}
-              readOnly
-            />
-            <Form.Input
-              className='router-section-input'
-              label={t('group_manage.table.updated_at')}
-              value={activeGroup.updated_at ? timestamp2string(activeGroup.updated_at) : '-'}
-              readOnly
-            />
-          </Form.Group>
-        </Form>
-        {renderBoundChannelsField(detailChannelRows, detailChannelLoading)}
-        {renderModelSummaryTable(detailModelRows, detailModelLoading)}
+            <Form.Group widths='equal'>
+              <Form.Input
+                className='router-section-input'
+                label={t('group_manage.form.billing_ratio')}
+                value={Number(activeGroup.billing_ratio ?? 1).toFixed(2)}
+                readOnly
+              />
+              <Form.Input
+                className='router-section-input'
+                label={t('group_manage.table.status')}
+                value={
+                  activeGroup.enabled
+                    ? t('group_manage.status.enabled')
+                    : t('group_manage.status.disabled')
+                }
+                readOnly
+              />
+            </Form.Group>
+            <Form.Group widths='equal'>
+              <Form.Input
+                className='router-section-input'
+                label={t('group_manage.form.sort_order')}
+                value={activeGroup.sort_order || 0}
+                readOnly
+              />
+              <Form.Input
+                className='router-section-input'
+                label={t('group_manage.table.updated_at')}
+                value={activeGroup.updated_at ? timestamp2string(activeGroup.updated_at) : '-'}
+                readOnly
+              />
+            </Form.Group>
+          </Form>
+        </section>
+        <section className='router-entity-detail-section'>
+          <Header as='h3' className='router-entity-detail-section-title'>
+            {t('group_manage.detail.bound_channels')}
+          </Header>
+          {renderBoundChannelsField(detailChannelRows, detailChannelLoading, {
+            hideLabel: true,
+          })}
+        </section>
+        <section className='router-entity-detail-section'>
+          {renderModelSummaryTable(detailModelRows, detailModelLoading, {
+            hideTitle: true,
+          })}
+        </section>
       </div>
     );
   };

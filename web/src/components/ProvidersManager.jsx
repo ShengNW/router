@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Breadcrumb,
   Button,
   Form,
   Header,
@@ -367,6 +368,8 @@ const OFFICIAL_PROVIDER_BASE_URLS = {
   volcengine: 'https://ark.cn-beijing.volces.com/api/v3',
 };
 
+const cloneEditableRow = (row) => toEditableRows([row])[0] || createEmptyRow();
+
 const MODEL_TYPE_OPTIONS = [
   { key: 'text', value: 'text', text: 'text' },
   { key: 'image', value: 'image', text: 'image' },
@@ -503,14 +506,14 @@ const ProvidersManager = () => {
   const [deletingRow, setDeletingRow] = useState(null);
   const [creating, setCreating] = useState(false);
   const [createRow, setCreateRow] = useState(createEmptyRow());
-
-  const [editing, setEditing] = useState(false);
-  const [editRow, setEditRow] = useState(createEmptyRow());
-  const [editModelSearchKeyword, setEditModelSearchKeyword] = useState('');
   const [viewingProvider, setViewingProvider] = useState('');
   const [viewRow, setViewRow] = useState(null);
   const [viewModelSearchKeyword, setViewModelSearchKeyword] = useState('');
   const [viewModelPage, setViewModelPage] = useState(1);
+  const [detailEditingSection, setDetailEditingSection] = useState('');
+  const [detailBasicDraft, setDetailBasicDraft] = useState(createEmptyRow());
+  const [detailModelsDraft, setDetailModelsDraft] = useState(createEmptyRow());
+  const [detailModelSearchKeyword, setDetailModelSearchKeyword] = useState('');
   const [pricingDetailOpen, setPricingDetailOpen] = useState(false);
   const [pricingDetailModel, setPricingDetailModel] = useState(null);
 
@@ -562,13 +565,6 @@ const ProvidersManager = () => {
     }
   }, [activePage, totalPages]);
 
-  const setEditValue = (key, value) => {
-    setEditRow((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
   const setCreateValue = (key, value) => {
     setCreateRow((prev) => ({
       ...prev,
@@ -576,25 +572,18 @@ const ProvidersManager = () => {
     }));
   };
 
-  const openEditor = (row) => {
-    if (!row || creating) return;
-    setViewingProvider('');
-    setViewRow(null);
-    setEditModelSearchKeyword('');
-    setEditRow({ ...row });
-    setEditing(true);
-  };
-
-  const rollbackEditor = () => {
-    setEditing(false);
-    setEditModelSearchKeyword('');
-    setEditRow(createEmptyRow());
-  };
+  const resetDetailEditingState = useCallback(() => {
+    setDetailEditingSection('');
+    setDetailBasicDraft(createEmptyRow());
+    setDetailModelsDraft(createEmptyRow());
+    setDetailModelSearchKeyword('');
+  }, []);
 
   const openCreatePanel = () => {
-    if (editing || creating || saving) return;
+    if (creating || saving) return;
     setViewingProvider('');
     setViewRow(null);
+    resetDetailEditingState();
     setCreateRow(createEmptyRow());
     setCreating(true);
   };
@@ -605,13 +594,14 @@ const ProvidersManager = () => {
   };
 
   const openViewer = (row) => {
-    if (creating || editing || saving) return;
+    if (creating || saving) return;
     const normalized = normalizeProvider(row?.id || '');
     if (!normalized) return;
     setViewModelSearchKeyword('');
     setViewModelPage(1);
+    resetDetailEditingState();
     setViewingProvider(normalized);
-    setViewRow({ ...row });
+    setViewRow(cloneEditableRow(row));
   };
 
   const closeViewer = () => {
@@ -619,6 +609,43 @@ const ProvidersManager = () => {
     setViewModelPage(1);
     setViewingProvider('');
     setViewRow(null);
+    resetDetailEditingState();
+  };
+
+  const startDetailSectionEdit = useCallback(
+    (section, row = null) => {
+      const sourceRow = cloneEditableRow(row || viewRow);
+      if (!sourceRow?.id || saving || creating) {
+        return;
+      }
+      setDetailEditingSection(section);
+      if (section === 'basic') {
+        setDetailBasicDraft(sourceRow);
+      }
+      if (section === 'models') {
+        setDetailModelsDraft(sourceRow);
+        setDetailModelSearchKeyword('');
+      }
+    },
+    [creating, saving, viewRow],
+  );
+
+  const cancelDetailSectionEdit = useCallback(() => {
+    resetDetailEditingState();
+  }, [resetDetailEditingState]);
+
+  const setDetailBasicValue = (key, value) => {
+    setDetailBasicDraft((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const setDetailModelsValue = (key, value) => {
+    setDetailModelsDraft((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
   const openPricingDetail = useCallback((detail) => {
@@ -949,7 +976,7 @@ const ProvidersManager = () => {
   };
 
   const openDeleteModal = (row) => {
-    if (saving || creating || editing) return;
+    if (saving || creating) return;
     if (!row) return;
     setDeletingRow(row);
   };
@@ -990,35 +1017,53 @@ const ProvidersManager = () => {
     }
   };
 
-  const applyEditToRows = async () => {
-    const provider = normalizeProvider(editRow.id);
+  const saveViewerSection = async (section) => {
+    const sourceRow = cloneEditableRow(viewRow);
+    const provider = normalizeProvider(sourceRow.id);
     if (!provider) {
       showInfo(t('channel.providers.messages.provider_required'));
       return;
     }
-    const normalizedRow = {
-      ...editRow,
+    let normalizedRow = {
+      ...sourceRow,
       id: provider,
-      name: (editRow.name || '').trim() || provider,
+      name: (sourceRow.name || '').trim() || provider,
       base_url:
-        (editRow.base_url || '').trim() ||
+        (sourceRow.base_url || '').trim() ||
         OFFICIAL_PROVIDER_BASE_URLS[provider] ||
         '',
-      official_url: (editRow.official_url || '').trim(),
-      model_details: normalizeModelDetails(editRow.model_details || []),
-      sort_order: Number(editRow.sort_order || 0),
-      source: editRow.source || 'manual',
+      official_url: (sourceRow.official_url || '').trim(),
+      model_details: normalizeModelDetails(sourceRow.model_details || []),
+      sort_order: Number(sourceRow.sort_order || 0),
+      source: sourceRow.source || 'manual',
       updated_at: Math.floor(Date.now() / 1000),
     };
+    if (section === 'basic') {
+      normalizedRow = {
+        ...normalizedRow,
+        name: (detailBasicDraft.name || '').trim() || provider,
+        base_url:
+          (detailBasicDraft.base_url || '').trim() ||
+          OFFICIAL_PROVIDER_BASE_URLS[provider] ||
+          '',
+        official_url: (detailBasicDraft.official_url || '').trim(),
+      };
+    }
+    if (section === 'models') {
+      normalizedRow = {
+        ...normalizedRow,
+        model_details: normalizeModelDetails(detailModelsDraft.model_details || []),
+      };
+    }
     const saved = await saveProvider(
       'put',
       `/api/v1/admin/providers/${provider}`,
       normalizedRow,
     );
     if (saved) {
-      rollbackEditor();
       setViewingProvider(saved.id || '');
       setViewRow(saved);
+      resetDetailEditingState();
     }
   };
 
@@ -1064,6 +1109,7 @@ const ProvidersManager = () => {
     const searchable = options.searchable === true;
     const modelSearchKeyword =
       typeof options.searchKeyword === 'string' ? options.searchKeyword : '';
+    const hideTitle = options.hideTitle === true;
     const normalizedModelSearchKeyword = modelSearchKeyword
       .trim()
       .toLowerCase();
@@ -1087,8 +1133,12 @@ const ProvidersManager = () => {
     return (
       <div>
         <div className='router-toolbar router-toolbar-compact'>
-          <div className='router-toolbar-title'>
-            {t('channel.providers.dialog.model_details')}
+          <div className='router-toolbar-start'>
+            {!hideTitle ? (
+              <div className='router-toolbar-title'>
+                {t('channel.providers.dialog.model_details')}
+              </div>
+            ) : null}
           </div>
           <div className='router-toolbar-end'>
             {searchable ? (
@@ -1647,6 +1697,7 @@ const ProvidersManager = () => {
   const renderModelDetailsReadonly = (row, options = {}) => {
     const details = Array.isArray(row?.model_details) ? row.model_details : [];
     const searchable = options.searchable === true;
+    const hideTitle = options.hideTitle === true;
     const pageSize =
       Number(options.pageSize || 0) > 0
         ? Number(options.pageSize)
@@ -1686,25 +1737,31 @@ const ProvidersManager = () => {
     return (
       <div className='router-block-top-sm'>
         <div className='router-toolbar router-block-gap-xs'>
-          <div className='router-toolbar-title'>
-            {t('channel.providers.dialog.model_details')}
+          <div className='router-toolbar-start'>
+            {!hideTitle ? (
+              <div className='router-toolbar-title'>
+                {t('channel.providers.dialog.model_details')}
+              </div>
+            ) : null}
           </div>
-          {searchable ? (
-            <Form.Input
-              className='router-inline-input router-search-form-xs'
-              icon='search'
-              iconPosition='left'
-              placeholder={t(
-                'channel.providers.model_detail_table.search_placeholder',
-              )}
-              value={modelSearchKeyword}
-              onChange={(e, { value }) => {
-                if (typeof options.onSearchChange === 'function') {
-                  options.onSearchChange(value || '');
-                }
-              }}
-            />
-          ) : null}
+          <div className='router-toolbar-end'>
+            {searchable ? (
+              <Form.Input
+                className='router-inline-input router-search-form-xs'
+                icon='search'
+                iconPosition='left'
+                placeholder={t(
+                  'channel.providers.model_detail_table.search_placeholder',
+                )}
+                value={modelSearchKeyword}
+                onChange={(e, { value }) => {
+                  if (typeof options.onSearchChange === 'function') {
+                    options.onSearchChange(value || '');
+                  }
+                }}
+              />
+            ) : null}
+          </div>
         </div>
         <Table compact celled className='router-detail-table'>
           <Table.Header>
@@ -1910,7 +1967,7 @@ const ProvidersManager = () => {
                     openViewer(row);
                   }}
                   className={
-                    creating || editing || saving
+                    creating || saving
                       ? undefined
                       : 'router-row-clickable'
                   }
@@ -1942,7 +1999,8 @@ const ProvidersManager = () => {
                       disabled={creating || saving}
                       onClick={(e) => {
                         e.stopPropagation();
-                        openEditor(row);
+                        openViewer(row);
+                        startDetailSectionEdit('basic', row);
                       }}
                     >
                       <Icon name='edit' />
@@ -1982,151 +2040,227 @@ const ProvidersManager = () => {
     </div>
   );
 
-  const renderEditor = () => (
-    <div>
-      <div className='router-toolbar-start router-block-gap-sm'>
-        <Button
-          type='button'
-          className='router-page-button'
-          onClick={rollbackEditor}
-          disabled={saving}
-        >
-          {t('channel.providers.dialog.cancel_create')}
-        </Button>
-        <Button
-          type='button'
-          className='router-page-button'
-          color='blue'
-          loading={saving}
-          disabled={saving}
-          onClick={applyEditToRows}
-        >
-          {t('channel.providers.dialog.confirm')}
-        </Button>
-      </div>
-      <Form>
-        <Form.Group widths='equal'>
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.providers.dialog.provider')}
-            value={editRow.id}
-            readOnly
-          />
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.providers.dialog.name')}
-            placeholder={t('channel.providers.dialog.name_placeholder')}
-            value={editRow.name}
-            onChange={(e, { value }) => setEditValue('name', value || '')}
-          />
-        </Form.Group>
-        <Form.Input
-          className='router-section-input'
-          label={t('channel.providers.dialog.base_url')}
-          placeholder={t('channel.providers.dialog.base_url_placeholder')}
-          value={editRow.base_url}
-          onChange={(e, { value }) => setEditValue('base_url', value || '')}
-        />
-        <Form.Input
-          className='router-section-input'
-          label={t('channel.providers.dialog.official_url')}
-          placeholder={t('channel.providers.dialog.official_url_placeholder')}
-          value={editRow.official_url}
-          onChange={(e, { value }) => setEditValue('official_url', value || '')}
-        />
-      </Form>
-
-      {renderModelDetailsTable(editRow, setEditValue, saving, {
-        searchable: true,
-        searchKeyword: editModelSearchKeyword,
-        onSearchChange: setEditModelSearchKeyword,
-      })}
-    </div>
-  );
-
   const renderViewer = () => {
     if (!viewRow) return null;
+    const basicEditing = detailEditingSection === 'basic';
+    const modelsEditing = detailEditingSection === 'models';
+    const basicSourceRow = basicEditing ? detailBasicDraft : viewRow;
     return (
-      <div>
-        <Header as='h2' className='router-page-title'>
-          {t('channel.providers.dialog.title_detail')}
-        </Header>
-        <div className='router-toolbar-start router-block-gap-sm'>
-          <Button
-            type='button'
-          className='router-page-button'
-          onClick={closeViewer}
-          disabled={saving}
-        >
-            {t('channel.providers.dialog.cancel')}
-          </Button>
-          <Button
-            type='button'
-            className='router-page-button'
-            color='blue'
-            disabled={saving}
-            onClick={() => openEditor(viewRow)}
-          >
-            {t('channel.providers.dialog.edit')}
-          </Button>
+      <div className='router-provider-detail-page'>
+        <div className='router-provider-detail-breadcrumb'>
+          <Breadcrumb size='small'>
+            <Breadcrumb.Section
+              link
+              onClick={closeViewer}
+            >
+              {t('header.providers')}
+            </Breadcrumb.Section>
+            <Breadcrumb.Divider icon='right chevron' />
+            <Breadcrumb.Section active>
+              {viewRow.name || viewRow.id || '-'}
+            </Breadcrumb.Section>
+          </Breadcrumb>
         </div>
-        <Form>
-          <Form.Group widths='equal'>
-            <Form.Input
-              className='router-section-input'
-              label={t('channel.providers.dialog.provider')}
-              value={viewRow.id || ''}
-              readOnly
-            />
-            <Form.Input
-              className='router-section-input'
-              label={t('channel.providers.dialog.name')}
-              value={viewRow.name || ''}
-              readOnly
-            />
-          </Form.Group>
-          <Form.Group widths='equal'>
-            <Form.Input
-              className='router-section-input'
-              label={t('channel.providers.dialog.base_url')}
-              value={viewRow.base_url || ''}
-              readOnly
-            />
-            <Form.Input
-              className='router-section-input'
-              label={t('channel.providers.dialog.official_url')}
-              value={viewRow.official_url || ''}
-              readOnly
-            />
-          </Form.Group>
-          <Form.Group widths='equal'>
-            <Form.Input
-              className='router-section-input'
-              label={t('channel.providers.table.source')}
-              value={viewRow.source || '-'}
-              readOnly
-            />
-          </Form.Group>
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.providers.table.updated_at')}
-            value={
-              viewRow.updated_at ? timestamp2string(viewRow.updated_at) : '-'
-            }
-            readOnly
-          />
-        </Form>
-        {renderModelDetailsReadonly(viewRow, {
-          searchable: true,
-          searchKeyword: viewModelSearchKeyword,
-          currentPage: viewModelPage,
-          pageSize: PROVIDER_DETAIL_MODEL_PAGE_SIZE,
-          onSearchChange: (value) => {
-            setViewModelSearchKeyword(value || '');
-            setViewModelPage(1);
-          },
-          onPageChange: setViewModelPage,
-        })}
+        <div className='router-provider-detail-sections'>
+          <section className='router-provider-detail-section'>
+            <div className='router-provider-detail-section-header'>
+              <div>
+                <Header
+                  as='h3'
+                  className='router-provider-detail-section-title'
+                >
+                  {t('channel.providers.dialog.detail_basic_title')}
+                </Header>
+              </div>
+              <div className='router-toolbar-start'>
+                {basicEditing ? (
+                  <>
+                    <Button
+                      type='button'
+                      className='router-page-button'
+                      onClick={cancelDetailSectionEdit}
+                      disabled={saving}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      type='button'
+                      className='router-page-button'
+                      color='blue'
+                      loading={saving}
+                      disabled={saving}
+                      onClick={() => saveViewerSection('basic')}
+                    >
+                      {t('common.save')}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type='button'
+                    className='router-page-button'
+                    disabled={saving}
+                    onClick={() => startDetailSectionEdit('basic')}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                )}
+              </div>
+            </div>
+            <Form>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('channel.providers.dialog.provider')}
+                  value={basicSourceRow.id || ''}
+                  readOnly
+                />
+                {basicEditing ? (
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('channel.providers.dialog.name')}
+                    placeholder={t('channel.providers.dialog.name_placeholder')}
+                    value={detailBasicDraft.name}
+                    onChange={(e, { value }) =>
+                      setDetailBasicValue('name', value || '')
+                    }
+                  />
+                ) : (
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('channel.providers.dialog.name')}
+                    value={basicSourceRow.name || ''}
+                    readOnly
+                  />
+                )}
+              </Form.Group>
+              <Form.Group widths='equal'>
+                {basicEditing ? (
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('channel.providers.dialog.base_url')}
+                    placeholder={t('channel.providers.dialog.base_url_placeholder')}
+                    value={detailBasicDraft.base_url}
+                    onChange={(e, { value }) =>
+                      setDetailBasicValue('base_url', value || '')
+                    }
+                  />
+                ) : (
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('channel.providers.dialog.base_url')}
+                    value={basicSourceRow.base_url || ''}
+                    readOnly
+                  />
+                )}
+                {basicEditing ? (
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('channel.providers.dialog.official_url')}
+                    placeholder={t(
+                      'channel.providers.dialog.official_url_placeholder',
+                    )}
+                    value={detailBasicDraft.official_url}
+                    onChange={(e, { value }) =>
+                      setDetailBasicValue('official_url', value || '')
+                    }
+                  />
+                ) : (
+                  <Form.Input
+                    className='router-section-input'
+                    label={t('channel.providers.dialog.official_url')}
+                    value={basicSourceRow.official_url || ''}
+                    readOnly
+                  />
+                )}
+              </Form.Group>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('channel.providers.table.source')}
+                  value={viewRow.source || '-'}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('channel.providers.table.updated_at')}
+                  value={
+                    viewRow.updated_at ? timestamp2string(viewRow.updated_at) : '-'
+                  }
+                  readOnly
+                />
+              </Form.Group>
+            </Form>
+          </section>
+          <section className='router-provider-detail-section'>
+            <div className='router-provider-detail-section-header'>
+              <div>
+                <Header
+                  as='h3'
+                  className='router-provider-detail-section-title'
+                >
+                  {t('channel.providers.dialog.model_details')}
+                </Header>
+              </div>
+              <div className='router-toolbar-start'>
+                {modelsEditing ? (
+                  <>
+                    <Button
+                      type='button'
+                      className='router-page-button'
+                      onClick={cancelDetailSectionEdit}
+                      disabled={saving}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      type='button'
+                      className='router-page-button'
+                      color='blue'
+                      loading={saving}
+                      disabled={saving}
+                      onClick={() => saveViewerSection('models')}
+                    >
+                      {t('common.save')}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type='button'
+                    className='router-page-button'
+                    disabled={saving}
+                    onClick={() => startDetailSectionEdit('models')}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {modelsEditing
+              ? renderModelDetailsTable(
+                  detailModelsDraft,
+                  setDetailModelsValue,
+                  saving,
+                  {
+                    searchable: true,
+                    hideTitle: true,
+                    searchKeyword: detailModelSearchKeyword,
+                    onSearchChange: setDetailModelSearchKeyword,
+                  },
+                )
+              : renderModelDetailsReadonly(viewRow, {
+                  searchable: true,
+                  hideTitle: true,
+                  searchKeyword: viewModelSearchKeyword,
+                  currentPage: viewModelPage,
+                  pageSize: PROVIDER_DETAIL_MODEL_PAGE_SIZE,
+                  onSearchChange: (value) => {
+                    setViewModelSearchKeyword(value || '');
+                    setViewModelPage(1);
+                  },
+                  onPageChange: setViewModelPage,
+                })}
+          </section>
+        </div>
       </div>
     );
   };
@@ -2368,9 +2502,7 @@ const ProvidersManager = () => {
       {renderPricingDetailModal()}
       {creating
         ? renderCreatePanel()
-        : editing
-          ? renderEditor()
-          : viewingProvider && viewRow
+        : viewingProvider && viewRow
             ? renderViewer()
             : renderRows()}
     </div>
