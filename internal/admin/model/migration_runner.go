@@ -201,6 +201,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return tx.AutoMigrate(&ServicePackage{}, &UserPackageSubscription{})
 			},
 		},
+		{
+			Version:     "202604011630_drop_group_quota_columns",
+			Description: "drop legacy group daily quota and timezone columns from groups table",
+			Up: func(tx *gorm.DB) error {
+				return dropLegacyGroupQuotaColumnsWithDB(tx)
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

@@ -67,11 +67,10 @@ func resolveEffectiveGroupDailyQuotaPolicyWithDB(db *gorm.DB, groupID string, us
 	if normalizedGroupID == "" {
 		return effectiveGroupDailyQuotaPolicy{}, fmt.Errorf("分组 ID 不能为空")
 	}
-	base := GetGroupDailyQuotaPolicy(normalizedGroupID)
 	effective := effectiveGroupDailyQuotaPolicy{
-		Limit:    normalizeGroupDailyQuotaLimit(base.Limit),
-		Timezone: normalizeGroupQuotaResetTimezone(base.Timezone),
-		Source:   "group",
+		Limit:    0,
+		Timezone: DefaultGroupQuotaResetTimezone,
+		Source:   "none",
 	}
 	if normalizedUserID == "" {
 		return effective, nil
@@ -265,6 +264,23 @@ func GetGroupDailyQuotaSnapshotWithDB(db *gorm.DB, groupID string, userID string
 	normalizedBizDate, err := normalizeGroupQuotaDate(bizDate, timezone)
 	if err != nil {
 		return GroupDailyQuotaSnapshot{}, err
+	}
+	if strings.TrimSpace(effectivePolicy.Source) != "package" {
+		return GroupDailyQuotaSnapshot{
+			GroupID:        normalizedGroupID,
+			UserID:         normalizedUserID,
+			BizDate:        normalizedBizDate,
+			PolicySource:   strings.TrimSpace(effectivePolicy.Source),
+			PackageID:      strings.TrimSpace(effectivePolicy.PackageID),
+			PackageName:    strings.TrimSpace(effectivePolicy.PackageName),
+			Limit:          0,
+			ConsumedQuota:  0,
+			ReservedQuota:  0,
+			RemainingQuota: 0,
+			Unlimited:      true,
+			Timezone:       timezone,
+			UpdatedAt:      0,
+		}, nil
 	}
 
 	counter := GroupQuotaCounter{}
