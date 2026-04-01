@@ -6,11 +6,13 @@ import (
 
 	admin "github.com/yeying-community/router/internal/admin/controller"
 	auth "github.com/yeying-community/router/internal/admin/controller/auth"
+	adminbilling "github.com/yeying-community/router/internal/admin/controller/billing"
 	channel "github.com/yeying-community/router/internal/admin/controller/channel"
 	dashboard "github.com/yeying-community/router/internal/admin/controller/dashboard"
 	group "github.com/yeying-community/router/internal/admin/controller/group"
 	log "github.com/yeying-community/router/internal/admin/controller/log"
 	option "github.com/yeying-community/router/internal/admin/controller/option"
+	plan "github.com/yeying-community/router/internal/admin/controller/plan"
 	task "github.com/yeying-community/router/internal/admin/controller/task"
 	token "github.com/yeying-community/router/internal/admin/controller/token"
 	user "github.com/yeying-community/router/internal/admin/controller/user"
@@ -47,6 +49,7 @@ func SetApiRouter(engine *gin.Engine) {
 		publicRouter.GET("/notice", admin.GetNotice)
 		publicRouter.GET("/about", admin.GetAbout)
 		publicRouter.GET("/home_page_content", admin.GetHomePageContent)
+		publicRouter.POST("/topup/callback", admin.ProcessTopupCallback)
 
 		// 仅保留密码找回，无额外人机验证
 		publicRouter.GET("/reset_password", middleware.CriticalRateLimit(), admin.SendPasswordResetEmail)
@@ -72,6 +75,7 @@ func SetApiRouter(engine *gin.Engine) {
 				publicSelfRoute.GET("/dashboard", user.GetUserDashboard)
 				publicSelfRoute.GET("/spend/overview", user.GetUserSpendOverview)
 				publicSelfRoute.GET("/quota/daily", user.GetCurrentUserDailyQuota)
+				publicSelfRoute.GET("/quota/summary", user.GetCurrentUserQuotaSummary)
 				publicSelfRoute.GET("/available_models", admin.GetUserAvailableModels)
 				publicSelfRoute.GET("/tasks/options", task.GetCurrentUserTaskFilterOptions)
 				publicSelfRoute.GET("/tasks", task.GetCurrentUserTasks)
@@ -81,6 +85,9 @@ func SetApiRouter(engine *gin.Engine) {
 				publicSelfRoute.DELETE("/self", user.DeleteSelf)
 				publicSelfRoute.GET("/token", user.GenerateAccessToken)
 				publicSelfRoute.GET("/aff", user.GetAffCode)
+				publicSelfRoute.GET("/topup/orders", user.GetTopUpOrders)
+				publicSelfRoute.GET("/topup/orders/:id", user.GetTopUpOrder)
+				publicSelfRoute.POST("/topup/orders", user.CreateTopUpOrder)
 				publicSelfRoute.POST("/topup", user.TopUp)
 			}
 		}
@@ -190,6 +197,8 @@ func SetApiRouter(engine *gin.Engine) {
 			adminUserRoute.GET("/", user.GetAllUsers)
 			adminUserRoute.GET("/search", user.SearchUsers)
 			adminUserRoute.GET("/:id", user.GetUser)
+			adminUserRoute.GET("/:id/package/subscription", user.GetUserActivePackageSubscription)
+			adminUserRoute.GET("/:id/quota/summary", user.GetUserQuotaSummary)
 			adminUserRoute.POST("/", user.CreateUser)
 			adminUserRoute.POST("/manage", user.ManageUser)
 			adminUserRoute.PUT("/", user.UpdateUser)
@@ -201,6 +210,17 @@ func SetApiRouter(engine *gin.Engine) {
 		{
 			adminOptionRoute.GET("/", option.GetOptions)
 			adminOptionRoute.PUT("/", option.UpdateOption)
+		}
+
+		adminBillingRoute := adminRouter.Group("/billing")
+		adminBillingRoute.Use(middleware.AdminAuth())
+		{
+			adminBillingRoute.GET("/currencies", adminbilling.GetBillingCurrencies)
+			adminBillingRoute.GET("/fx/status", adminbilling.GetFXSyncStatus)
+			adminBillingRoute.GET("/fx/rates", adminbilling.GetFXMarketRates)
+			adminBillingRoute.POST("/currencies", middleware.RootAuth(), adminbilling.CreateBillingCurrency)
+			adminBillingRoute.PUT("/currencies/:code", middleware.RootAuth(), adminbilling.UpdateBillingCurrency)
+			adminBillingRoute.POST("/fx/sync", middleware.RootAuth(), adminbilling.SyncBillingCurrenciesFromFX)
 		}
 
 		adminChannelRoute := adminRouter.Group("/channel")
@@ -248,6 +268,11 @@ func SetApiRouter(engine *gin.Engine) {
 		{
 			adminGroupsRoute.GET("/", group.GetGroups)
 		}
+		adminPackagesRoute := adminRouter.Group("/packages")
+		adminPackagesRoute.Use(middleware.AdminAuth())
+		{
+			adminPackagesRoute.GET("/", plan.GetPackages)
+		}
 
 		adminRedemptionRoute := adminRouter.Group("/redemption")
 		adminRedemptionRoute.Use(middleware.AdminAuth())
@@ -284,6 +309,15 @@ func SetApiRouter(engine *gin.Engine) {
 			adminGroupRoute.GET("/:id/model-configs", group.GetGroupModelConfigs)
 			adminGroupRoute.PUT("/:id/channels", group.UpdateGroupChannels)
 			adminGroupRoute.PUT("/:id/model-configs", group.UpdateGroupModelConfigs)
+		}
+		adminPackageRoute := adminRouter.Group("/package")
+		adminPackageRoute.Use(middleware.AdminAuth())
+		{
+			adminPackageRoute.GET("/:id", plan.GetPackage)
+			adminPackageRoute.POST("/", plan.CreatePackage)
+			adminPackageRoute.PUT("/", plan.UpdatePackage)
+			adminPackageRoute.DELETE("/:id", plan.DeletePackage)
+			adminPackageRoute.POST("/:id/assign", plan.AssignPackageToUser)
 		}
 
 		adminProviderRoute := adminRouter.Group("/providers")

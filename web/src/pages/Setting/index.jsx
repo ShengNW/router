@@ -1,16 +1,18 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, Tab } from 'semantic-ui-react';
-import { useLocation } from 'react-router-dom';
+import { Card, Grid, Menu } from 'semantic-ui-react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import SystemSetting from '../../components/SystemSetting';
 import { isRoot } from '../../helpers';
 import OtherSetting from '../../components/OtherSetting';
 import PersonalSetting from '../../components/PersonalSetting';
 import OperationSetting from '../../components/OperationSetting';
+import ExchangeRateSetting from '../../components/ExchangeRateSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdminWorkspace = location.pathname.startsWith('/admin/');
 
   if (!isAdminWorkspace) {
@@ -28,51 +30,143 @@ const Setting = () => {
     );
   }
 
-  const panes = [];
+  const menuGroups = [];
 
   if (isRoot()) {
-    panes.push({
-      menuItem: t('setting.tabs.operation'),
-      render: () => (
-        <Tab.Pane attached={false}>
-          <OperationSetting />
-        </Tab.Pane>
-      ),
+    menuGroups.push({
+      key: 'operation',
+      label: t('setting.tabs.operation'),
+      sections: [
+        { key: 'quota', label: t('setting.operation.quota.title') },
+        { key: 'monitor', label: t('setting.operation.monitor.title') },
+        { key: 'log', label: t('setting.operation.log.title') },
+        { key: 'general', label: t('setting.operation.general.title') },
+        { key: 'billing', label: t('setting.operation.billing.title') },
+      ],
     });
-    panes.push({
-      menuItem: t('setting.tabs.system'),
-      render: () => (
-        <Tab.Pane attached={false}>
-          <SystemSetting />
-        </Tab.Pane>
-      ),
+    menuGroups.push({
+      key: 'exchange',
+      label: t('setting.tabs.exchange'),
+      sections: [
+        { key: 'sync', label: t('setting.exchange.sync.title') },
+      ],
     });
-    panes.push({
-      menuItem: t('setting.tabs.other'),
-      render: () => (
-        <Tab.Pane attached={false}>
-          <OtherSetting />
-        </Tab.Pane>
-      ),
+    menuGroups.push({
+      key: 'system',
+      label: t('setting.tabs.system'),
+      sections: [
+        { key: 'general', label: t('setting.system.general.title') },
+        { key: 'smtp', label: t('setting.system.smtp.title') },
+        { key: 'login', label: t('setting.system.login.title') },
+      ],
+    });
+    menuGroups.push({
+      key: 'other',
+      label: t('setting.tabs.other'),
+      sections: [
+        { key: 'notice', label: t('setting.system.notice', '站点公告') },
+        { key: 'content', label: t('setting.other.content.title') },
+      ],
     });
   }
+
+  const tabKeys = menuGroups.map((item) => item.key);
+  const requestedTab = (searchParams.get('tab') || '').trim().toLowerCase();
+  const visibleMenuGroups =
+    tabKeys.includes(requestedTab) && requestedTab !== ''
+      ? menuGroups.filter((item) => item.key === requestedTab)
+      : menuGroups;
+  const visibleTabKeys = visibleMenuGroups.map((item) => item.key);
+  const activeTab =
+    visibleTabKeys.includes(requestedTab) && requestedTab !== ''
+      ? requestedTab
+      : visibleTabKeys[0] || '';
+  const activeGroup = visibleMenuGroups.find((item) => item.key === activeTab);
+  const sectionKeys = (activeGroup?.sections || []).map((item) => item.key);
+  const requestedSection = (searchParams.get('section') || '')
+    .trim()
+    .toLowerCase();
+  const activeSection =
+    sectionKeys.includes(requestedSection) && requestedSection !== ''
+      ? requestedSection
+      : sectionKeys[0] || '';
+
+  const goToSection = (tab, section) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', tab);
+    nextParams.set('section', section);
+    setSearchParams(nextParams);
+  };
+
+  const renderContent = () => {
+    if (activeTab === 'operation') {
+      return <OperationSetting section={activeSection} />;
+    }
+    if (activeTab === 'exchange') {
+      return <ExchangeRateSetting section={activeSection} />;
+    }
+    if (activeTab === 'system') {
+      return <SystemSetting section={activeSection} />;
+    }
+    if (activeTab === 'other') {
+      return <OtherSetting section={activeSection} />;
+    }
+    return <div className='router-empty-cell'>{t('setting.empty_admin', '暂无可配置项')}</div>;
+  };
+
+  const pageTitle = activeGroup?.label || t('setting.title');
+  const singleGroupMode = visibleMenuGroups.length === 1;
+  const singleGroup = singleGroupMode ? visibleMenuGroups[0] : null;
 
   return (
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
         <Card.Content>
           <Card.Header className='header router-page-title'>
-            {t('setting.title')}
+            {pageTitle}
           </Card.Header>
-          {panes.length > 0 ? (
-            <Tab
-              menu={{
-                secondary: true,
-                pointing: true,
-                className: 'router-tab-menu',
-              }}
-              panes={panes}
-            />
+          {visibleMenuGroups.length > 0 ? (
+            <Grid stackable columns={2} className='router-settings-layout'>
+              <Grid.Column width={3} className='router-settings-menu-column'>
+                <Menu fluid vertical className='router-settings-menu'>
+                  {singleGroupMode && singleGroup
+                    ? singleGroup.sections.map((section) => (
+                        <Menu.Item
+                          key={`${singleGroup.key}-${section.key}`}
+                          active={
+                            activeTab === singleGroup.key &&
+                            activeSection === section.key
+                          }
+                          onClick={() => goToSection(singleGroup.key, section.key)}
+                        >
+                          {section.label}
+                        </Menu.Item>
+                      ))
+                    : visibleMenuGroups.map((group) => (
+                        <Menu.Item key={group.key} className='router-settings-menu-group'>
+                          <Menu.Header>{group.label}</Menu.Header>
+                          <Menu.Menu>
+                            {group.sections.map((section) => (
+                              <Menu.Item
+                                key={`${group.key}-${section.key}`}
+                                active={
+                                  activeTab === group.key &&
+                                  activeSection === section.key
+                                }
+                                onClick={() => goToSection(group.key, section.key)}
+                              >
+                                {section.label}
+                              </Menu.Item>
+                            ))}
+                          </Menu.Menu>
+                        </Menu.Item>
+                      ))}
+                </Menu>
+              </Grid.Column>
+              <Grid.Column width={13}>
+                {renderContent()}
+              </Grid.Column>
+            </Grid>
           ) : (
             <div className='router-empty-cell'>
               {t('setting.empty_admin', '暂无可配置项')}

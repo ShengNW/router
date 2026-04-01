@@ -21,6 +21,7 @@ import (
 	"github.com/yeying-community/router/common/random"
 	"github.com/yeying-community/router/common/utils"
 	"github.com/yeying-community/router/internal/admin/model"
+	"github.com/yeying-community/router/internal/admin/presenter"
 	logsvc "github.com/yeying-community/router/internal/admin/service/log"
 	usersvc "github.com/yeying-community/router/internal/admin/service/user"
 	"gorm.io/gorm"
@@ -36,22 +37,92 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-func exposedUser(user *model.User) *model.User {
+type activeUserPackageSubscriptionView struct {
+	Id                         string `json:"id"`
+	UserID                     string `json:"user_id"`
+	PackageID                  string `json:"package_id"`
+	PackageName                string `json:"package_name"`
+	GroupID                    string `json:"group_id"`
+	GroupName                  string `json:"group_name,omitempty"`
+	DailyQuotaLimit            int64  `json:"daily_quota_limit"`
+	MonthlyEmergencyQuotaLimit int64  `json:"monthly_emergency_quota_limit"`
+	QuotaResetTimezone         string `json:"quota_reset_timezone"`
+	StartedAt                  int64  `json:"started_at"`
+	ExpiresAt                  int64  `json:"expires_at"`
+	Status                     int    `json:"status"`
+	Source                     string `json:"source,omitempty"`
+}
+
+type activeUserPackageSubscriptionPayload struct {
+	HasActiveSubscription bool                               `json:"has_active_subscription"`
+	Subscription          *activeUserPackageSubscriptionView `json:"subscription,omitempty"`
+}
+
+func exposedUser(user *model.User) *presenter.User {
 	if user == nil {
 		return nil
 	}
 	clean := *user
 	clean.Role = model.ExposedRole(user)
 	clean.CanManageUsers = model.CanManageUsers(user)
-	return &clean
+	return presenter.NewUser(&clean)
 }
 
-func exposedUsers(users []*model.User) []*model.User {
-	items := make([]*model.User, 0, len(users))
+func exposedUsers(users []*model.User) []*presenter.User {
+	items := make([]*presenter.User, 0, len(users))
 	for _, user := range users {
 		items = append(items, exposedUser(user))
 	}
 	return items
+}
+
+func requesterIsRootUser(c *gin.Context) bool {
+	return c.GetBool(ctxkey.CanManageUsers) || c.GetInt(ctxkey.Role) == model.RoleRootUser
+}
+
+func requesterIsSelf(c *gin.Context, targetUserID string) bool {
+	return strings.TrimSpace(c.GetString(ctxkey.Id)) == strings.TrimSpace(targetUserID)
+}
+
+func requesterCanReadUser(c *gin.Context, targetUser *model.User) bool {
+	if targetUser == nil {
+		return false
+	}
+	if requesterIsRootUser(c) || requesterIsSelf(c, targetUser.Id) {
+		return true
+	}
+	return c.GetInt(ctxkey.Role) >= model.EffectiveRole(targetUser)
+}
+
+func buildActiveUserPackageSubscriptionView(subscription model.UserPackageSubscription) *activeUserPackageSubscriptionView {
+	groupID := strings.TrimSpace(subscription.GroupID)
+	groupName := ""
+	if groupID != "" {
+		if groupCatalog, err := model.GetGroupCatalogByID(groupID); err == nil {
+			groupName = strings.TrimSpace(groupCatalog.Name)
+		}
+	}
+	source := ""
+	if packageID := strings.TrimSpace(subscription.PackageID); packageID != "" {
+		if servicePackage, err := model.GetServicePackageByID(packageID); err == nil {
+			source = strings.TrimSpace(servicePackage.Source)
+		}
+	}
+	return &activeUserPackageSubscriptionView{
+		Id:                         strings.TrimSpace(subscription.Id),
+		UserID:                     strings.TrimSpace(subscription.UserID),
+		PackageID:                  strings.TrimSpace(subscription.PackageID),
+		PackageName:                strings.TrimSpace(subscription.PackageName),
+		GroupID:                    groupID,
+		GroupName:                  groupName,
+		DailyQuotaLimit:            subscription.DailyQuotaLimit,
+		MonthlyEmergencyQuotaLimit: subscription.MonthlyEmergencyQuotaLimit,
+		QuotaResetTimezone:         strings.TrimSpace(subscription.QuotaResetTimezone),
+		StartedAt:                  subscription.StartedAt,
+		ExpiresAt:                  subscription.ExpiresAt,
+		Status:                     subscription.Status,
+		Source:                     source,
+	}
 }
 
 // Login godoc
@@ -343,8 +414,7 @@ func GetUser(c *gin.Context) {
 		})
 		return
 	}
-	myRole := c.GetInt(ctxkey.Role)
-	if myRole <= model.EffectiveRole(user) && myRole != model.RoleRootUser {
+	if !requesterCanReadUser(c, user) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "无权获取同级或更高等级用户的信息",
@@ -357,6 +427,67 @@ func GetUser(c *gin.Context) {
 		"data":    exposedUser(user),
 	})
 	return
+}
+
+// GetUserActivePackageSubscription godoc
+// @Summary Get current active package subscription for user (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "User ID"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/{id}/package/subscription [get]
+func GetUserActivePackageSubscription(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "id 为空",
+		})
+		return
+	}
+	targetUser, err := usersvc.GetByID(id, false)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if !requesterCanReadUser(c, targetUser) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无权获取同级或更高等级用户的信息",
+		})
+		return
+	}
+	subscription, err := model.GetActiveUserPackageSubscription(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": "",
+				"data": activeUserPackageSubscriptionPayload{
+					HasActiveSubscription: false,
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": activeUserPackageSubscriptionPayload{
+			HasActiveSubscription: true,
+			Subscription:          buildActiveUserPackageSubscriptionView(subscription),
+		},
+	})
 }
 
 // GetUserDashboard godoc
@@ -408,7 +539,7 @@ func GetUserDashboard(c *gin.Context) {
 	response := gin.H{
 		"success": true,
 		"message": "",
-		"data":    dashboards,
+		"data":    presenter.NewLogStatistics(dashboards),
 	}
 	if includeMeta {
 		providerSet := make(map[string]map[string]struct{})
@@ -659,21 +790,27 @@ func GetUserSpendOverview(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"today_cost":        todayCost,
-			"today_revenue":     todayRevenue,
-			"today_requests":    todayRequests,
-			"today_tokens":      todayTokens,
-			"yesterday_cost":    yesterdayCost,
-			"yesterday_revenue": yesterdayRevenue,
-			"period_cost":       periodCost,
-			"period_revenue":    periodRevenue,
-			"period_requests":   periodRequests,
-			"period_tokens":     periodTokens,
-			"period_days":       periodDays,
-			"period_start":      periodStartUnix,
-			"period_end":        periodEndUnix,
-			"yesterday_start":   yesterdayStart.Unix(),
-			"yesterday_end":     yesterdayEnd.Unix(),
+			"today_cost":            todayCost,
+			"today_yyc_cost":        todayCost,
+			"today_revenue":         todayRevenue,
+			"today_yyc_revenue":     todayRevenue,
+			"today_requests":        todayRequests,
+			"today_tokens":          todayTokens,
+			"yesterday_cost":        yesterdayCost,
+			"yesterday_yyc_cost":    yesterdayCost,
+			"yesterday_revenue":     yesterdayRevenue,
+			"yesterday_yyc_revenue": yesterdayRevenue,
+			"period_cost":           periodCost,
+			"period_yyc_cost":       periodCost,
+			"period_revenue":        periodRevenue,
+			"period_yyc_revenue":    periodRevenue,
+			"period_requests":       periodRequests,
+			"period_tokens":         periodTokens,
+			"period_days":           periodDays,
+			"period_start":          periodStartUnix,
+			"period_end":            periodEndUnix,
+			"yesterday_start":       yesterdayStart.Unix(),
+			"yesterday_end":         yesterdayEnd.Unix(),
 		},
 	})
 	return
@@ -830,6 +967,14 @@ func resolveUserDailyQuotaGroupID(user *model.User, requestedGroupRef string) (s
 	if user == nil {
 		return "", fmt.Errorf("用户不存在")
 	}
+	if subscription, err := model.GetActiveUserPackageSubscription(strings.TrimSpace(user.Id)); err == nil {
+		groupID := strings.TrimSpace(subscription.GroupID)
+		if groupID != "" {
+			return groupID, nil
+		}
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", err
+	}
 	groupRefs := parseGroupReferences(user.Group)
 	if len(groupRefs) == 0 {
 		return "", fmt.Errorf("当前用户未绑定分组")
@@ -891,22 +1036,95 @@ func GetCurrentUserDailyQuota(c *gin.Context) {
 		return
 	}
 	groupCatalog, _ := model.GetGroupCatalogByID(groupID)
+	groupName := strings.TrimSpace(groupCatalog.Name)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data": gin.H{
-			"group_id":        snapshot.GroupID,
-			"group_name":      strings.TrimSpace(groupCatalog.Name),
-			"user_id":         snapshot.UserID,
-			"biz_date":        snapshot.BizDate,
-			"limit":           snapshot.Limit,
-			"consumed_quota":  snapshot.ConsumedQuota,
-			"reserved_quota":  snapshot.ReservedQuota,
-			"remaining_quota": snapshot.RemainingQuota,
-			"unlimited":       snapshot.Unlimited,
-			"timezone":        snapshot.Timezone,
-			"updated_at":      snapshot.UpdatedAt,
-		},
+		"data":    presenter.NewGroupDailyQuotaSnapshot(snapshot, groupName),
+	})
+}
+
+// GetCurrentUserQuotaSummary godoc
+// @Summary Get current user's quota summary
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param date query string false "Biz date in YYYY-MM-DD"
+// @Param month query string false "Biz month in YYYY-MM"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/quota/summary [get]
+func GetCurrentUserQuotaSummary(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	if userID == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "用户 ID 不能为空",
+		})
+		return
+	}
+	summary, err := model.GetUserQuotaSummary(userID, c.Query("date"), c.Query("month"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    presenter.NewUserQuotaSummary(summary),
+	})
+}
+
+// GetUserQuotaSummary godoc
+// @Summary Get user quota summary (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "User ID"
+// @Param date query string false "Biz date in YYYY-MM-DD"
+// @Param month query string false "Biz month in YYYY-MM"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/{id}/quota/summary [get]
+func GetUserQuotaSummary(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "id 为空",
+		})
+		return
+	}
+	targetUser, err := usersvc.GetByID(id, false)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if !requesterCanReadUser(c, targetUser) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无权获取同级或更高等级用户的信息",
+		})
+		return
+	}
+	summary, err := model.GetUserQuotaSummary(id, c.Query("date"), c.Query("month"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    presenter.NewUserQuotaSummary(summary),
 	})
 }
 
@@ -943,6 +1161,22 @@ func UpdateUser(c *gin.Context) {
 		})
 		return
 	}
+	if updatedUser.DailyQuotaLimit < 0 || updatedUser.MonthlyEmergencyQuotaLimit < 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": i18n.Translate(c, "invalid_input"),
+		})
+		return
+	}
+	quotaResetTimezone, err := model.ValidateUserQuotaResetTimezone(updatedUser.QuotaResetTimezone)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	updatedUser.QuotaResetTimezone = quotaResetTimezone
 	originUser, err := usersvc.GetByID(updatedUser.Id, false)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -952,14 +1186,53 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 	myRole := c.GetInt(ctxkey.Role)
-	if myRole <= model.EffectiveRole(originUser) && myRole != model.RoleRootUser {
+	targetEffectiveRole := model.EffectiveRole(originUser)
+	requesterIsRoot := requesterIsRootUser(c)
+	requesterSelf := requesterIsSelf(c, originUser.Id)
+	updatedUser.UsedQuota = originUser.UsedQuota
+	updatedUser.RequestCount = originUser.RequestCount
+	updatedUser.HasPassword = originUser.HasPassword
+	updatedUser.WalletAddress = originUser.WalletAddress
+	roleChanged := updatedUser.Role != model.ExposedRole(originUser)
+	statusChanged := updatedUser.Status != originUser.Status
+	passwordChanged := updatedUser.Password != "$I_LOVE_U" && strings.TrimSpace(updatedUser.Password) != ""
+	normalizedOriginWallet := ""
+	if originUser.WalletAddress != nil {
+		normalizedOriginWallet = model.NormalizeWalletAddress(*originUser.WalletAddress)
+	}
+	normalizedUpdatedWallet := ""
+	if updatedUser.WalletAddress != nil {
+		normalizedUpdatedWallet = model.NormalizeWalletAddress(*updatedUser.WalletAddress)
+	}
+	walletChanged := normalizedOriginWallet != normalizedUpdatedWallet
+	privilegeSensitiveChanged := roleChanged || statusChanged || passwordChanged || walletChanged
+	logger.Loginf(
+		ctx,
+		"update user permission check actor=%s role=%d target=%s target_role=%d role_changed=%t status_changed=%t password_changed=%t wallet_changed=%t",
+		c.GetString(ctxkey.Id),
+		myRole,
+		originUser.Id,
+		targetEffectiveRole,
+		roleChanged,
+		statusChanged,
+		passwordChanged,
+		walletChanged,
+	)
+	if targetEffectiveRole > myRole && !requesterIsRoot {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "无权更新同权限等级或更高权限等级的用户信息",
 		})
 		return
 	}
-	if myRole <= updatedUser.Role && myRole != model.RoleRootUser {
+	if targetEffectiveRole == myRole && privilegeSensitiveChanged && !requesterIsRoot && !requesterSelf {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无权修改同权限等级用户的权限相关字段",
+		})
+		return
+	}
+	if myRole <= updatedUser.Role && !requesterIsRoot && roleChanged {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "无权将其他用户权限等级提升到大于等于自己的权限等级",
@@ -1027,13 +1300,19 @@ func UpdateSelf(c *gin.Context) {
 		return
 	}
 
-	cleanUser := model.User{
-		Id:          c.GetString(ctxkey.Id),
-		Username:    user.Username,
-		Password:    user.Password,
-		DisplayName: user.DisplayName,
-		Email:       strings.TrimSpace(user.Email),
+	originUser, err := usersvc.GetByID(c.GetString(ctxkey.Id), false)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
 	}
+	cleanUser := *originUser
+	cleanUser.Username = user.Username
+	cleanUser.Password = user.Password
+	cleanUser.DisplayName = user.DisplayName
+	cleanUser.Email = strings.TrimSpace(user.Email)
 	if user.Password == "$I_LOVE_U" {
 		user.Password = "" // rollback to what it should be
 		cleanUser.Password = ""
@@ -1484,6 +1763,146 @@ type topUpRequest struct {
 	Key  string `json:"key"`
 }
 
+type topUpOrderResponseData struct {
+	ID            string `json:"id"`
+	TransactionID string `json:"transaction_id"`
+	Status        string `json:"status"`
+	RedirectURL   string `json:"redirect_url"`
+	CreatedAt     int64  `json:"created_at"`
+}
+
+type topUpOrderListData struct {
+	Items    []model.TopupOrder `json:"items"`
+	Total    int64              `json:"total"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"page_size"`
+}
+
+func parseTopupOrderPageParams(c *gin.Context) (int, int) {
+	page, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page", "1")))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page_size", strconv.Itoa(config.ItemsPerPage))))
+	if pageSize <= 0 {
+		pageSize = config.ItemsPerPage
+	}
+	return page, pageSize
+}
+
+// GetTopUpOrders godoc
+// @Summary List current user top up orders
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param page query int false "Page number"
+// @Param page_size query int false "Page size"
+// @Success 200 {object} docs.UserTopUpOrderListResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup/orders [get]
+func GetTopUpOrders(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	page, pageSize := parseTopupOrderPageParams(c)
+	items, total, err := model.ListTopupOrdersPageWithDB(model.DB, userID, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": topUpOrderListData{
+			Items:    items,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		},
+	})
+}
+
+// CreateTopUpOrder godoc
+// @Summary Create user top up order
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.UserCreateTopUpOrderResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup/orders [post]
+func CreateTopUpOrder(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	if userID == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的 user id",
+		})
+		return
+	}
+	username := strings.TrimSpace(c.GetString(ctxkey.Username))
+	if username == "" {
+		username = strings.TrimSpace(c.GetString("username"))
+	}
+	if username == "" {
+		user, err := usersvc.GetByID(userID, false)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+		username = strings.TrimSpace(user.Username)
+	}
+	order, err := model.CreateTopupOrderWithDB(model.DB, userID, username)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": topUpOrderResponseData{
+			ID:            order.Id,
+			TransactionID: order.TransactionID,
+			Status:        order.Status,
+			RedirectURL:   order.RedirectURL,
+			CreatedAt:     order.CreatedAt,
+		},
+	})
+}
+
+// GetTopUpOrder godoc
+// @Summary Get current user top up order detail
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Order ID"
+// @Success 200 {object} docs.UserTopUpOrderDetailResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup/orders/{id} [get]
+func GetTopUpOrder(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	orderID := strings.TrimSpace(c.Param("id"))
+	order, err := model.GetTopupOrderByIDWithDB(model.DB, orderID, userID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    order,
+	})
+}
+
 // TopUp godoc
 // @Summary User top up
 // @Tags public
@@ -1510,7 +1929,7 @@ func TopUp(c *gin.Context) {
 	if code == "" {
 		code = strings.TrimSpace(req.Key)
 	}
-	quota, err := usersvc.Redeem(ctx, code, id)
+	result, err := usersvc.Redeem(ctx, code, id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -1521,7 +1940,7 @@ func TopUp(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    quota,
+		"data":    result,
 	})
 	return
 }

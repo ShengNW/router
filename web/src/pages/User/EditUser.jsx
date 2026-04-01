@@ -3,6 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card, Dropdown, Form, Label } from 'semantic-ui-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API, isRoot, showError, showSuccess } from '../../helpers';
+import {
+  formatYYCValue,
+  isQuotaDisplayedInCurrency,
+  quotaInputStep,
+  quotaInputToStoredValue,
+  quotaToInputValue,
+} from '../../helpers/render';
 
 const ROLE_OPTIONS = (t) => [
   { key: 1, value: 1, text: t('user.table.role_types.normal') },
@@ -56,6 +63,29 @@ const readOnlyValue = (value) => {
   return normalized || '-';
 };
 
+const formatDateTime = (timestamp) => {
+  const value = Number(timestamp || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return '-';
+  }
+  return new Date(value * 1000).toLocaleString('zh-CN', { hour12: false });
+};
+
+const resolvePackageStatusText = (status, t) => {
+  switch (Number(status)) {
+    case 1:
+      return t('user.detail.package_status_types.active');
+    case 2:
+      return t('user.detail.package_status_types.expired');
+    case 3:
+      return t('user.detail.package_status_types.replaced');
+    case 4:
+      return t('user.detail.package_status_types.canceled');
+    default:
+      return t('user.detail.package_status_types.unknown');
+  }
+};
+
 const createEmptyDailyQuota = () => ({
   group_id: '',
   group_name: '',
@@ -69,6 +99,96 @@ const createEmptyDailyQuota = () => ({
   timezone: '',
   updated_at: 0,
 });
+
+const createEmptyUserQuotaSummary = () => ({
+  user_id: '',
+  daily: {
+    user_id: '',
+    biz_date: '',
+    limit: 0,
+    consumed_quota: 0,
+    reserved_quota: 0,
+    remaining_quota: 0,
+    unlimited: true,
+    timezone: '',
+    updated_at: 0,
+  },
+  monthly_emergency: {
+    user_id: '',
+    biz_month: '',
+    limit: 0,
+    consumed_quota: 0,
+    reserved_quota: 0,
+    remaining_quota: 0,
+    enabled: false,
+    timezone: '',
+    updated_at: 0,
+  },
+});
+
+const createEmptyActivePackage = () => ({
+  has_active_subscription: false,
+  subscription: null,
+});
+
+const normalizeQuotaSnapshot = (raw, fallback = {}) => ({
+  ...fallback,
+  ...(raw || {}),
+  limit: Number(raw?.yyc_limit ?? raw?.limit ?? fallback?.limit ?? 0),
+  consumed_quota: Number(raw?.yyc_consumed ?? raw?.consumed_quota ?? fallback?.consumed_quota ?? 0),
+  reserved_quota: Number(raw?.yyc_reserved ?? raw?.reserved_quota ?? fallback?.reserved_quota ?? 0),
+  remaining_quota: Number(raw?.yyc_remaining ?? raw?.remaining_quota ?? fallback?.remaining_quota ?? 0),
+});
+
+const normalizeGroupDailyQuota = (raw, fallbackGroupName = '') => {
+  const next = normalizeQuotaSnapshot(raw, createEmptyDailyQuota());
+  return {
+    ...next,
+    group_id: (raw?.group_id || next.group_id || '').toString().trim(),
+    group_name: (raw?.group_name || fallbackGroupName || '').toString().trim(),
+  };
+};
+
+const normalizeUserQuotaSummary = (raw) => {
+  const empty = createEmptyUserQuotaSummary();
+  return {
+    ...empty,
+    ...(raw || {}),
+    daily: normalizeQuotaSnapshot(raw?.daily, empty.daily),
+    monthly_emergency: normalizeQuotaSnapshot(raw?.monthly_emergency, empty.monthly_emergency),
+  };
+};
+
+const normalizeActivePackage = (raw) => {
+  if (!raw || typeof raw !== 'object') {
+    return createEmptyActivePackage();
+  }
+  const subscription =
+    raw.subscription && typeof raw.subscription === 'object'
+      ? {
+          id: (raw.subscription.id || '').toString().trim(),
+          user_id: (raw.subscription.user_id || '').toString().trim(),
+          package_id: (raw.subscription.package_id || '').toString().trim(),
+          package_name: (raw.subscription.package_name || '').toString().trim(),
+          group_id: (raw.subscription.group_id || '').toString().trim(),
+          group_name: (raw.subscription.group_name || '').toString().trim(),
+          daily_quota_limit: Number(raw.subscription.daily_quota_limit || 0),
+          monthly_emergency_quota_limit: Number(
+            raw.subscription.monthly_emergency_quota_limit || 0,
+          ),
+          quota_reset_timezone: (raw.subscription.quota_reset_timezone || '').toString().trim(),
+          started_at: Number(raw.subscription.started_at || 0),
+          expires_at: Number(raw.subscription.expires_at || 0),
+          status: Number(raw.subscription.status || 0),
+          source: (raw.subscription.source || '').toString().trim(),
+        }
+      : null;
+  const hasActive = raw.has_active_subscription === true && subscription !== null;
+  return {
+    has_active_subscription: hasActive,
+    subscription: hasActive ? subscription : null,
+  };
+};
 
 const parseFirstGroupRef = (raw) => {
   const normalized = (raw || '').toString().trim();
@@ -89,6 +209,9 @@ const UserDetail = () => {
   const { t } = useTranslation();
   const { id: userId } = useParams();
   const navigate = useNavigate();
+  const quotaDisplayInCurrency = isQuotaDisplayedInCurrency();
+  const quotaFieldStep = quotaInputStep();
+  const quotaFieldSuffix = quotaDisplayInCurrency ? ' (USD)' : '';
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState('');
@@ -96,11 +219,18 @@ const UserDetail = () => {
   const [groupMap, setGroupMap] = useState({});
   const [dailyQuota, setDailyQuota] = useState(createEmptyDailyQuota());
   const [dailyQuotaLoading, setDailyQuotaLoading] = useState(false);
+  const [activePackage, setActivePackage] = useState(createEmptyActivePackage());
+  const [activePackageLoading, setActivePackageLoading] = useState(false);
+  const [userQuotaSummary, setUserQuotaSummary] = useState(createEmptyUserQuotaSummary());
+  const [userQuotaSummaryLoading, setUserQuotaSummaryLoading] = useState(false);
   const [inputs, setInputs] = useState({
     username: '',
     email: '',
     quota: 0,
     group: '',
+    daily_quota_limit: 0,
+    monthly_emergency_quota_limit: 0,
+    quota_reset_timezone: 'Asia/Shanghai',
     role: 1,
     status: 1,
     wallet_address: '',
@@ -113,6 +243,9 @@ const UserDetail = () => {
     email: '',
     quota: 0,
     group: '',
+    daily_quota_limit: 0,
+    monthly_emergency_quota_limit: 0,
+    quota_reset_timezone: 'Asia/Shanghai',
   });
 
   const loadGroups = useCallback(async () => {
@@ -177,12 +310,17 @@ const UserDetail = () => {
       const nextInputs = {
         username: data?.username || '',
         email: data?.email || '',
-        quota: data?.quota ?? 0,
+        quota: Number(data?.yyc_balance ?? data?.quota ?? 0),
         group: data?.group || '',
+        daily_quota_limit: Number(data?.yyc_daily_limit ?? data?.daily_quota_limit ?? 0),
+        monthly_emergency_quota_limit: Number(
+          data?.yyc_monthly_emergency_limit ?? data?.monthly_emergency_quota_limit ?? 0,
+        ),
+        quota_reset_timezone: data?.quota_reset_timezone || 'Asia/Shanghai',
         role: Number(data?.role || 1),
         status: Number(data?.status || 1),
         wallet_address: walletAddress,
-        used_quota: data?.used_quota ?? 0,
+        used_quota: Number(data?.yyc_used ?? data?.used_quota ?? 0),
         request_count: data?.request_count ?? 0,
         can_manage_users: data?.can_manage_users === true,
       };
@@ -190,8 +328,11 @@ const UserDetail = () => {
       setEditInputs({
         username: nextInputs.username,
         email: nextInputs.email,
-        quota: nextInputs.quota,
+        quota: quotaToInputValue(nextInputs.quota),
         group: nextInputs.group,
+        daily_quota_limit: quotaToInputValue(nextInputs.daily_quota_limit),
+        monthly_emergency_quota_limit: quotaToInputValue(nextInputs.monthly_emergency_quota_limit),
+        quota_reset_timezone: nextInputs.quota_reset_timezone,
       });
       setPersistedUsername((data?.username || '').toString().trim());
       setIsEditing(false);
@@ -201,6 +342,52 @@ const UserDetail = () => {
       setLoading(false);
     }
   }, [navigate, userId]);
+
+  const loadUserQuotaSummary = useCallback(async () => {
+    const normalizedUserId = (userId || '').toString().trim();
+    if (normalizedUserId === '') {
+      setUserQuotaSummary(createEmptyUserQuotaSummary());
+      return;
+    }
+    setUserQuotaSummaryLoading(true);
+    try {
+      const res = await API.get(`/api/v1/admin/user/${encodeURIComponent(normalizedUserId)}/quota/summary`);
+      const { success, message, data } = res.data || {};
+      if (!success) {
+        showError(message || t('user.messages.user_quota_load_failed'));
+        return;
+      }
+      setUserQuotaSummary(normalizeUserQuotaSummary(data));
+    } catch (error) {
+      showError(error?.message || error);
+    } finally {
+      setUserQuotaSummaryLoading(false);
+    }
+  }, [t, userId]);
+
+  const loadActivePackage = useCallback(async () => {
+    const normalizedUserId = (userId || '').toString().trim();
+    if (normalizedUserId === '') {
+      setActivePackage(createEmptyActivePackage());
+      return;
+    }
+    setActivePackageLoading(true);
+    try {
+      const res = await API.get(
+        `/api/v1/admin/user/${encodeURIComponent(normalizedUserId)}/package/subscription`,
+      );
+      const { success, message, data } = res.data || {};
+      if (!success) {
+        showError(message || t('user.messages.active_package_load_failed'));
+        return;
+      }
+      setActivePackage(normalizeActivePackage(data));
+    } catch (error) {
+      showError(error?.message || error);
+    } finally {
+      setActivePackageLoading(false);
+    }
+  }, [t, userId]);
 
   useEffect(() => {
     const init = async () => {
@@ -250,6 +437,8 @@ const UserDetail = () => {
 
   const isProtectedUser = inputs.can_manage_users === true;
   const canManageRole = isRoot() && !isProtectedUser;
+  const hasActivePackage = activePackage.has_active_subscription === true && activePackage.subscription;
+  const activePackageSubscription = hasActivePackage ? activePackage.subscription : null;
 
   const loadDailyQuota = useCallback(async () => {
     const normalizedUserId = (userId || '').toString().trim();
@@ -271,12 +460,9 @@ const UserDetail = () => {
         showError(message || t('user.messages.daily_quota_load_failed'));
         return;
       }
-      setDailyQuota({
-        ...createEmptyDailyQuota(),
-        ...(data || {}),
-        group_id: normalizedGroupId,
-        group_name: groupMap[normalizedGroupId] || normalizedGroupId,
-      });
+      setDailyQuota(
+        normalizeGroupDailyQuota(data, groupMap[normalizedGroupId] || normalizedGroupId),
+      );
     } catch (error) {
       showError(error?.message || error);
     } finally {
@@ -287,6 +473,14 @@ const UserDetail = () => {
   useEffect(() => {
     loadDailyQuota().then();
   }, [loadDailyQuota]);
+
+  useEffect(() => {
+    loadUserQuotaSummary().then();
+  }, [loadUserQuotaSummary]);
+
+  useEffect(() => {
+    loadActivePackage().then();
+  }, [loadActivePackage]);
 
   const roleControl = useMemo(() => {
     if (!canManageRole) {
@@ -354,10 +548,21 @@ const UserDetail = () => {
     setEditInputs({
       username: inputs.username || '',
       email: inputs.email || '',
-      quota: inputs.quota ?? 0,
+      quota: quotaToInputValue(inputs.quota ?? 0),
       group: inputs.group || '',
+      daily_quota_limit: quotaToInputValue(inputs.daily_quota_limit ?? 0),
+      monthly_emergency_quota_limit: quotaToInputValue(inputs.monthly_emergency_quota_limit ?? 0),
+      quota_reset_timezone: inputs.quota_reset_timezone || 'Asia/Shanghai',
     });
-  }, [inputs.email, inputs.group, inputs.quota, inputs.username]);
+  }, [
+    inputs.daily_quota_limit,
+    inputs.email,
+    inputs.group,
+    inputs.monthly_emergency_quota_limit,
+    inputs.quota,
+    inputs.quota_reset_timezone,
+    inputs.username,
+  ]);
 
   const startEditing = useCallback(() => {
     resetEditInputs();
@@ -373,12 +578,22 @@ const UserDetail = () => {
     const username = (editInputs.username || '').toString().trim();
     const email = (editInputs.email || '').toString().trim();
     const group = (editInputs.group || '').toString().trim();
-    const quota = Number(editInputs.quota);
+    const quota = quotaInputToStoredValue(editInputs.quota);
+    const dailyQuotaLimit = quotaInputToStoredValue(editInputs.daily_quota_limit);
+    const monthlyEmergencyQuotaLimit = quotaInputToStoredValue(editInputs.monthly_emergency_quota_limit);
+    const quotaResetTimezone = (editInputs.quota_reset_timezone || '').toString().trim();
     if (username === '') {
       showError(t('user.edit.username_placeholder'));
       return;
     }
-    if (!Number.isFinite(quota) || quota < 0) {
+    if (
+      !Number.isFinite(quota) ||
+      quota < 0 ||
+      !Number.isFinite(dailyQuotaLimit) ||
+      dailyQuotaLimit < 0 ||
+      !Number.isFinite(monthlyEmergencyQuotaLimit) ||
+      monthlyEmergencyQuotaLimit < 0
+    ) {
       showError(t('user.messages.operation_failed'));
       return;
     }
@@ -390,6 +605,9 @@ const UserDetail = () => {
         email,
         group,
         quota: Math.trunc(quota),
+        daily_quota_limit: Math.trunc(dailyQuotaLimit),
+        monthly_emergency_quota_limit: Math.trunc(monthlyEmergencyQuotaLimit),
+        quota_reset_timezone: quotaResetTimezone,
         role: Number(inputs.role || 1),
         status: Number(inputs.status || 1),
         display_name: username,
@@ -402,6 +620,8 @@ const UserDetail = () => {
       }
       showSuccess(t('user.messages.update_success'));
       await loadUser();
+      await loadUserQuotaSummary();
+      await loadActivePackage();
       setIsEditing(false);
     } catch (error) {
       showError(error?.message || error);
@@ -409,13 +629,18 @@ const UserDetail = () => {
       setActionLoading('');
     }
   }, [
+    editInputs.daily_quota_limit,
     editInputs.email,
     editInputs.group,
+    editInputs.monthly_emergency_quota_limit,
     editInputs.quota,
+    editInputs.quota_reset_timezone,
     editInputs.username,
     inputs.role,
     inputs.status,
     loadUser,
+    loadActivePackage,
+    loadUserQuotaSummary,
     t,
     userId,
   ]);
@@ -528,8 +753,35 @@ const UserDetail = () => {
                   className='router-section-input'
                   type='number'
                   min='0'
-                  step='1'
-                  label={t('user.edit.quota')}
+                  step={quotaFieldStep}
+                  label={`${t('user.edit.daily_quota_limit')}${quotaFieldSuffix}`}
+                  name='daily_quota_limit'
+                  value={editInputs.daily_quota_limit}
+                  placeholder={t('user.edit.daily_quota_limit_placeholder')}
+                  onChange={handleEditInputChange}
+                />
+              ) : (
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.edit.daily_quota_limit')}
+                  value={
+                    Number(inputs.daily_quota_limit || 0) > 0
+                      ? formatYYCValue(inputs.daily_quota_limit)
+                      : t('common.unlimited')
+                  }
+                  readOnly
+                />
+              )}
+            </Form.Group>
+
+            <Form.Group widths='equal'>
+              {isEditing ? (
+                <Form.Input
+                  className='router-section-input'
+                  type='number'
+                  min='0'
+                  step={quotaFieldStep}
+                  label={`${t('user.edit.quota')}${quotaFieldSuffix}`}
                   name='quota'
                   value={editInputs.quota}
                   placeholder={t('user.edit.quota_placeholder')}
@@ -539,7 +791,44 @@ const UserDetail = () => {
                 <Form.Input
                   className='router-section-input'
                   label={t('user.edit.quota')}
-                  value={inputs.quota}
+                  value={formatYYCValue(inputs.quota)}
+                  readOnly
+                />
+              )}
+              {isEditing ? (
+                <Form.Input
+                  className='router-section-input'
+                  type='number'
+                  min='0'
+                  step={quotaFieldStep}
+                  label={`${t('user.edit.monthly_emergency_quota_limit')}${quotaFieldSuffix}`}
+                  name='monthly_emergency_quota_limit'
+                  value={editInputs.monthly_emergency_quota_limit}
+                  placeholder={t('user.edit.monthly_emergency_quota_limit_placeholder')}
+                  onChange={handleEditInputChange}
+                />
+              ) : (
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.edit.monthly_emergency_quota_limit')}
+                  value={formatYYCValue(inputs.monthly_emergency_quota_limit || 0)}
+                  readOnly
+                />
+              )}
+              {isEditing ? (
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.edit.quota_reset_timezone')}
+                  name='quota_reset_timezone'
+                  value={editInputs.quota_reset_timezone}
+                  placeholder={t('user.edit.quota_reset_timezone_placeholder')}
+                  onChange={handleEditInputChange}
+                />
+              ) : (
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.edit.quota_reset_timezone')}
+                  value={readOnlyValue(inputs.quota_reset_timezone)}
                   readOnly
                 />
               )}
@@ -555,7 +844,7 @@ const UserDetail = () => {
               <Form.Input
                 className='router-section-input'
                 label={t('user.table.used_quota')}
-                value={inputs.used_quota}
+                value={formatYYCValue(inputs.used_quota)}
                 readOnly
               />
               <Form.Input
@@ -565,6 +854,245 @@ const UserDetail = () => {
                 readOnly
               />
             </Form.Group>
+
+            <div className='router-block-top-sm'>
+              <div className='router-toolbar router-block-gap-xs'>
+                <div className='router-toolbar-title'>
+                  {t('user.detail.package_title')}
+                </div>
+                <Button
+                  type='button'
+                  className='router-inline-button'
+                  loading={activePackageLoading}
+                  disabled={activePackageLoading || loading || actionLoading !== ''}
+                  onClick={() => loadActivePackage()}
+                >
+                  {t('user.buttons.refresh')}
+                </Button>
+              </div>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_name')}
+                  value={
+                    hasActivePackage
+                      ? readOnlyValue(activePackageSubscription?.package_name)
+                      : t('user.detail.package_none')
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_group')}
+                  value={
+                    hasActivePackage
+                      ? readOnlyValue(
+                          activePackageSubscription?.group_name ||
+                            activePackageSubscription?.group_id,
+                        )
+                      : '-'
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_status')}
+                  value={
+                    hasActivePackage
+                      ? resolvePackageStatusText(activePackageSubscription?.status, t)
+                      : '-'
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_source')}
+                  value={
+                    hasActivePackage
+                      ? readOnlyValue(activePackageSubscription?.source)
+                      : '-'
+                  }
+                  readOnly
+                />
+              </Form.Group>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_daily_limit')}
+                  value={
+                    hasActivePackage
+                      ? Number(activePackageSubscription?.daily_quota_limit || 0) > 0
+                        ? formatYYCValue(activePackageSubscription?.daily_quota_limit || 0)
+                        : t('common.unlimited')
+                      : '-'
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_monthly_emergency_limit')}
+                  value={
+                    hasActivePackage
+                      ? formatYYCValue(
+                          activePackageSubscription?.monthly_emergency_quota_limit || 0,
+                        )
+                      : '-'
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_timezone')}
+                  value={
+                    hasActivePackage
+                      ? readOnlyValue(activePackageSubscription?.quota_reset_timezone)
+                      : '-'
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_started_at')}
+                  value={
+                    hasActivePackage
+                      ? formatDateTime(activePackageSubscription?.started_at)
+                      : '-'
+                  }
+                  readOnly
+                />
+              </Form.Group>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.package_expires_at')}
+                  value={
+                    hasActivePackage
+                      ? Number(activePackageSubscription?.expires_at || 0) > 0
+                        ? formatDateTime(activePackageSubscription?.expires_at)
+                        : t('common.unlimited')
+                      : '-'
+                  }
+                  readOnly
+                />
+              </Form.Group>
+            </div>
+
+            <div className='router-block-top-sm'>
+              <div className='router-toolbar router-block-gap-xs'>
+                <div className='router-toolbar-title'>
+                  {t('user.detail.user_quota_title')}
+                </div>
+                <Button
+                  type='button'
+                  className='router-inline-button'
+                  loading={userQuotaSummaryLoading}
+                  disabled={userQuotaSummaryLoading || loading || actionLoading !== ''}
+                  onClick={() => loadUserQuotaSummary()}
+                >
+                  {t('user.buttons.refresh')}
+                </Button>
+              </div>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_daily_limit')}
+                  value={
+                    userQuotaSummary.daily.unlimited
+                      ? t('common.unlimited')
+                      : formatYYCValue(userQuotaSummary.daily.limit || 0)
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_daily_consumed')}
+                  value={formatYYCValue(userQuotaSummary.daily.consumed_quota || 0)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_daily_reserved')}
+                  value={formatYYCValue(userQuotaSummary.daily.reserved_quota || 0)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_daily_remaining')}
+                  value={
+                    userQuotaSummary.daily.unlimited
+                      ? t('common.unlimited')
+                      : formatYYCValue(userQuotaSummary.daily.remaining_quota || 0)
+                  }
+                  readOnly
+                />
+              </Form.Group>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_biz_date')}
+                  value={readOnlyValue(userQuotaSummary.daily.biz_date)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_monthly_emergency_limit')}
+                  value={
+                    userQuotaSummary.monthly_emergency.enabled
+                      ? formatYYCValue(userQuotaSummary.monthly_emergency.limit || 0)
+                      : '-'
+                  }
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_monthly_emergency_consumed')}
+                  value={formatYYCValue(userQuotaSummary.monthly_emergency.consumed_quota || 0)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_monthly_emergency_remaining')}
+                  value={
+                    userQuotaSummary.monthly_emergency.enabled
+                      ? formatYYCValue(userQuotaSummary.monthly_emergency.remaining_quota || 0)
+                      : '-'
+                  }
+                  readOnly
+                />
+              </Form.Group>
+              <Form.Group widths='equal'>
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_monthly_emergency_reserved')}
+                  value={formatYYCValue(userQuotaSummary.monthly_emergency.reserved_quota || 0)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_biz_month')}
+                  value={readOnlyValue(userQuotaSummary.monthly_emergency.biz_month)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_timezone')}
+                  value={readOnlyValue(userQuotaSummary.daily.timezone)}
+                  readOnly
+                />
+                <Form.Input
+                  className='router-section-input'
+                  label={t('user.detail.user_quota_updated_at')}
+                  value={
+                    userQuotaSummary.daily.updated_at
+                      ? new Date(Number(userQuotaSummary.daily.updated_at) * 1000).toLocaleString('zh-CN', { hour12: false })
+                      : userQuotaSummary.monthly_emergency.updated_at
+                        ? new Date(Number(userQuotaSummary.monthly_emergency.updated_at) * 1000).toLocaleString('zh-CN', { hour12: false })
+                        : '-'
+                  }
+                  readOnly
+                />
+              </Form.Group>
+            </div>
 
             <div className='router-block-top-sm'>
               <div className='router-toolbar router-block-gap-xs'>
@@ -591,20 +1119,26 @@ const UserDetail = () => {
                 <Form.Input
                   className='router-section-input'
                   label={t('user.detail.daily_quota_limit')}
-                  value={dailyQuota.unlimited ? t('common.unlimited') : Number(dailyQuota.limit || 0)}
+                  value={
+                    dailyQuota.unlimited
+                      ? t('common.unlimited')
+                      : formatYYCValue(dailyQuota.limit || 0)
+                  }
                   readOnly
                 />
                 <Form.Input
                   className='router-section-input'
                   label={t('user.detail.daily_quota_consumed')}
-                  value={Number(dailyQuota.consumed_quota || 0)}
+                  value={formatYYCValue(dailyQuota.consumed_quota || 0)}
                   readOnly
                 />
                 <Form.Input
                   className='router-section-input'
                   label={t('user.detail.daily_quota_remaining')}
                   value={
-                    dailyQuota.unlimited ? t('common.unlimited') : Number(dailyQuota.remaining_quota || 0)
+                    dailyQuota.unlimited
+                      ? t('common.unlimited')
+                      : formatYYCValue(dailyQuota.remaining_quota || 0)
                   }
                   readOnly
                 />
@@ -613,7 +1147,7 @@ const UserDetail = () => {
                 <Form.Input
                   className='router-section-input'
                   label={t('user.detail.daily_quota_reserved')}
-                  value={Number(dailyQuota.reserved_quota || 0)}
+                  value={formatYYCValue(dailyQuota.reserved_quota || 0)}
                   readOnly
                 />
                 <Form.Input

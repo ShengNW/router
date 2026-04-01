@@ -16,6 +16,7 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		&Channel{},
 		&ChannelModel{},
 		&ChannelTest{},
+		&TopupOrder{},
 		&AsyncTask{},
 		&UserTask{},
 		&Token{},
@@ -27,7 +28,10 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		&ProviderModelPriceComponent{},
 		&ChannelProtocolCatalog{},
 		&GroupCatalog{},
-		&GroupQuotaDailyCounter{},
+		&ServicePackage{},
+		&UserPackageSubscription{},
+		&GroupQuotaCounter{},
+		&UserQuotaCounter{},
 		&Log{},
 	); err != nil {
 		return err

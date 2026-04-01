@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Button, Form, Label, Modal, Table } from 'semantic-ui-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../helpers';
-
 const MODE_LIST = 'list';
 const MODE_CREATE = 'create';
 const MODE_VIEW = 'view';
@@ -14,8 +13,6 @@ const createEmptyForm = () => ({
   name: '',
   description: '',
   billing_ratio: 1,
-  daily_quota_limit: 0,
-  quota_reset_timezone: 'Asia/Shanghai',
   sort_order: 0,
 });
 
@@ -40,8 +37,6 @@ const buildFormFromRow = (row) => ({
   name: row?.name || '',
   description: row?.description || '',
   billing_ratio: Number(row?.billing_ratio ?? 1),
-  daily_quota_limit: Number(row?.daily_quota_limit || 0),
-  quota_reset_timezone: row?.quota_reset_timezone || 'Asia/Shanghai',
   sort_order: Number(row?.sort_order || 0),
 });
 
@@ -497,18 +492,12 @@ const GroupsManager = ({ detailGroupId = '' }) => {
       showInfo(t('group_manage.messages.billing_ratio_invalid'));
       return;
     }
-    const dailyQuotaLimit = Number(form.daily_quota_limit ?? 0);
-    if (!Number.isFinite(dailyQuotaLimit) || dailyQuotaLimit < 0) {
-      showInfo(t('group_manage.messages.daily_quota_limit_invalid'));
-      return;
-    }
     setSubmitting(true);
     try {
       const res = await API.post('/api/v1/admin/group/', {
         name,
         description: (form.description || '').trim(),
         billing_ratio: billingRatio,
-        daily_quota_limit: Math.floor(dailyQuotaLimit),
         channel_ids: formChannelIDs,
       });
       const { success, message, data } = res.data || {};
@@ -536,11 +525,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     const billingRatio = Number(form.billing_ratio ?? 1);
     if (!Number.isFinite(billingRatio) || billingRatio < 0) {
       showInfo(t('group_manage.messages.billing_ratio_invalid'));
-      return;
-    }
-    const dailyQuotaLimit = Number(form.daily_quota_limit ?? 0);
-    if (!Number.isFinite(dailyQuotaLimit) || dailyQuotaLimit < 0) {
-      showInfo(t('group_manage.messages.daily_quota_limit_invalid'));
       return;
     }
     const selectedChannelIDSet = new Set(formChannelIDs);
@@ -579,7 +563,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
         name,
         description: (form.description || '').trim(),
         billing_ratio: billingRatio,
-        daily_quota_limit: Math.floor(dailyQuotaLimit),
         sort_order: Number(form.sort_order || 0),
         channel_ids: formChannelIDs,
         model_configs: normalizedModelConfigs,
@@ -716,7 +699,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
             <Table.HeaderCell>{t('group_manage.table.description')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.channels')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.billing_ratio')}</Table.HeaderCell>
-            <Table.HeaderCell>{t('group_manage.table.daily_quota_limit')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.status')}</Table.HeaderCell>
             <Table.HeaderCell>{t('group_manage.table.updated_at')}</Table.HeaderCell>
             <Table.HeaderCell className='router-table-action-cell router-group-action-cell'>
@@ -727,7 +709,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
         <Table.Body>
           {visibleRows.length === 0 ? (
             <Table.Row>
-              <Table.Cell className='router-empty-cell' colSpan={8} textAlign='center'>
+              <Table.Cell className='router-empty-cell' colSpan={7} textAlign='center'>
                 {loading
                   ? t('group_manage.messages.loading')
                   : t('group_manage.messages.empty')}
@@ -756,11 +738,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
                   )}
                 </Table.Cell>
                 <Table.Cell>{Number(row.billing_ratio ?? 1).toFixed(2)}</Table.Cell>
-                <Table.Cell>
-                  {Number(row.daily_quota_limit || 0) > 0
-                    ? Number(row.daily_quota_limit || 0)
-                    : t('common.unlimited')}
-                </Table.Cell>
                 <Table.Cell>{renderGroupStatus(row.enabled)}</Table.Cell>
                 <Table.Cell>{row.updated_at ? timestamp2string(row.updated_at) : '-'}</Table.Cell>
                 <Table.Cell className='router-table-action-cell router-group-action-cell'>
@@ -1182,16 +1159,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
             />
             <Form.Input
               className='router-section-input'
-              label={t('group_manage.form.daily_quota_limit')}
-              value={
-                Number(activeGroup.daily_quota_limit || 0) > 0
-                  ? Number(activeGroup.daily_quota_limit || 0)
-                  : t('common.unlimited')
-              }
-              readOnly
-            />
-            <Form.Input
-              className='router-section-input'
               label={t('group_manage.table.status')}
               value={
                 activeGroup.enabled
@@ -1267,21 +1234,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
               setForm((prev) => ({
                 ...prev,
                 billing_ratio: e.target.value,
-              }))
-            }
-          />
-          <Form.Input
-            className='router-section-input'
-            type='number'
-            min='0'
-            step='1'
-            label={t('group_manage.form.daily_quota_limit')}
-            placeholder={t('group_manage.form.daily_quota_limit_placeholder')}
-            value={form.daily_quota_limit}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                daily_quota_limit: e.target.value,
               }))
             }
           />
@@ -1388,21 +1340,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
               setForm((prev) => ({
                 ...prev,
                 billing_ratio: e.target.value,
-              }))
-            }
-          />
-          <Form.Input
-            className='router-section-input'
-            type='number'
-            min='0'
-            step='1'
-            label={t('group_manage.form.daily_quota_limit')}
-            placeholder={t('group_manage.form.daily_quota_limit_placeholder')}
-            value={form.daily_quota_limit}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                daily_quota_limit: e.target.value,
               }))
             }
           />

@@ -66,17 +66,29 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	// pre-consume quota
 	promptTokens := getPromptTokens(textRequest, meta.Mode)
 	meta.PromptTokens = promptTokens
-	groupReservedQuota := billing.ComputeTextPreConsumedQuota(promptTokens, textRequest.MaxTokens, pricing, groupRatio)
-	groupReservation, groupQuotaErr := reserveGroupDailyQuota(meta.Group, meta.UserId, groupReservedQuota)
+	groupReservedQuota, err := billing.ComputeTextPreConsumedQuota(promptTokens, textRequest.MaxTokens, pricing, groupRatio)
+	if err != nil {
+		logger.Errorf(ctx, "ComputeTextPreConsumedQuota failed: %s", err.Error())
+		return openai.ErrorWrapper(err, "calculate_text_quota_failed", http.StatusInternalServerError)
+	}
+	groupReservation, groupQuotaErr := reserveGroupDailyQuota(ctx, meta.Group, meta.UserId, groupReservedQuota)
 	if groupQuotaErr != nil {
 		return groupQuotaErr
 	}
-	groupQuotaSettled := false
-	defer func() {
-		if groupQuotaSettled {
-			return
-		}
+	userReservation, userQuotaErr := reserveUserQuota(meta.UserId, groupReservedQuota)
+	if userQuotaErr != nil {
 		releaseGroupDailyQuotaReservation(ctx, groupReservation)
+		return userQuotaErr
+	}
+	groupQuotaSettled := false
+	userQuotaSettled := false
+	defer func() {
+		if !groupQuotaSettled {
+			releaseGroupDailyQuotaReservation(ctx, groupReservation)
+		}
+		if !userQuotaSettled {
+			releaseUserQuotaReservation(ctx, userReservation)
+		}
 	}()
 	preConsumedQuota, bizErr := preConsumeQuota(ctx, textRequest, promptTokens, pricing, groupRatio, meta)
 	if bizErr != nil {
@@ -122,8 +134,9 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		return respErr
 	}
 	// post-consume quota
-	go postConsumeQuota(ctx, usage, meta, upstreamRequest, pricing, preConsumedQuota, groupRatio, systemPromptReset, groupReservation)
+	go postConsumeQuota(ctx, usage, meta, upstreamRequest, pricing, preConsumedQuota, groupRatio, systemPromptReset, groupReservation, userReservation)
 	groupQuotaSettled = true
+	userQuotaSettled = true
 	return nil
 }
 

@@ -36,10 +36,12 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Providers from './pages/Providers';
 import Group from './pages/Group';
+import Package from './pages/Package';
 import Task from './pages/Task';
 import TaskDetail from './pages/Task/Detail';
 import AdminLayout from './layouts/AdminLayout';
 import UserLayout from './layouts/UserLayout';
+import UserWorkspaceLayout from './layouts/UserWorkspaceLayout';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '';
 
@@ -71,7 +73,11 @@ function DashboardRedirect() {
 function SettingRedirect() {
   return (
     <Navigate
-      to={isAdmin() ? '/admin/setting' : '/workspace/setting'}
+      to={
+        isAdmin()
+          ? '/admin/setting?tab=system&section=general'
+          : '/workspace/setting'
+      }
       replace
     />
   );
@@ -267,6 +273,15 @@ function App() {
           path='/workspace/about'
           element={<Navigate to='/workspace/token' replace />}
         />
+      </Route>
+
+      <Route
+        element={
+          <PrivateRoute>
+            <UserWorkspaceLayout />
+          </PrivateRoute>
+        }
+      >
         <Route
           path='/workspace/chat'
           element={
@@ -275,15 +290,6 @@ function App() {
             </Suspense>
           }
         />
-      </Route>
-
-      <Route
-        element={
-          <PrivateRoute>
-            <UserLayout />
-          </PrivateRoute>
-        }
-      >
         <Route path='/workspace/token' element={<Token />} />
         <Route
           path='/workspace/token/:id'
@@ -383,6 +389,7 @@ function App() {
         <Route path='/admin/provider' element={<Providers />} />
         <Route path='/admin/group' element={<Group />} />
         <Route path='/admin/group/detail/:id' element={<Group />} />
+        <Route path='/admin/package' element={<Package />} />
         <Route path='/admin/redemption' element={<Redemption />} />
         <Route
           path='/admin/redemption/edit/:id'
@@ -489,6 +496,10 @@ function App() {
       <Route
         path='/group/*'
         element={<PrefixRedirect from='/group' to='/admin/group' />}
+      />
+      <Route
+        path='/package/*'
+        element={<PrefixRedirect from='/package' to='/admin/package' />}
       />
       <Route
         path='/redemption/*'

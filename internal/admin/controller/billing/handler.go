@@ -1,13 +1,241 @@
 package billing
 
 import (
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/yeying-community/router/common/config"
 	"github.com/yeying-community/router/common/ctxkey"
+	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/internal/admin/model"
 	billingsvc "github.com/yeying-community/router/internal/admin/service/billing"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 )
+
+func usdYYCPerUnit() float64 {
+	value, err := model.GetBillingCurrencyYYCPerUnit(model.BillingCurrencyCodeUSD)
+	if err != nil || value <= 0 {
+		return config.QuotaPerUnit
+	}
+	return value
+}
+
+type upsertBillingCurrencyRequest struct {
+	Code       string  `json:"code"`
+	Name       string  `json:"name"`
+	Symbol     string  `json:"symbol"`
+	MinorUnit  int     `json:"minor_unit"`
+	YYCPerUnit float64 `json:"yyc_per_unit"`
+	Status     int     `json:"status"`
+	Source     string  `json:"source"`
+}
+
+// GetBillingCurrencies godoc
+// @Summary List billing currencies (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/currencies [get]
+func GetBillingCurrencies(c *gin.Context) {
+	rows, err := model.ListBillingCurrencies()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "加载计费币种失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    rows,
+	})
+}
+
+// CreateBillingCurrency godoc
+// @Summary Create billing currency (root)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/currencies [post]
+func CreateBillingCurrency(c *gin.Context) {
+	req := upsertBillingCurrencyRequest{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "参数错误",
+		})
+		return
+	}
+	row, err := model.CreateBillingCurrencyWithDB(model.DB, model.BillingCurrency{
+		Code:       req.Code,
+		Name:       req.Name,
+		Symbol:     req.Symbol,
+		MinorUnit:  req.MinorUnit,
+		YYCPerUnit: req.YYCPerUnit,
+		Status:     req.Status,
+		Source:     req.Source,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    row,
+	})
+}
+
+// UpdateBillingCurrency godoc
+// @Summary Update billing currency (root)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param code path string true "Currency code"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/currencies/{code} [put]
+func UpdateBillingCurrency(c *gin.Context) {
+	code := strings.TrimSpace(c.Param("code"))
+	if code == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "币种代码不能为空",
+		})
+		return
+	}
+	req := upsertBillingCurrencyRequest{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "参数错误",
+		})
+		return
+	}
+	row, err := model.UpdateBillingCurrencyWithDB(model.DB, code, func(current model.BillingCurrency) (model.BillingCurrency, error) {
+		next := current
+		next.Name = req.Name
+		next.Symbol = req.Symbol
+		next.MinorUnit = req.MinorUnit
+		next.YYCPerUnit = req.YYCPerUnit
+		next.Status = req.Status
+		if strings.TrimSpace(req.Source) != "" {
+			next.Source = req.Source
+		} else if strings.TrimSpace(strings.ToLower(current.Source)) == model.BillingCurrencySourceSystemDefault {
+			next.Source = model.BillingCurrencySourceManual
+		}
+		return next, nil
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    row,
+	})
+}
+
+// SyncBillingCurrenciesFromFX godoc
+// @Summary Sync billing currencies from FX provider (root)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/fx/sync [post]
+func SyncBillingCurrenciesFromFX(c *gin.Context) {
+	runAt := helper.GetTimestamp()
+	_ = model.UpdateOption("FXAutoSyncLastRunAt", strconv.FormatInt(runAt, 10))
+
+	result, err := billingsvc.SyncBillingCurrenciesFromFX(c.Request.Context())
+	if err != nil {
+		_ = model.UpdateOption("FXAutoSyncLastError", strings.TrimSpace(err.Error()))
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "同步汇率失败: " + err.Error(),
+		})
+		return
+	}
+	_ = model.UpdateOption("FXAutoSyncLastSuccessAt", strconv.FormatInt(runAt, 10))
+	_ = model.UpdateOption("FXAutoSyncLastError", "")
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    result,
+	})
+}
+
+// GetFXSyncStatus godoc
+// @Summary Get FX auto-sync status (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/fx/status [get]
+func GetFXSyncStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"enabled":            config.FXAutoSyncEnabled,
+			"interval_seconds":   config.FXAutoSyncIntervalSeconds,
+			"provider":           config.FXAutoSyncProvider,
+			"last_run_at":        config.FXAutoSyncLastRunAt,
+			"last_success_at":    config.FXAutoSyncLastSuccessAt,
+			"last_error":         config.FXAutoSyncLastError,
+			"min_interval":       60,
+			"loop_check_seconds": 30,
+		},
+	})
+}
+
+// GetFXMarketRates godoc
+// @Summary Get FX market rates (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/fx/rates [get]
+func GetFXMarketRates(c *gin.Context) {
+	currenciesParam := strings.TrimSpace(c.Query("currencies"))
+	currencies := make([]string, 0)
+	if currenciesParam != "" {
+		currencies = append(currencies, strings.Split(currenciesParam, ",")...)
+	}
+
+	result, err := billingsvc.GetFXMarketRates(c.Request.Context(), currencies)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "加载汇率列表失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    result,
+	})
+}
 
 func GetSubscription(c *gin.Context) {
 	var remainQuota int64
@@ -49,7 +277,7 @@ func GetSubscription(c *gin.Context) {
 	quota := remainQuota + usedQuota
 	amount := float64(quota)
 	if config.DisplayInCurrencyEnabled {
-		amount /= config.QuotaPerUnit
+		amount /= usdYYCPerUnit()
 	}
 	if token != nil && token.UnlimitedQuota {
 		amount = 100000000
@@ -95,7 +323,7 @@ func GetUsage(c *gin.Context) {
 	}
 	amount := float64(quota)
 	if config.DisplayInCurrencyEnabled {
-		amount /= config.QuotaPerUnit
+		amount /= usdYYCPerUnit()
 	}
 	usage := billingsvc.OpenAIUsageResponse{
 		Object:     "list",
