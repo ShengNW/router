@@ -1528,11 +1528,14 @@
         },
         "buttons": {
           "add": "Add Currency",
+          "sync_fx": "Sync FX Rates",
           "save": "Save",
           "cancel": "Cancel"
         },
         "messages": {
           "load_failed": "Failed to load billing currencies",
+          "sync_failed": "Failed to sync FX rates",
+          "sync_success": "FX sync finished, updated {{count}} currencies",
           "save_failed": "Failed to save billing currency",
           "save_success": "Billing currency saved",
           "code_required": "Currency code is required",

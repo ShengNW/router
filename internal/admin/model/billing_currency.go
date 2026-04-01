@@ -22,6 +22,8 @@ const (
 	BillingCurrencyCodeCNY = "CNY"
 
 	BillingCurrencySourceSystemDefault = "system_default"
+	BillingCurrencySourceManual        = "manual"
+	BillingCurrencySourceFXAuto        = "fx_auto"
 
 	defaultUSDCNYExchangeRate = 7.0
 	defaultUSDYYCPerUnit      = 500 * 1000.0
@@ -294,7 +296,7 @@ func normalizeBillingCurrencyMinorUnit(value int) int {
 func normalizeBillingCurrencySource(value string) string {
 	normalized := strings.TrimSpace(strings.ToLower(value))
 	if normalized == "" {
-		return "manual"
+		return BillingCurrencySourceManual
 	}
 	return normalized
 }
@@ -365,7 +367,7 @@ func UpdateBillingCurrencyWithDB(db *gorm.DB, code string, apply func(current Bi
 		}
 		next.Code = current.Code
 		if next.Source == "" && strings.TrimSpace(strings.ToLower(current.Source)) == BillingCurrencySourceSystemDefault {
-			next.Source = "manual"
+			next.Source = BillingCurrencySourceManual
 		}
 		next, err = validateBillingCurrencyForWrite(next, false)
 		if err != nil {

@@ -1526,11 +1526,14 @@
         },
         "buttons": {
           "add": "新增币种",
+          "sync_fx": "同步汇率",
           "save": "保存",
           "cancel": "取消"
         },
         "messages": {
           "load_failed": "加载计费币种失败",
+          "sync_failed": "同步汇率失败",
+          "sync_success": "汇率同步完成，已更新 {{count}} 个币种",
           "save_failed": "保存计费币种失败",
           "save_success": "计费币种已保存",
           "code_required": "币种代码不能为空",

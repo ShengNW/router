@@ -46,6 +46,7 @@ const OperationSetting = ({ section = '' }) => {
   const [groupOptions, setGroupOptions] = useState([]);
   const [billingCurrencies, setBillingCurrencies] = useState([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [billingSyncing, setBillingSyncing] = useState(false);
   const [billingSavingKey, setBillingSavingKey] = useState('');
   let [loading, setLoading] = useState(false);
   let [historyTimestamp, setHistoryTimestamp] = useState(
@@ -357,6 +358,29 @@ const OperationSetting = ({ section = '' }) => {
     }
   };
 
+  const syncBillingCurrenciesFromFX = async () => {
+    setBillingSyncing(true);
+    try {
+      const res = await API.post('/api/v1/admin/billing/fx/sync');
+      const { success, message, data } = res.data || {};
+      if (!success) {
+        showError(message || t('setting.operation.billing.messages.sync_failed'));
+        return;
+      }
+      const updatedCount = Number(data?.updated_count || 0);
+      showSuccess(
+        t('setting.operation.billing.messages.sync_success', {
+          count: updatedCount,
+        })
+      );
+      await loadBillingCurrencies();
+    } catch (error) {
+      showError(error?.message || t('setting.operation.billing.messages.sync_failed'));
+    } finally {
+      setBillingSyncing(false);
+    }
+  };
+
   return (
     <Grid columns={1}>
       <Grid.Column>
@@ -639,6 +663,19 @@ const OperationSetting = ({ section = '' }) => {
                     disabled={billingLoading || billingCurrencies.some((item) => item._isNew)}
                   >
                     {t('setting.operation.billing.buttons.add')}
+                  </Button>
+                  <Button
+                    className='router-page-button'
+                    type='button'
+                    onClick={syncBillingCurrenciesFromFX}
+                    loading={billingSyncing}
+                    disabled={
+                      billingLoading ||
+                      billingSyncing ||
+                      billingCurrencies.some((item) => item._isNew)
+                    }
+                  >
+                    {t('setting.operation.billing.buttons.sync_fx')}
                   </Button>
                 </div>
               </div>

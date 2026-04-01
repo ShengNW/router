@@ -132,7 +132,7 @@ func UpdateBillingCurrency(c *gin.Context) {
 		if strings.TrimSpace(req.Source) != "" {
 			next.Source = req.Source
 		} else if strings.TrimSpace(strings.ToLower(current.Source)) == model.BillingCurrencySourceSystemDefault {
-			next.Source = "manual"
+			next.Source = model.BillingCurrencySourceManual
 		}
 		return next, nil
 	})
@@ -147,6 +147,30 @@ func UpdateBillingCurrency(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    row,
+	})
+}
+
+// SyncBillingCurrenciesFromFX godoc
+// @Summary Sync billing currencies from FX provider (root)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/billing/fx/sync [post]
+func SyncBillingCurrenciesFromFX(c *gin.Context) {
+	result, err := billingsvc.SyncBillingCurrenciesFromFX(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "同步汇率失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    result,
 	})
 }
 
