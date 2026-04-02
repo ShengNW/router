@@ -195,6 +195,8 @@ fi
 verify_artifacts
 
 mkdir -p "$out_dir"
+echo "Cleaning output directory: $out_dir"
+find "$out_dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 rm -rf "$stage_dir"
 mkdir -p "$stage_dir/build" "$stage_dir/scripts" "$stage_dir/web"
 
