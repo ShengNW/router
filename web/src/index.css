@@ -146,6 +146,7 @@ code {
     min-width: 180px;
     padding: 6px !important;
     border-radius: 10px !important;
+    z-index: 1200 !important;
 }
 
 .ui.vertical.menu.router-admin-compact-popup-menu {

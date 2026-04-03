@@ -16,8 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { ITEMS_PER_PAGE } from '../constants';
 import {
   formatCompactNumber,
-  renderGroup,
   renderText,
+  renderYYC,
 } from '../helpers/render';
 
 function renderRole(role, t) {
@@ -62,7 +62,6 @@ const UsersTable = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
-  const [groupMap, setGroupMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -107,48 +106,6 @@ const UsersTable = () => {
     await loadUsers(activePage);
   };
 
-  const loadGroups = useCallback(async () => {
-    try {
-      const rows = [];
-      let page = 1;
-      while (page <= 50) {
-        const res = await API.get('/api/v1/admin/groups', {
-          params: {
-            page,
-            page_size: 100,
-          },
-        });
-        const { success, message, data } = res.data || {};
-        if (!success) {
-          showError(message || t('user.messages.operation_failed'));
-          return;
-        }
-        const pageItems = Array.isArray(data?.items) ? data.items : [];
-        rows.push(...pageItems);
-        const total = Number(data?.total || pageItems.length || 0);
-        if (
-          pageItems.length === 0 ||
-          rows.length >= total ||
-          pageItems.length < 100
-        ) {
-          break;
-        }
-        page += 1;
-      }
-      const nextMap = {};
-      rows.forEach((group) => {
-        const id = (group?.id || '').toString().trim();
-        if (id === '') {
-          return;
-        }
-        nextMap[id] = (group?.name || '').toString().trim() || id;
-      });
-      setGroupMap(nextMap);
-    } catch (error) {
-      showError(error?.message || error);
-    }
-  }, [t]);
-
   const onPaginationChange = (e, { activePage }) => {
     (async () => {
       const nextPage = Number(activePage) > 0 ? Number(activePage) : 1;
@@ -168,25 +125,7 @@ const UsersTable = () => {
       .catch((reason) => {
         showError(reason);
       });
-    loadGroups().then();
-  }, [loadGroups, loadUsers]);
-
-  const renderUserGroup = useCallback(
-    (value) => {
-      const raw = (value || '').toString().trim();
-      if (raw === '') {
-        return renderGroup(raw);
-      }
-      const mapped = raw
-        .split(',')
-        .map((item) => item.trim())
-        .filter((item) => item !== '')
-        .map((item) => groupMap[item] || item)
-        .join(',');
-      return renderGroup(mapped);
-    },
-    [groupMap],
-  );
+  }, [loadUsers]);
 
   const manageUser = async (username, action, idx) => {
     const res = await API.post('/api/v1/admin/user/manage', {
@@ -384,11 +323,12 @@ const UsersTable = () => {
             <Table.HeaderCell
               className='router-sortable-header'
               onClick={() => {
-                sortUser('group');
+                sortUser('active_package_name');
               }}
             >
-              {t('user.table.group')}
+              {t('user.table.package')}
             </Table.HeaderCell>
+            <Table.HeaderCell>{t('user.table.balance')}</Table.HeaderCell>
             <Table.HeaderCell
               className='router-sortable-header'
               onClick={() => {
@@ -479,7 +419,14 @@ const UsersTable = () => {
                       '-'
                     )}
                   </Table.Cell>
-                  <Table.Cell>{renderUserGroup(user.group)}</Table.Cell>
+                  <Table.Cell>
+                    {user.active_package_name
+                      ? renderText(user.active_package_name, 18)
+                      : '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {renderYYC(user.yyc_balance ?? user.quota, t)}
+                  </Table.Cell>
                   <Table.Cell>
                     {renderCountValue(user.request_count)}
                   </Table.Cell>
@@ -540,7 +487,7 @@ const UsersTable = () => {
 
         <Table.Footer>
           <Table.Row>
-            <Table.HeaderCell colSpan='9'>
+            <Table.HeaderCell colSpan='10'>
               <Pagination
                 className='router-page-pagination'
                 floated='right'

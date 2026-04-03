@@ -200,6 +200,52 @@ func GetActiveUserPackageSubscriptionForGroup(userID string, groupID string) (Us
 	return getActiveUserPackageSubscriptionForGroupWithDB(DB, userID, groupID)
 }
 
+func ListActiveUserPackageSubscriptionsByUserIDs(userIDs []string) ([]UserPackageSubscription, error) {
+	normalizedIDs := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		normalized := strings.TrimSpace(userID)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		normalizedIDs = append(normalizedIDs, normalized)
+	}
+	if len(normalizedIDs) == 0 {
+		return []UserPackageSubscription{}, nil
+	}
+	now := helper.GetTimestamp()
+	rows := make([]UserPackageSubscription, 0, len(normalizedIDs))
+	if err := DB.
+		Where("user_id IN ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at >= ?)",
+			normalizedIDs,
+			UserPackageSubscriptionStatusActive,
+			now,
+			now,
+		).
+		Order("user_id asc, updated_at desc, id desc").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	items := make([]UserPackageSubscription, 0, len(rows))
+	resolved := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		userID := strings.TrimSpace(row.UserID)
+		if userID == "" {
+			continue
+		}
+		if _, ok := resolved[userID]; ok {
+			continue
+		}
+		resolved[userID] = struct{}{}
+		items = append(items, row)
+	}
+	return items, nil
+}
+
 func AssignServicePackageToUser(packageID string, userID string, startAt int64) (UserPackageSubscription, error) {
 	return AssignServicePackageToUserWithDB(DB, packageID, userID, startAt)
 }

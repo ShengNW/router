@@ -34,15 +34,10 @@ export const ADMIN_MENU_GROUPS = [
     ],
   },
   {
-    key: 'operation',
-    name: 'header.operation',
-    icon: 'tasks',
+    key: 'business',
+    name: 'header.business_operation',
+    icon: 'users',
     items: [
-      {
-        name: 'header.config',
-        to: '/admin/setting?tab=operation&section=balance',
-        icon: 'sliders horizontal',
-      },
       {
         name: 'header.package',
         to: '/admin/package',
@@ -57,6 +52,18 @@ export const ADMIN_MENU_GROUPS = [
         name: 'header.redemption',
         to: '/admin/redemption',
         icon: 'dollar sign',
+      },
+    ],
+  },
+  {
+    key: 'operation',
+    name: 'header.platform_operation',
+    icon: 'tasks',
+    items: [
+      {
+        name: 'header.config',
+        to: '/admin/setting?tab=operation&section=balance',
+        icon: 'sliders horizontal',
       },
       {
         name: 'header.log',

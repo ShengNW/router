@@ -80,6 +80,42 @@ func exposedUsers(users []*model.User) []*presenter.User {
 	return items
 }
 
+func attachActivePackageNames(items []*presenter.User) error {
+	if len(items) == 0 {
+		return nil
+	}
+	userIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item == nil || item.User == nil {
+			continue
+		}
+		userIDs = append(userIDs, strings.TrimSpace(item.Id))
+	}
+	subscriptions, err := model.ListActiveUserPackageSubscriptionsByUserIDs(userIDs)
+	if err != nil {
+		return err
+	}
+	nameByUserID := make(map[string]string, len(subscriptions))
+	for _, subscription := range subscriptions {
+		userID := strings.TrimSpace(subscription.UserID)
+		if userID == "" {
+			continue
+		}
+		packageName := strings.TrimSpace(subscription.PackageName)
+		if packageName == "" {
+			packageName = strings.TrimSpace(subscription.PackageID)
+		}
+		nameByUserID[userID] = packageName
+	}
+	for _, item := range items {
+		if item == nil || item.User == nil {
+			continue
+		}
+		item.ActivePackageName = nameByUserID[strings.TrimSpace(item.Id)]
+	}
+	return nil
+}
+
 func requesterIsRootUser(c *gin.Context) bool {
 	return c.GetBool(ctxkey.CanManageUsers) || c.GetInt(ctxkey.Role) == model.RoleRootUser
 }
@@ -352,10 +388,19 @@ func GetAllUsers(c *gin.Context) {
 		return
 	}
 
+	items := exposedUsers(users)
+	if err := attachActivePackageNames(items); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    exposedUsers(users),
+		"data":    items,
 		"meta": gin.H{
 			"total":     total,
 			"page":      page,
@@ -383,10 +428,19 @@ func SearchUsers(c *gin.Context) {
 		})
 		return
 	}
+	items := exposedUsers(users)
+	if err := attachActivePackageNames(items); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    exposedUsers(users),
+		"data":    items,
 	})
 	return
 }
