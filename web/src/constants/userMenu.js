@@ -58,6 +58,11 @@ export const buildUserWorkspaceMenuItems = ({ includeChat = false } = {}) => {
           to: '/workspace/token',
           icon: 'key',
         },
+        {
+          name: 'header.account',
+          to: '/workspace/setting',
+          icon: 'setting',
+        },
       ],
     },
     {
@@ -92,11 +97,6 @@ export const buildUserWorkspaceMenuItems = ({ includeChat = false } = {}) => {
       name: 'header.task',
       to: '/workspace/task',
       icon: 'tasks',
-    },
-    {
-      name: 'header.setting',
-      to: '/workspace/setting',
-      icon: 'setting',
     },
   );
 

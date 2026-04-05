@@ -5,6 +5,7 @@
     "providers": "供应商",
     "group": "分组",
     "token": "令牌",
+    "account": "账户",
     "redemption": "兑换码",
     "topup": "充值",
     "mine": "我的",

@@ -5,6 +5,7 @@
     "providers": "Providers",
     "group": "Group",
     "token": "Token",
+    "account": "Account",
     "redemption": "Redemption Codes",
     "topup": "Top Up",
     "mine": "Mine",
