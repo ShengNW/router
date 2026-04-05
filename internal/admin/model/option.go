@@ -54,17 +54,12 @@ func InitOptionMap() {
 	config.OptionMap["Footer"] = config.Footer
 	config.OptionMap["SystemName"] = config.SystemName
 	config.OptionMap["Logo"] = config.Logo
-	config.OptionMap["ServerAddress"] = ""
 	config.OptionMap["QuotaForNewUser"] = strconv.FormatInt(config.QuotaForNewUser, 10)
 	config.OptionMap["DefaultUserGroup"] = config.DefaultUserGroup
 	config.OptionMap["QuotaForInviter"] = strconv.FormatInt(config.QuotaForInviter, 10)
 	config.OptionMap["QuotaForInvitee"] = strconv.FormatInt(config.QuotaForInvitee, 10)
 	config.OptionMap["QuotaRemindThreshold"] = strconv.FormatInt(config.QuotaRemindThreshold, 10)
 	config.OptionMap["PreConsumedQuota"] = strconv.FormatInt(config.PreConsumedQuota, 10)
-	config.OptionMap["TopUpLink"] = config.TopUpLink
-	config.OptionMap["TopUpSignSecret"] = config.TopUpSignSecret
-	config.OptionMap["TopUpCallbackToken"] = config.TopUpCallbackToken
-	config.OptionMap["ChatLink"] = config.ChatLink
 	config.OptionMap["QuotaPerUnit"] = strconv.FormatFloat(config.QuotaPerUnit, 'f', -1, 64)
 	config.OptionMap["RetryTimes"] = strconv.Itoa(config.RetryTimes)
 	config.OptionMapRWMutex.Unlock()
@@ -109,7 +104,8 @@ func UpdateOptionMap(key string, value string) (err error) {
 	config.OptionMapRWMutex.Lock()
 	defer config.OptionMapRWMutex.Unlock()
 	switch key {
-	case "WalletLoginEnabled", "WalletAutoRegisterEnabled", "WalletAllowedChains", "AutoRegisterEnabled", "Theme":
+	case "WalletLoginEnabled", "WalletAutoRegisterEnabled", "WalletAllowedChains", "AutoRegisterEnabled", "Theme",
+		"ServerAddress", "TopUpLink", "TopUpSignSecret", "TopUpCallbackToken", "ChatLink":
 		delete(config.OptionMap, key)
 		return nil
 	}
@@ -151,8 +147,6 @@ func UpdateOptionMap(key string, value string) (err error) {
 		config.SMTPFrom = value
 	case "SMTPToken":
 		config.SMTPToken = value
-	case "ServerAddress":
-		config.ServerAddress = value
 	case "Footer":
 		config.Footer = value
 	case "SystemName":
@@ -193,14 +187,6 @@ func UpdateOptionMap(key string, value string) (err error) {
 		config.FXAutoSyncLastSuccessAt, _ = strconv.ParseInt(value, 10, 64)
 	case "FXAutoSyncLastError":
 		config.FXAutoSyncLastError = strings.TrimSpace(value)
-	case "TopUpLink":
-		config.TopUpLink = value
-	case "TopUpSignSecret":
-		config.TopUpSignSecret = value
-	case "TopUpCallbackToken":
-		config.TopUpCallbackToken = value
-	case "ChatLink":
-		config.ChatLink = value
 	case "ChannelDisableThreshold":
 		config.ChannelDisableThreshold, _ = strconv.ParseFloat(value, 64)
 	case "QuotaPerUnit":

@@ -41,6 +41,7 @@ type RuntimeConfig struct {
 	CORS      CORSRuntimeConfig      `yaml:"cors"`
 	UCAN      UCANRuntimeConfig      `yaml:"ucan"`
 	Feature   FeatureRuntimeConfig   `yaml:"feature"`
+	Operation OperationRuntimeConfig `yaml:"operation"`
 	Relay     RelayRuntimeConfig     `yaml:"relay"`
 	RateLimit RateLimitRuntimeConfig `yaml:"rate_limit"`
 	Metrics   MetricsRuntimeConfig   `yaml:"metrics"`
@@ -52,6 +53,7 @@ type ServerRuntimeConfig struct {
 	Port    int    `yaml:"port"`
 	GinMode string `yaml:"gin_mode"`
 	LogDir  string `yaml:"log_dir"`
+	Address string `yaml:"address"`
 }
 
 type DatabaseRuntimeConfig struct {
@@ -111,6 +113,13 @@ type FeatureRuntimeConfig struct {
 	FrontendBaseURL     string `yaml:"frontend_base_url"`
 }
 
+type OperationRuntimeConfig struct {
+	TopUpLink          string `yaml:"top_up_link"`
+	TopUpSignSecret    string `yaml:"top_up_sign_secret"`
+	TopUpCallbackToken string `yaml:"top_up_callback_token"`
+	ChatLink           string `yaml:"chat_link"`
+}
+
 type RelayRuntimeConfig struct {
 	TimeoutSeconds                int    `yaml:"timeout_seconds"`
 	Proxy                         string `yaml:"proxy"`
@@ -157,6 +166,7 @@ func defaultRuntimeConfig() RuntimeConfig {
 			Port:    3011,
 			GinMode: "release",
 			LogDir:  "./logs",
+			Address: "",
 		},
 		Database: DatabaseRuntimeConfig{
 			SQLDSN:             "postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable",
@@ -206,6 +216,12 @@ func defaultRuntimeConfig() RuntimeConfig {
 			DebugSQL:            false,
 			DisableOpenAICompat: false,
 			FrontendBaseURL:     "",
+		},
+		Operation: OperationRuntimeConfig{
+			TopUpLink:          "",
+			TopUpSignSecret:    "",
+			TopUpCallbackToken: "",
+			ChatLink:           "",
 		},
 		Relay: RelayRuntimeConfig{
 			TimeoutSeconds:                0,
@@ -284,6 +300,9 @@ func ApplyRuntimeConfig(cfg *RuntimeConfig, portFlagSet bool, logDirFlagSet bool
 	}
 
 	GinMode = normalizeGinMode(cfg.Server.GinMode)
+	if serverAddress := strings.TrimSpace(cfg.Server.Address); serverAddress != "" {
+		config.ServerAddress = serverAddress
+	}
 	ChannelTestFrequency = cfg.Cache.ChannelTestFrequency
 	if ChannelTestFrequency < 0 {
 		return fmt.Errorf("invalid cache.channel_test_frequency: %d", ChannelTestFrequency)
@@ -291,6 +310,10 @@ func ApplyRuntimeConfig(cfg *RuntimeConfig, portFlagSet bool, logDirFlagSet bool
 
 	DisableOpenAICompat = cfg.Feature.DisableOpenAICompat
 	FrontendBaseURL = strings.TrimSpace(cfg.Feature.FrontendBaseURL)
+	config.TopUpLink = strings.TrimSpace(cfg.Operation.TopUpLink)
+	config.TopUpSignSecret = strings.TrimSpace(cfg.Operation.TopUpSignSecret)
+	config.TopUpCallbackToken = strings.TrimSpace(cfg.Operation.TopUpCallbackToken)
+	config.ChatLink = strings.TrimSpace(cfg.Operation.ChatLink)
 
 	SQLDSN = strings.TrimSpace(cfg.Database.SQLDSN)
 	LogSQLDSN = strings.TrimSpace(cfg.Database.LogSQLDSN)
@@ -475,6 +498,15 @@ func ApplyRuntimeConfig(cfg *RuntimeConfig, portFlagSet bool, logDirFlagSet bool
 		config.LogRotateMaxAgeDays = 14
 	}
 	config.LogRotateCompress = cfg.Logging.RotateCompress
+
+	if issues := config.TopUpConfigIssues(); len(issues) == 0 {
+		logger.SysLog("top-up capability enabled from config file")
+	} else {
+		logger.SysLog("top-up capability disabled: " + strings.Join(issues, "; "))
+	}
+	if strings.TrimSpace(config.ChatLink) == "" {
+		logger.SysLog("chat entry disabled: operation.chat_link is empty")
+	}
 
 	setCompatibilityEnvs()
 	return nil

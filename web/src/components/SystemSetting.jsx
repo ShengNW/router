@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Divider, Form, Header, Message, Segment } from 'semantic-ui-react';
 import { useTranslation } from 'react-i18next';
-import { API, removeTrailingSlash, showError, showSuccess } from '../helpers';
+import { API, showError, showSuccess } from '../helpers';
 
 const SystemSetting = ({ section = '' }) => {
   const { t } = useTranslation();
@@ -14,7 +14,6 @@ const SystemSetting = ({ section = '' }) => {
     SMTPAccount: '',
     SMTPFrom: '',
     SMTPToken: '',
-    ServerAddress: '',
     Footer: '',
     SystemName: '',
     Logo: '',
@@ -96,7 +95,6 @@ const SystemSetting = ({ section = '' }) => {
     await updateOption('SystemName', inputs.SystemName);
     await updateOption('Logo', inputs.Logo);
     await updateOption('Footer', inputs.Footer);
-    await updateOption('ServerAddress', removeTrailingSlash(inputs.ServerAddress));
     setLoading(false);
     showSuccess(t('setting.system.saved', '已保存'));
   };
@@ -111,14 +109,6 @@ const SystemSetting = ({ section = '' }) => {
         <>
           <Header as='h3' className='router-section-title'>{t('setting.system.general.title')}</Header>
           <Form>
-            <Form.Input
-              className='router-section-input'
-              label={t('setting.system.general.server_address')}
-              placeholder={t('setting.system.general.server_address_placeholder')}
-              name='ServerAddress'
-              value={inputs.ServerAddress}
-              onChange={handleChange}
-            />
             <Form.Input
               className='router-section-input'
               label={t('setting.system.general.system_name')}

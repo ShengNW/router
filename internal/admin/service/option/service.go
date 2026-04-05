@@ -1,6 +1,7 @@
 package option
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/yeying-community/router/common/config"
@@ -9,10 +10,22 @@ import (
 	optionrepo "github.com/yeying-community/router/internal/admin/repository/option"
 )
 
+func isFileManagedOptionKey(key string) bool {
+	switch strings.TrimSpace(key) {
+	case "ServerAddress", "TopUpLink", "TopUpSignSecret", "TopUpCallbackToken", "ChatLink":
+		return true
+	default:
+		return false
+	}
+}
+
 func GetOptions() []*model.Option {
 	options := make([]*model.Option, 0)
 	config.OptionMapRWMutex.Lock()
 	for k, v := range config.OptionMap {
+		if isFileManagedOptionKey(k) {
+			continue
+		}
 		if strings.HasSuffix(k, "Token") || strings.HasSuffix(k, "Secret") {
 			continue
 		}
@@ -26,6 +39,9 @@ func GetOptions() []*model.Option {
 }
 
 func UpdateOption(key string, value string) error {
+	if isFileManagedOptionKey(key) {
+		return fmt.Errorf("配置项 %s 仅支持通过配置文件设置", strings.TrimSpace(key))
+	}
 	if strings.TrimSpace(key) == "DefaultUserGroup" {
 		normalizedValue, err := model.ValidateDefaultUserGroupOptionValue(value)
 		if err != nil {

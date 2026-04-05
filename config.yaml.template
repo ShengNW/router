@@ -8,6 +8,8 @@ server:
   gin_mode: release
   # 日志目录，可被 --log-dir 覆盖
   log_dir: ./logs
+  # 对外访问地址，用于密码找回、充值回调等需要拼接公网 URL 的场景
+  address: ""
 
 database:
   # 仅支持 PostgreSQL
@@ -75,6 +77,16 @@ feature:
   disable_openai_compat: false
   # slave 节点可配置前端跳转地址
   frontend_base_url: ""
+
+operation:
+  # 外部充值/购买套餐页地址；为空时，前端充值和购买套餐按钮会被禁用
+  top_up_link: ""
+  # 外部支付签名密钥；按钮可点后，真正创建订单还需要这个值
+  top_up_sign_secret: ""
+  # 外部支付回调鉴权令牌；支付平台回调 /api/v1/public/topup/callback 时使用
+  top_up_callback_token: ""
+  # 用户工作区聊天入口；为空则不展示聊天菜单
+  chat_link: ""
 
 relay:
   timeout_seconds: 0

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -203,3 +204,21 @@ var UserContentRequestTimeout = 30
 
 var EnforceIncludeUsage = false
 var TestPrompt = "Output only your specific model name with no additional text."
+
+func TopUpConfigIssues() []string {
+	issues := make([]string, 0, 3)
+	if strings.TrimSpace(TopUpLink) == "" {
+		issues = append(issues, "operation.top_up_link is empty")
+	}
+	if strings.TrimSpace(ServerAddress) == "" {
+		issues = append(issues, "server.address is empty")
+	}
+	if strings.TrimSpace(TopUpSignSecret) == "" {
+		issues = append(issues, "operation.top_up_sign_secret is empty")
+	}
+	return issues
+}
+
+func TopUpFeatureEnabled() bool {
+	return len(TopUpConfigIssues()) == 0
+}

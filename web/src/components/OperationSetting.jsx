@@ -46,8 +46,6 @@ const OperationSetting = ({ section = '' }) => {
     [BALANCE_OPTION_KEYS.inviteeRewardAmount]: 0,
     [BALANCE_OPTION_KEYS.balanceReminderThreshold]: 0,
     [BALANCE_OPTION_KEYS.preConsumedAmount]: 0,
-    TopUpLink: '',
-    ChatLink: '',
     AutomaticDisableChannelEnabled: '',
     AutomaticEnableChannelEnabled: '',
     ChannelDisableThreshold: 0,
@@ -369,12 +367,6 @@ const OperationSetting = ({ section = '' }) => {
         }
         break;
       case 'general':
-        if (originInputs['TopUpLink'] !== inputs.TopUpLink) {
-          await updateOption('TopUpLink', inputs.TopUpLink);
-        }
-        if (originInputs['ChatLink'] !== inputs.ChatLink) {
-          await updateOption('ChatLink', inputs.ChatLink);
-        }
         if (originInputs['RetryTimes'] !== inputs.RetryTimes) {
           await updateOption('RetryTimes', inputs.RetryTimes);
         }
@@ -627,29 +619,7 @@ const OperationSetting = ({ section = '' }) => {
           {sectionVisible.general ? (
             <>
               <Header as='h3' className='router-section-title'>{t('setting.operation.general.title')}</Header>
-              <Form.Group widths={3}>
-                <Form.Input
-                  className='router-section-input'
-                  label={t('setting.operation.general.topup_link')}
-                  name='TopUpLink'
-                  onChange={handleInputChange}
-                  autoComplete='new-password'
-                  value={inputs.TopUpLink}
-                  type='link'
-                  placeholder={t(
-                    'setting.operation.general.topup_link_placeholder'
-                  )}
-                />
-                <Form.Input
-                  className='router-section-input'
-                  label={t('setting.operation.general.chat_link')}
-                  name='ChatLink'
-                  onChange={handleInputChange}
-                  autoComplete='new-password'
-                  value={inputs.ChatLink}
-                  type='link'
-                  placeholder={t('setting.operation.general.chat_link_placeholder')}
-                />
+              <Form.Group widths={1}>
                 <Form.Input
                   className='router-section-input'
                   label={t('setting.operation.general.retry_times')}

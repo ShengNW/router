@@ -23,6 +23,10 @@ import (
 // @Failure 500 {object} docs.ErrorResponse
 // @Router /api/v1/public/status [get]
 func GetStatus(c *gin.Context) {
+	topUpLink := ""
+	if config.TopUpFeatureEnabled() {
+		topUpLink = config.TopUpLink
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -33,7 +37,7 @@ func GetStatus(c *gin.Context) {
 			"logo":                    config.Logo,
 			"footer_html":             config.Footer,
 			"server_address":          config.ServerAddress,
-			"top_up_link":             config.TopUpLink,
+			"top_up_link":             topUpLink,
 			"chat_link":               config.ChatLink,
 			"quota_per_unit":          config.QuotaPerUnit,
 			"display_in_currency":     config.DisplayInCurrencyEnabled,
