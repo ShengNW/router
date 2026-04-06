@@ -269,13 +269,26 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 					return err
 				}
 				if err := tx.Exec(
+					`ALTER TABLE redemptions
+					 ALTER COLUMN face_value_amount TYPE numeric(30,8)
+					 USING face_value_amount::numeric`,
+				).Error; err != nil {
+					return err
+				}
+				if err := tx.Exec(
 					"UPDATE redemptions SET face_value_unit = ? WHERE COALESCE(face_value_unit, '') = ''",
 					RedemptionFaceValueUnitYYC,
 				).Error; err != nil {
 					return err
 				}
 				return tx.Exec(
-					"UPDATE redemptions SET face_value_amount = quota WHERE COALESCE(face_value_amount, 0) = 0 AND COALESCE(quota, 0) > 0",
+					`UPDATE redemptions
+					 SET face_value_amount = LEAST(
+					   quota::numeric,
+					   9999999999999999999999.99999999::numeric
+					 )
+					 WHERE COALESCE(face_value_amount, 0) = 0
+					   AND COALESCE(quota, 0) > 0`,
 				).Error
 			},
 		},
