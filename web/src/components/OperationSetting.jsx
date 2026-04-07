@@ -50,7 +50,7 @@ const OperationSetting = ({ section = '' }) => {
     AutomaticEnableChannelEnabled: '',
     ChannelDisableThreshold: 0,
     LogConsumeEnabled: '',
-    RelayRetryLimit: 0,
+    RetryTimes: 0,
   });
   const [originInputs, setOriginInputs] = useState({});
   const [groupOptions, setGroupOptions] = useState([]);
@@ -368,13 +368,13 @@ const OperationSetting = ({ section = '' }) => {
         {
           const retryLimit = Math.max(
             0,
-            Math.trunc(Number(inputs.RelayRetryLimit || 0))
+            Math.trunc(Number(inputs.RetryTimes || 0))
           );
           if (
-            normalizeOptionValue(originInputs.RelayRetryLimit, '0') !==
+            normalizeOptionValue(originInputs.RetryTimes, '0') !==
             `${retryLimit}`
           ) {
-            await updateOption('RelayRetryLimit', `${retryLimit}`);
+            await updateOption('RetryTimes', `${retryLimit}`);
           }
         }
         break;
@@ -604,13 +604,13 @@ const OperationSetting = ({ section = '' }) => {
                 <Form.Input
                   className='router-section-input'
                   label={t('setting.operation.retry.limit')}
-                  name='RelayRetryLimit'
+                  name='RetryTimes'
                   type='number'
                   step='1'
                   min='0'
                   onChange={handleInputChange}
                   autoComplete='new-password'
-                  value={inputs.RelayRetryLimit}
+                  value={inputs.RetryTimes}
                   placeholder={t('setting.operation.retry.limit_placeholder')}
                 />
               </Form.Group>

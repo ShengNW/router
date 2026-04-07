@@ -79,7 +79,7 @@ func Relay(c *gin.Context) {
 	}
 	go processChannelRelayError(ctx, userId, channelId, channelName, originalModel, requestPath, *bizErr)
 	traceID := c.GetString(helper.TraceIDKey)
-	retryTimes := config.RelayRetryLimit
+	retryTimes := config.RetryTimes
 	retryCount := 0
 	retryable := shouldRetry(c, bizErr)
 	if !retryable {

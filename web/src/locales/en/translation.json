@@ -1733,10 +1733,10 @@
       "retry": {
         "title": "Retry Settings",
         "description_title": "In-request switch behavior",
-        "description": "This setting controls how many times Router may switch to another channel within the same request after the first upstream failure.",
-        "description_effective": "It only takes effect when the error is retryable, no specific channel is pinned, and there are still other candidate channels for the current group and model.",
-        "description_disabled": "Set to 0 to disable in-request switching. Set to 1 to allow one additional switch, and so on. Router stops early when candidates are exhausted.",
-        "limit": "In-request switch limit",
+        "description": "This setting controls how many times Router will retry within the same request after the first upstream failure. Each retry reselects another available channel for the model in the current group.",
+        "description_effective": "It only takes effect when the error is retryable, no specific channel is pinned, and there are still other candidate channels for the current group and model. Channels that already failed in the same request will not be retried again.",
+        "description_disabled": "Set to 0 to disable in-request retries. Set to 1 to allow one additional attempt after the first failure. The request fails immediately once all candidate channels are exhausted or all retries fail.",
+        "limit": "Retry times",
         "limit_placeholder": "0 disables it; start with 1 or 2",
         "buttons": {
           "save": "Save Retry Settings"
