@@ -715,6 +715,7 @@
       "delete": "删除"
     },
     "form": {
+      "id": "套餐ID",
       "name": "套餐名称",
       "name_placeholder": "请输入套餐名称",
       "description": "描述",
@@ -1558,6 +1559,15 @@
       }
     },
     "system": {
+      "basic": {
+        "title": "基础设置"
+      },
+      "content": {
+        "title": "内容设置"
+      },
+      "runtime": {
+        "title": "运行设置"
+      },
       "general": {
         "title": "通用设置",
         "server_address": "服务器地址",

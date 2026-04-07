@@ -56,52 +56,28 @@ const Setting = () => {
       ],
     });
     menuGroups.push({
-      key: 'general',
-      label: t('setting.system.general.title'),
+      key: 'basic',
+      label: t('setting.system.basic.title'),
       sections: [
         { key: 'general', label: t('setting.system.general.title') },
-      ],
-    });
-    menuGroups.push({
-      key: 'smtp',
-      label: t('setting.system.smtp.title'),
-      sections: [
         { key: 'smtp', label: t('setting.system.smtp.title') },
-      ],
-    });
-    menuGroups.push({
-      key: 'login',
-      label: t('setting.system.login.title'),
-      sections: [
         { key: 'login', label: t('setting.system.login.title') },
       ],
     });
     menuGroups.push({
-      key: 'monitor',
-      label: t('setting.operation.monitor.title'),
-      sections: [
-        { key: 'monitor', label: t('setting.operation.monitor.title') },
-      ],
-    });
-    menuGroups.push({
-      key: 'log_setting',
-      label: t('setting.operation.log.title'),
-      sections: [
-        { key: 'log', label: t('setting.operation.log.title') },
-      ],
-    });
-    menuGroups.push({
-      key: 'notice',
-      label: t('setting.system.notice', '站点公告'),
+      key: 'content',
+      label: t('setting.system.content.title'),
       sections: [
         { key: 'notice', label: t('setting.system.notice', '站点公告') },
+        { key: 'content', label: t('setting.other.content.title') },
       ],
     });
     menuGroups.push({
-      key: 'content',
-      label: t('setting.other.content.title'),
+      key: 'runtime',
+      label: t('setting.system.runtime.title'),
       sections: [
-        { key: 'content', label: t('setting.other.content.title') },
+        { key: 'monitor', label: t('setting.operation.monitor.title') },
+        { key: 'log', label: t('setting.operation.log.title') },
       ],
     });
   }
@@ -114,25 +90,32 @@ const Setting = () => {
   const requestedTab =
     rawRequestedTab === 'system'
       ? rawRequestedSection === 'smtp'
-        ? 'smtp'
+        ? 'basic'
         : rawRequestedSection === 'login'
-          ? 'login'
+          ? 'basic'
           : rawRequestedSection === 'monitor'
-            ? 'monitor'
+            ? 'runtime'
             : rawRequestedSection === 'log'
-              ? 'log_setting'
-              : 'general'
+              ? 'runtime'
+              : 'basic'
       : rawRequestedTab === 'operation'
         ? rawRequestedSection === 'monitor'
-          ? 'monitor'
+          ? 'runtime'
           : rawRequestedSection === 'log'
-            ? 'log_setting'
+            ? 'runtime'
             : 'operation'
         : rawRequestedTab === 'other'
-          ? rawRequestedSection === 'content'
-            ? 'content'
-            : 'notice'
-          : rawRequestedTab;
+          ? 'content'
+          : rawRequestedTab === 'general' ||
+              rawRequestedTab === 'smtp' ||
+              rawRequestedTab === 'login'
+            ? 'basic'
+            : rawRequestedTab === 'notice'
+              ? 'content'
+              : rawRequestedTab === 'monitor' ||
+                  rawRequestedTab === 'log_setting'
+                ? 'runtime'
+                : rawRequestedTab;
   const visibleMenuGroups =
     tabKeys.includes(requestedTab) && requestedTab !== ''
       ? menuGroups.filter((item) => item.key === requestedTab)
@@ -151,7 +134,13 @@ const Setting = () => {
       rawRequestedSection === 'general' ||
       rawRequestedSection === 'config')
       ? 'config'
-      : rawRequestedSection;
+      : activeTab === 'basic' && rawRequestedSection === ''
+        ? 'general'
+        : activeTab === 'content' && rawRequestedSection === ''
+          ? 'notice'
+          : activeTab === 'runtime' && rawRequestedSection === ''
+            ? 'monitor'
+            : rawRequestedSection;
   const activeSection =
     sectionKeys.includes(requestedSection) && requestedSection !== ''
       ? requestedSection
@@ -174,17 +163,13 @@ const Setting = () => {
     if (activeTab === 'exchange') {
       return <ExchangeRateSetting section={activeSection} />;
     }
-    if (
-      activeTab === 'general' ||
-      activeTab === 'smtp' ||
-      activeTab === 'login'
-    ) {
+    if (activeTab === 'basic') {
       return <SystemSetting section={activeSection} />;
     }
-    if (activeTab === 'monitor' || activeTab === 'log_setting') {
+    if (activeTab === 'runtime') {
       return <OperationSetting section={activeSection} />;
     }
-    if (activeTab === 'notice' || activeTab === 'content') {
+    if (activeTab === 'content') {
       return <OtherSetting section={activeSection} />;
     }
     return <div className='router-empty-cell'>{t('setting.empty_admin', '暂无可配置项')}</div>;
@@ -192,7 +177,9 @@ const Setting = () => {
 
   const pageTitle = activeGroup?.label || t('setting.title');
   const singleGroupMode = visibleMenuGroups.length === 1;
-  const hideSettingsMenu = singleGroupMode;
+  const hideSettingsMenu =
+    singleGroupMode &&
+    Number(activeGroup?.sections?.length || 0) <= 1;
 
   return (
     <div className='dashboard-container'>

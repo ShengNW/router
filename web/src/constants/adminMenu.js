@@ -125,39 +125,19 @@ export const ADMIN_MENU_GROUPS = [
     icon: 'setting',
     items: [
       {
-        name: 'setting.system.general.title',
-        to: '/admin/setting?tab=general&section=general',
+        name: 'setting.system.basic.title',
+        to: '/admin/setting?tab=basic&section=general',
         icon: 'sliders horizontal',
       },
       {
-        name: 'setting.system.smtp.title',
-        to: '/admin/setting?tab=smtp&section=smtp',
-        icon: 'mail',
-      },
-      {
-        name: 'setting.system.login.title',
-        to: '/admin/setting?tab=login&section=login',
-        icon: 'server',
-      },
-      {
-        name: 'setting.operation.monitor.title',
-        to: '/admin/setting?tab=monitor&section=monitor',
-        icon: 'heartbeat',
-      },
-      {
-        name: 'setting.operation.log.title',
-        to: '/admin/setting?tab=log_setting&section=log',
-        icon: 'book',
-      },
-      {
-        name: 'setting.system.notice',
-        to: '/admin/setting?tab=notice&section=notice',
-        icon: 'options',
-      },
-      {
-        name: 'setting.other.content.title',
-        to: '/admin/setting?tab=content&section=content',
+        name: 'setting.system.content.title',
+        to: '/admin/setting?tab=content&section=notice',
         icon: 'file alternate outline',
+      },
+      {
+        name: 'setting.system.runtime.title',
+        to: '/admin/setting?tab=runtime&section=monitor',
+        icon: 'heartbeat',
       },
     ],
   },
@@ -208,7 +188,16 @@ export const isAdminRouteActive = (location, to) => {
             ? currentSection === 'content'
               ? 'content'
               : 'notice'
-            : rawCurrentTab;
+            : rawCurrentTab === 'general' ||
+                rawCurrentTab === 'smtp' ||
+                rawCurrentTab === 'login'
+              ? 'basic'
+              : rawCurrentTab === 'notice'
+                ? 'content'
+                : rawCurrentTab === 'monitor' ||
+                    rawCurrentTab === 'log_setting'
+                  ? 'runtime'
+                  : rawCurrentTab;
     if (currentTab !== targetTab) {
       return false;
     }

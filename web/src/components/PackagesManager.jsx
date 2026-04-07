@@ -930,6 +930,12 @@ const PackagesManager = () => {
           <Form.Group widths='equal'>
             <Form.Input
               className='router-section-input'
+              label={t('package_manage.form.id')}
+              value={activeRow?.id || '-'}
+              readOnly
+            />
+            <Form.Input
+              className='router-section-input'
               label={t('package_manage.table.name')}
               value={activeRow?.name || '-'}
               readOnly

@@ -715,6 +715,7 @@
       "delete": "Delete"
     },
     "form": {
+      "id": "Package ID",
       "name": "Package Name",
       "name_placeholder": "Enter package name",
       "description": "Description",
@@ -1558,6 +1559,15 @@
       }
     },
     "system": {
+      "basic": {
+        "title": "Basic Settings"
+      },
+      "content": {
+        "title": "Content Settings"
+      },
+      "runtime": {
+        "title": "Runtime Settings"
+      },
       "general": {
         "title": "General Settings",
         "server_address": "Server Address",

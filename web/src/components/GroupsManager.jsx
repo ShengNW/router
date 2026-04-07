@@ -1075,9 +1075,9 @@ const GroupsManager = ({ detailGroupId = '' }) => {
               {t('group_manage.edit.model_configs')}
             </div>
           )}
-          <div className='router-toolbar-start router-block-gap-sm'>
+          <div className='router-toolbar-end router-block-gap-sm'>
             <Form.Input
-              className='router-inline-input router-search-form-sm'
+              className='router-inline-input router-search-form-sm router-group-model-search'
               icon='search'
               iconPosition='left'
               placeholder={t('group_manage.edit.model_search_placeholder')}
@@ -1668,16 +1668,24 @@ const GroupsManager = ({ detailGroupId = '' }) => {
             </div>
           </div>
           <Form>
-            <Form.Input
-              className='router-section-input'
-              label={t('group_manage.form.id')}
-              value={detailBasicEditing ? form.name : activeGroup.name || ''}
-              readOnly={!detailBasicEditing}
-              placeholder={t('group_manage.form.id_placeholder')}
-              onChange={(e, { value }) =>
-                setForm((prev) => ({ ...prev, name: value || '' }))
-              }
-            />
+            <Form.Group widths='equal'>
+              <Form.Input
+                className='router-section-input'
+                label='分组ID'
+                value={activeGroup.id || '-'}
+                readOnly
+              />
+              <Form.Input
+                className='router-section-input'
+                label={t('group_manage.form.name')}
+                value={detailBasicEditing ? form.name : activeGroup.name || ''}
+                readOnly={!detailBasicEditing}
+                placeholder={t('group_manage.form.id_placeholder')}
+                onChange={(e, { value }) =>
+                  setForm((prev) => ({ ...prev, name: value || '' }))
+                }
+              />
+            </Form.Group>
             <Form.TextArea
               className='router-section-textarea'
               label={t('group_manage.form.description')}

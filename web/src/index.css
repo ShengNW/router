@@ -1939,6 +1939,11 @@ code {
     max-width: 100%;
 }
 
+.router-group-model-search {
+    width: 360px;
+    max-width: 100%;
+}
+
 .router-search-form-xs {
     width: 260px;
     max-width: 100%;
