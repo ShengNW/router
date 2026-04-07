@@ -10,9 +10,6 @@ func TestBuildBalanceRelayBillingPlanWithoutPackage(t *testing.T) {
 	if !plan.ChargeUserBalance() {
 		t.Fatalf("plan.ChargeUserBalance() = false, want true")
 	}
-	if plan.UserReservation.Active() {
-		t.Fatalf("plan.UserReservation.Active() = true, want false")
-	}
 }
 
 func TestBuildBalanceRelayBillingPlanWithPackageFallback(t *testing.T) {
@@ -22,8 +19,5 @@ func TestBuildBalanceRelayBillingPlanWithPackageFallback(t *testing.T) {
 	}
 	if !plan.ChargeUserBalance() {
 		t.Fatalf("plan.ChargeUserBalance() = false, want true")
-	}
-	if plan.UserReservation.Active() {
-		t.Fatalf("plan.UserReservation.Active() = true, want false")
 	}
 }

@@ -24,7 +24,6 @@ const (
 type relayBillingPlan struct {
 	Source           relayBillingSource
 	GroupReservation model.GroupDailyQuotaReservation
-	UserReservation  model.UserQuotaReservation
 }
 
 func (plan relayBillingPlan) ChargeUserBalance() bool {
