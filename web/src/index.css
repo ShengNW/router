@@ -2030,8 +2030,21 @@ code {
 
 .router-table-scroll-x {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
+}
+
+.router-business-flow-package-scroll .ui.table.router-list-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.router-business-flow-package-scroll .ui.table.router-list-table th,
+.router-business-flow-package-scroll .ui.table.router-list-table td {
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .router-table-action-cell {

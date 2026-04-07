@@ -4,6 +4,8 @@ import { Button, Dropdown, Form, Label, Pagination, Table } from 'semantic-ui-re
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API, showError, timestamp2string } from '../helpers';
 import { ITEMS_PER_PAGE } from '../constants';
+import UnitDropdown from './UnitDropdown';
+import { buildBillingCurrencyIndex, buildDisplayUnitOptions, formatDisplayAmountFromYYC } from '../helpers/billing';
 import { formatAmountWithUnit, formatYYCValue, renderText } from '../helpers/render';
 
 const readOnlyText = (value) => {
@@ -66,10 +68,19 @@ const BusinessFlowTable = ({ kind }) => {
   const [totalCount, setTotalCount] = useState(0);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [displayUnit, setDisplayUnit] = useState('USD');
+  const [currencyIndex, setCurrencyIndex] = useState(
+    buildBillingCurrencyIndex([], { activeOnly: true })
+  );
 
   const currentPagePath = useMemo(
     () => `${location.pathname}${location.search}${location.hash}`,
     [location.hash, location.pathname, location.search],
+  );
+
+  const displayUnitOptions = useMemo(
+    () => buildDisplayUnitOptions(currencyIndex, { order: 'yyc-first' }),
+    [currencyIndex],
   );
 
   const config = useMemo(() => {
@@ -101,6 +112,32 @@ const BusinessFlowTable = ({ kind }) => {
           </div>
         </div>
       ),
+    };
+    const compactUserColumn = {
+      key: 'username',
+      label: t('user.table.username'),
+      render: (row) => {
+        const userId = readOnlyText(row.user_id || row.redeemed_by_user_id);
+        return (
+          <Button
+            type='button'
+            basic
+            compact
+            size='mini'
+            className='router-inline-button'
+            onClick={() => {
+              if (userId === '-') {
+                return;
+              }
+              navigate(`/admin/user/detail/${encodeURIComponent(userId)}`, {
+                state: { from: currentPagePath },
+              });
+            }}
+          >
+            {readOnlyText(row.username || row.redeemed_by_username)}
+          </Button>
+        );
+      },
     };
 
     if (kind === 'topup') {
@@ -187,6 +224,7 @@ const BusinessFlowTable = ({ kind }) => {
     if (kind === 'package') {
       return {
         endpoint: '/api/v1/admin/flow/package-records',
+        tableWrapperClassName: 'router-business-flow-package-scroll',
         searchPlaceholder: t('flow.package.search_placeholder'),
         emptyText: t('flow.package.empty'),
         statusOptions: [
@@ -197,40 +235,72 @@ const BusinessFlowTable = ({ kind }) => {
           { key: '4', value: '4', text: t('user.detail.package_status_types.canceled') },
         ],
         columns: [
-          commonUserColumn,
+          compactUserColumn,
           {
             key: 'package_name',
             label: t('user.detail.package_name'),
-            render: (row) => (
-              <div>
-                <div>{readOnlyText(row.package_name)}</div>
-                <div className='router-text-muted'>{readOnlyText(row.package_id)}</div>
-              </div>
-            ),
+            render: (row) => readOnlyText(row.package_name),
           },
           {
             key: 'group',
             label: t('user.detail.package_group'),
-            render: (row) => (
-              <div>
-                <div>{readOnlyText(row.group_name || row.group_id)}</div>
-                <div className='router-text-muted'>{readOnlyText(row.group_id)}</div>
-              </div>
-            ),
+            render: (row) => readOnlyText(row.group_name || row.group_id),
           },
           {
             key: 'daily_quota_limit',
-            label: t('user.detail.package_daily_limit'),
+            label: (
+              <div className='router-table-header-with-control'>
+                <span>{t('user.detail.package_daily_limit')}</span>
+                <UnitDropdown
+                  variant='header'
+                  compact
+                  options={displayUnitOptions}
+                  value={displayUnit}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onChange={(_, { value }) => {
+                    setDisplayUnit((value || '').toString());
+                  }}
+                />
+              </div>
+            ),
             render: (row) => (
               Number(row.daily_quota_limit || 0) > 0
-                ? formatYYCValue(row.daily_quota_limit)
+                ? formatDisplayAmountFromYYC(
+                    row.daily_quota_limit,
+                    displayUnit,
+                    currencyIndex,
+                    { fractionDigits: 6, includeSymbol: false, yycMode: 'fixed' },
+                  )
                 : t('common.unlimited')
             ),
           },
           {
             key: 'package_emergency_quota_limit',
-            label: t('user.detail.package_emergency_limit'),
-            render: (row) => formatYYCValue(row.package_emergency_quota_limit || 0),
+            label: (
+              <div className='router-table-header-with-control'>
+                <span>{t('user.detail.package_emergency_limit')}</span>
+                <UnitDropdown
+                  variant='header'
+                  compact
+                  options={displayUnitOptions}
+                  value={displayUnit}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onChange={(_, { value }) => {
+                    setDisplayUnit((value || '').toString());
+                  }}
+                />
+              </div>
+            ),
+            render: (row) => formatDisplayAmountFromYYC(
+              row.package_emergency_quota_limit || 0,
+              displayUnit,
+              currencyIndex,
+              { fractionDigits: 6, includeSymbol: false, yycMode: 'fixed' },
+            ),
           },
           {
             key: 'status',
@@ -315,7 +385,27 @@ const BusinessFlowTable = ({ kind }) => {
         },
       ],
     };
-  }, [currentPagePath, kind, navigate, t]);
+  }, [currencyIndex, currentPagePath, displayUnit, displayUnitOptions, kind, navigate, t]);
+
+  const loadCurrencyCatalog = useCallback(async () => {
+    try {
+      const res = await API.get('/api/v1/admin/billing/currencies');
+      const { success, data } = res.data || {};
+      if (!success) {
+        return;
+      }
+      const next = buildBillingCurrencyIndex(Array.isArray(data) ? data : [], {
+        activeOnly: true,
+        placeholderCodes: ['USD', 'CNY'],
+      });
+      setCurrencyIndex(next);
+      if (!next[displayUnit]) {
+        setDisplayUnit(next.USD ? 'USD' : Object.keys(next)[0] || 'USD');
+      }
+    } catch {
+      // Keep the placeholder index when the catalog cannot be loaded.
+    }
+  }, [displayUnit]);
 
   const totalPages = useMemo(
     () => Math.max(Math.ceil(totalCount / ITEMS_PER_PAGE), 1),
@@ -350,6 +440,10 @@ const BusinessFlowTable = ({ kind }) => {
     },
     [config.endpoint, t],
   );
+
+  useEffect(() => {
+    loadCurrencyCatalog().then();
+  }, [loadCurrencyCatalog]);
 
   useEffect(() => {
     setKeyword('');
@@ -427,36 +521,38 @@ const BusinessFlowTable = ({ kind }) => {
         </div>
       </div>
 
-      <Table basic='very' compact className='router-hover-table router-list-table'>
-        <Table.Header>
-          <Table.Row>
-            {config.columns.map((column) => (
-              <Table.HeaderCell key={column.key} collapsing={column.collapsing === true}>
-                {column.label}
-              </Table.HeaderCell>
-            ))}
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {items.length === 0 ? (
+      <div className={`router-table-scroll-x ${config.tableWrapperClassName || ''}`.trim()}>
+        <Table basic='very' compact className='router-hover-table router-list-table'>
+          <Table.Header>
             <Table.Row>
-              <Table.Cell colSpan={config.columns.length} className='router-table-empty-cell'>
-                {config.emptyText}
-              </Table.Cell>
+              {config.columns.map((column) => (
+                <Table.HeaderCell key={column.key} collapsing={column.collapsing === true}>
+                  {column.label}
+                </Table.HeaderCell>
+              ))}
             </Table.Row>
-          ) : (
-            items.map((row) => (
-              <Table.Row key={row.id || row.transaction_id || row.package_id}>
-                {config.columns.map((column) => (
-                  <Table.Cell key={column.key} collapsing={column.collapsing === true}>
-                    {column.render(row)}
-                  </Table.Cell>
-                ))}
+          </Table.Header>
+          <Table.Body>
+            {items.length === 0 ? (
+              <Table.Row>
+                <Table.Cell colSpan={config.columns.length} className='router-table-empty-cell'>
+                  {config.emptyText}
+                </Table.Cell>
               </Table.Row>
-            ))
-          )}
-        </Table.Body>
-      </Table>
+            ) : (
+              items.map((row) => (
+                <Table.Row key={row.id || row.transaction_id || row.package_id}>
+                  {config.columns.map((column) => (
+                    <Table.Cell key={column.key} collapsing={column.collapsing === true}>
+                      {column.render(row)}
+                    </Table.Cell>
+                  ))}
+                </Table.Row>
+              ))
+            )}
+          </Table.Body>
+        </Table>
+      </div>
 
       <div className='table-footer'>
         <Pagination
