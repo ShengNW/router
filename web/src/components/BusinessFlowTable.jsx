@@ -87,8 +87,9 @@ const BusinessFlowTable = ({ kind }) => {
     const commonUserColumn = {
       key: 'username',
       label: t('user.table.username'),
-      render: (row) => (
-        <div>
+      render: (row) => {
+        const userId = readOnlyText(row.user_id || row.redeemed_by_user_id);
+        return (
           <Button
             type='button'
             basic
@@ -96,7 +97,6 @@ const BusinessFlowTable = ({ kind }) => {
             size='mini'
             className='router-inline-button'
             onClick={() => {
-              const userId = readOnlyText(row.user_id || row.redeemed_by_user_id);
               if (userId === '-') {
                 return;
               }
@@ -107,11 +107,8 @@ const BusinessFlowTable = ({ kind }) => {
           >
             {readOnlyText(row.username || row.redeemed_by_username)}
           </Button>
-          <div className='router-text-muted'>
-            {readOnlyText(row.user_id || row.redeemed_by_user_id)}
-          </div>
-        </div>
-      ),
+        );
+      },
     };
     const compactUserColumn = {
       key: 'username',
