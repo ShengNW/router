@@ -102,6 +102,32 @@ const BusinessFlowTable = ({ kind }) => {
         </div>
       ),
     };
+    const compactUserColumn = {
+      key: 'username',
+      label: t('user.table.username'),
+      render: (row) => {
+        const userId = readOnlyText(row.user_id || row.redeemed_by_user_id);
+        return (
+          <Button
+            type='button'
+            basic
+            compact
+            size='mini'
+            className='router-inline-button'
+            onClick={() => {
+              if (userId === '-') {
+                return;
+              }
+              navigate(`/admin/user/detail/${encodeURIComponent(userId)}`, {
+                state: { from: currentPagePath },
+              });
+            }}
+          >
+            {readOnlyText(row.username || row.redeemed_by_username)}
+          </Button>
+        );
+      },
+    };
 
     if (kind === 'topup') {
       return {
@@ -187,6 +213,7 @@ const BusinessFlowTable = ({ kind }) => {
     if (kind === 'package') {
       return {
         endpoint: '/api/v1/admin/flow/package-records',
+        tableWrapperClassName: 'router-business-flow-package-scroll',
         searchPlaceholder: t('flow.package.search_placeholder'),
         emptyText: t('flow.package.empty'),
         statusOptions: [
@@ -197,26 +224,16 @@ const BusinessFlowTable = ({ kind }) => {
           { key: '4', value: '4', text: t('user.detail.package_status_types.canceled') },
         ],
         columns: [
-          commonUserColumn,
+          compactUserColumn,
           {
             key: 'package_name',
             label: t('user.detail.package_name'),
-            render: (row) => (
-              <div>
-                <div>{readOnlyText(row.package_name)}</div>
-                <div className='router-text-muted'>{readOnlyText(row.package_id)}</div>
-              </div>
-            ),
+            render: (row) => readOnlyText(row.package_name),
           },
           {
             key: 'group',
             label: t('user.detail.package_group'),
-            render: (row) => (
-              <div>
-                <div>{readOnlyText(row.group_name || row.group_id)}</div>
-                <div className='router-text-muted'>{readOnlyText(row.group_id)}</div>
-              </div>
-            ),
+            render: (row) => readOnlyText(row.group_name || row.group_id),
           },
           {
             key: 'daily_quota_limit',
@@ -427,7 +444,7 @@ const BusinessFlowTable = ({ kind }) => {
         </div>
       </div>
 
-      <div className='router-table-scroll-x'>
+      <div className={`router-table-scroll-x ${config.tableWrapperClassName || ''}`.trim()}>
         <Table basic='very' compact className='router-hover-table router-list-table'>
           <Table.Header>
             <Table.Row>
