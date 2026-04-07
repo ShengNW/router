@@ -9,11 +9,10 @@ import (
 )
 
 func LogQuota(quota int64) string {
-	if config.DisplayInCurrencyEnabled {
+	if config.QuotaPerUnit > 0 {
 		return fmt.Sprintf("＄%.6f 额度", float64(quota)/config.QuotaPerUnit)
-	} else {
-		return fmt.Sprintf("%d 点额度", quota)
 	}
+	return fmt.Sprintf("%d 点额度", quota)
 }
 
 // IsValidEthAddress performs a basic checksum/length check

@@ -50,7 +50,6 @@ const OperationSetting = ({ section = '' }) => {
     AutomaticEnableChannelEnabled: '',
     ChannelDisableThreshold: 0,
     LogConsumeEnabled: '',
-    DisplayInCurrencyEnabled: '',
     DisplayTokenStatEnabled: '',
     ApproximateTokenEnabled: '',
     RetryTimes: 0,
@@ -636,13 +635,6 @@ const OperationSetting = ({ section = '' }) => {
                 />
               </Form.Group>
               <Form.Group inline>
-                <Form.Checkbox
-                  className='router-section-checkbox'
-                  checked={inputs.DisplayInCurrencyEnabled === 'true'}
-                  label={t('setting.operation.general.display_in_currency')}
-                  name='DisplayInCurrencyEnabled'
-                  onChange={handleInputChange}
-                />
                 <Form.Checkbox
                   className='router-section-checkbox'
                   checked={inputs.DisplayTokenStatEnabled === 'true'}

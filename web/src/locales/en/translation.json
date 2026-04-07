@@ -1740,7 +1740,6 @@
         "quota_per_unit_placeholder": "How many YYC 1 USD converts to",
         "retry_times": "Retry Times on Failure",
         "retry_times_placeholder": "Number of retry attempts on failure",
-        "display_in_currency": "Display YYC as Fiat Amount",
         "display_token_stat": "Show token balance instead of user balance in billing APIs",
         "approximate_token": "Use Approximate Method to Estimate Token Count",
         "buttons": {

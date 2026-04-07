@@ -82,13 +82,8 @@ export function formatCompactNumber(value) {
 }
 
 export function renderDisplayAmount(yycAmount, t, precision = 2) {
-  const displayInCurrency =
-    localStorage.getItem('display_in_currency') === 'true';
-  const yycPerUnit = parseFloat(
-    localStorage.getItem('quota_per_unit') || '1'
-  );
-
-  if (displayInCurrency) {
+  const yycPerUnit = getYYCPerUnitValue();
+  if (yycPerUnit > 0 && typeof t === 'function') {
     const amount = (yycAmount / yycPerUnit).toFixed(precision);
     return t('common.quota.display_short', { amount });
   }
@@ -100,10 +95,7 @@ export function renderDisplayAmount(yycAmount, t, precision = 2) {
 export const renderQuota = renderDisplayAmount;
 
 export function isYYCDisplayedInCurrency() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return localStorage.getItem('display_in_currency') === 'true';
+  return getYYCPerUnitValue() > 0;
 }
 
 // Legacy alias kept for older frontend callsites during the quota -> YYC cleanup.
@@ -111,11 +103,11 @@ export const isQuotaDisplayedInCurrency = isYYCDisplayedInCurrency;
 
 export function getYYCPerUnitValue() {
   if (typeof window === 'undefined') {
-    return 1;
+    return 0;
   }
-  const value = parseFloat(localStorage.getItem('quota_per_unit') || '1');
+  const value = parseFloat(localStorage.getItem('quota_per_unit') || '0');
   if (!Number.isFinite(value) || value <= 0) {
-    return 1;
+    return 0;
   }
   return value;
 }
@@ -125,10 +117,14 @@ export const getQuotaPerUnitValue = getYYCPerUnitValue;
 
 export function formatYYCEquivalentAmount(yycAmount, precision = 6) {
   const normalized = Number(yycAmount || 0);
+  const yycPerUnit = getYYCPerUnitValue();
   if (!Number.isFinite(normalized)) {
     return '';
   }
-  return (normalized / getYYCPerUnitValue())
+  if (!Number.isFinite(yycPerUnit) || yycPerUnit <= 0) {
+    return '';
+  }
+  return (normalized / yycPerUnit)
     .toFixed(precision)
     .replace(/\.?0+$/, '');
 }
@@ -221,10 +217,7 @@ export function displayAmountInputStep() {
 export const quotaInputStep = displayAmountInputStep;
 
 export function renderAmountEquivalentPrompt(yycAmount, t) {
-  const displayInCurrency =
-    localStorage.getItem('display_in_currency') === 'true';
-
-  if (displayInCurrency) {
+  if (getYYCPerUnitValue() > 0) {
     const amount = formatYYCEquivalentAmount(yycAmount, 2);
     return ` (${t('common.quota.display', { amount })})`;
   }

@@ -49,7 +49,6 @@ func GetStatus(c *gin.Context) {
 			"top_up_callback_issues":  topUpCallbackIssues,
 			"chat_link":               config.ChatLink,
 			"quota_per_unit":          config.QuotaPerUnit,
-			"display_in_currency":     config.DisplayInCurrencyEnabled,
 			"wallet_login":            true,
 			"wallet_jwt_enabled":      config.WalletJWTSecret != "",
 			"wallet_jwt_expire_hours": config.WalletJWTExpireHours,

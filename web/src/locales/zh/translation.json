@@ -1738,7 +1738,6 @@
         "quota_per_unit_placeholder": "1 USD 折算为多少 YYC",
         "retry_times": "失败重试次数",
         "retry_times_placeholder": "失败重试次数",
-        "display_in_currency": "以法币形式显示 YYC",
         "display_token_stat": "Billing 相关 API 显示令牌余额而非用户余额",
         "approximate_token": "使用近似的方式估算 token 数以减少计算量",
         "buttons": {

@@ -372,10 +372,7 @@ func GetSubscription(c *gin.Context) {
 		return
 	}
 	quota := remainQuota + usedQuota
-	amount := float64(quota)
-	if config.DisplayInCurrencyEnabled {
-		amount /= usdYYCPerUnit()
-	}
+	amount := float64(quota) / usdYYCPerUnit()
 	if token != nil && token.UnlimitedQuota {
 		amount = 100000000
 	}
@@ -418,10 +415,7 @@ func GetUsage(c *gin.Context) {
 		})
 		return
 	}
-	amount := float64(quota)
-	if config.DisplayInCurrencyEnabled {
-		amount /= usdYYCPerUnit()
-	}
+	amount := float64(quota) / usdYYCPerUnit()
 	usage := billingsvc.OpenAIUsageResponse{
 		Object:     "list",
 		TotalUsage: amount * 100,

@@ -22,7 +22,6 @@ var TopUpSignSecret = ""
 var TopUpCallbackToken = ""
 var ChatLink = ""
 var QuotaPerUnit = 500 * 1000.0 // $0.002 / 1K tokens
-var DisplayInCurrencyEnabled = true
 var DisplayTokenStatEnabled = true
 var FXAutoSyncEnabled = false
 var FXAutoSyncIntervalSeconds = 6 * 60 * 60
