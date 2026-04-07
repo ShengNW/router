@@ -366,10 +366,7 @@ const OperationSetting = ({ section = '' }) => {
         break;
       case 'retry':
         {
-          const retryLimit = Math.max(
-            0,
-            Math.trunc(Number(inputs.RetryTimes || 0))
-          );
+          const retryLimit = Number(inputs.RetryTimes || 0) > 0 ? 1 : 0;
           if (
             normalizeOptionValue(originInputs.RetryTimes, '0') !==
             `${retryLimit}`
@@ -601,17 +598,26 @@ const OperationSetting = ({ section = '' }) => {
                 <p>{t('setting.operation.retry.description_disabled')}</p>
               </Message>
               <Form.Group widths={2}>
-                <Form.Input
+                <Form.Dropdown
                   className='router-section-input'
-                  label={t('setting.operation.retry.limit')}
+                  selection
                   name='RetryTimes'
-                  type='number'
-                  step='1'
-                  min='0'
+                  label={t('setting.operation.retry.limit')}
                   onChange={handleInputChange}
-                  autoComplete='new-password'
                   value={inputs.RetryTimes}
                   placeholder={t('setting.operation.retry.limit_placeholder')}
+                  options={[
+                    {
+                      key: 'disabled',
+                      text: t('setting.operation.retry.options.disabled'),
+                      value: '0',
+                    },
+                    {
+                      key: 'all_candidates',
+                      text: t('setting.operation.retry.options.all_candidates'),
+                      value: '1',
+                    },
+                  ]}
                 />
               </Form.Group>
               <Form.Button

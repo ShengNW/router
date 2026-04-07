@@ -79,7 +79,7 @@ func Relay(c *gin.Context) {
 	}
 	go processChannelRelayError(ctx, userId, channelId, channelName, originalModel, requestPath, *bizErr)
 	traceID := c.GetString(helper.TraceIDKey)
-	retryTimes := config.RetryTimes
+	retryAllRemainingCandidates := config.RetryTimes > 0
 	retryCount := 0
 	retryable := shouldRetry(c, bizErr)
 	if !retryable {
@@ -92,9 +92,9 @@ func Relay(c *gin.Context) {
 			String("model", originalModel).
 			String("reason", "status_not_retryable").
 			Build())
-		retryTimes = 0
+		retryAllRemainingCandidates = false
 	}
-	for i := retryTimes; i > 0; i-- {
+	for retryAllRemainingCandidates {
 		channel, selectionStats, err := dbmodel.CacheSelectRandomSatisfiedChannelForRequestExcluding(group, originalModel, requestPath, false, failedChannelIDs)
 		if err != nil {
 			fields := relaylogging.NewFields("RETRY").
@@ -132,7 +132,6 @@ func Relay(c *gin.Context) {
 			Int("remaining_candidates", selectionStats.RemainingCandidates).
 			Int("total_candidates", selectionStats.TotalCandidates).
 			Int("failed_channels", len(failedChannelIDs)).
-			Int("remaining", i-1).
 			Build())
 		middleware.SetupContextForSelectedChannel(c, channel, originalModel)
 		requestBody, err := common.GetRequestBody(c)
