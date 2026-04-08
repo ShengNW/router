@@ -111,6 +111,19 @@ export const buildUserWorkspaceMenuItems = ({ includeChat = false } = {}) => {
       to: '/workspace/task',
       icon: 'tasks',
     },
+    {
+      key: 'help',
+      type: 'group',
+      name: 'header.help',
+      icon: 'book',
+      items: [
+        {
+          name: 'header.usage_guide',
+          to: '/workspace/service/help',
+          icon: 'file alternate outline',
+        },
+      ],
+    },
   );
 
   return items;

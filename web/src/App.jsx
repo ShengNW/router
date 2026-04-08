@@ -42,6 +42,7 @@ import Task from './pages/Task';
 import TaskDetail from './pages/Task/Detail';
 import FlowPage from './pages/Flow';
 import ServicePricing from './pages/ServicePricing';
+import HelpDoc from './pages/HelpDoc';
 import AdminLayout from './layouts/AdminLayout';
 import UserLayout from './layouts/UserLayout';
 import UserWorkspaceLayout from './layouts/UserWorkspaceLayout';
@@ -377,6 +378,14 @@ function App() {
           element={
             <Suspense fallback={<Loading />}>
               <ServicePricing />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/workspace/service/help'
+          element={
+            <Suspense fallback={<Loading />}>
+              <HelpDoc />
             </Suspense>
           }
         />
