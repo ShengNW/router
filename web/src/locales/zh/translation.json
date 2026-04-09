@@ -86,6 +86,7 @@
       "package_title": "套餐购买",
       "package_empty": "暂无可购买套餐",
       "package_select_required": "请选择套餐",
+      "plan_invalid": "充值档位无效，请刷新后重试",
       "amount_invalid": "请输入大于 0 的充值金额",
       "request_failed": "创建充值订单失败",
       "popup_blocked": "浏览器拦截了新窗口，请允许弹窗后重试",

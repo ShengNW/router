@@ -86,6 +86,7 @@
       "package_title": "Package Purchase",
       "package_empty": "No purchasable packages",
       "package_select_required": "Please select a package",
+      "plan_invalid": "Invalid top-up plan. Please refresh and try again.",
       "amount_invalid": "Please enter an amount greater than 0",
       "request_failed": "Failed to create top-up order",
       "popup_blocked": "The browser blocked the new window. Please allow pop-ups and try again.",

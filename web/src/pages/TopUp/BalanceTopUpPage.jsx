@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Header, Statistic } from 'semantic-ui-react';
+import { showError } from '../../helpers';
 import { useTopUpWorkspace } from './shared.jsx';
 
 const renderPlanAmount = (amount, currency) =>
@@ -8,6 +9,10 @@ const renderPlanAmount = (amount, currency) =>
 
 const renderPlanQuota = (amount, currency) =>
   `${Number(amount || 0)} ${String(currency || 'USD').toUpperCase()}`;
+
+const resolvePlanID = (plan) =>
+  String(plan?.id || plan?.plan_id || plan?.Id || '')
+    .trim();
 
 const BalanceTopUpPage = () => {
   const { t } = useTranslation();
@@ -19,7 +24,12 @@ const BalanceTopUpPage = () => {
   } = useTopUpWorkspace();
   const [creatingPlanID, setCreatingPlanID] = useState('');
 
-  const handleSubmit = async (planID) => {
+  const handleSubmit = async (plan) => {
+    const planID = resolvePlanID(plan);
+    if (!planID) {
+      showError(t('topup.external_topup.plan_invalid'));
+      return;
+    }
     setCreatingPlanID(planID);
     try {
       await createTopupOrder({
@@ -57,8 +67,10 @@ const BalanceTopUpPage = () => {
 
             <div className='router-grid-top-md' style={{ width: '100%' }}>
               <Card.Group itemsPerRow={5} stackable>
-                {(Array.isArray(topupPlans) ? topupPlans : []).map((plan) => (
-                  <Card key={plan.id} className='router-soft-card'>
+                {(Array.isArray(topupPlans) ? topupPlans : []).map((plan, index) => {
+                  const planID = resolvePlanID(plan);
+                  return (
+                  <Card key={planID || plan?.name || `plan-${index}`} className='router-soft-card'>
                     <Card.Content>
                       <Card.Header>{plan.name || renderPlanAmount(plan.amount, plan.amount_currency)}</Card.Header>
                       <Card.Meta style={{ marginTop: '0.5rem' }}>
@@ -81,16 +93,16 @@ const BalanceTopUpPage = () => {
                         primary
                         className='router-section-button'
                         disabled={creatingPlanID !== ''}
-                        loading={creatingPlanID === plan.id}
-                        onClick={() => handleSubmit(plan.id)}
+                        loading={creatingPlanID === planID}
+                        onClick={() => handleSubmit(plan)}
                       >
-                        {creatingPlanID === plan.id
+                        {creatingPlanID === planID
                           ? t('topup.external_topup.creating')
                           : t('topup.external_topup.button')}
                       </Button>
                     </Card.Content>
                   </Card>
-                ))}
+                )})}
               </Card.Group>
             </div>
           </div>

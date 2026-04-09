@@ -313,7 +313,8 @@ func CreateTopupOrderWithDB(db *gorm.DB, userID string, username string, input C
 		return TopupOrder{}, fmt.Errorf("无效的业务类型")
 	}
 	amount := normalizeTopupOrderAmount(input.Amount)
-	if amount <= 0 && !isLegacyMode && businessType == TopupOrderBusinessBalance {
+	normalizedPlanID := strings.TrimSpace(input.PlanID)
+	if amount <= 0 && !isLegacyMode && businessType == TopupOrderBusinessBalance && normalizedPlanID == "" {
 		return TopupOrder{}, fmt.Errorf("支付金额必须大于 0")
 	}
 	currency := normalizeTopupOrderCurrency(input.Currency)
@@ -347,7 +348,7 @@ func CreateTopupOrderWithDB(db *gorm.DB, userID string, username string, input C
 	} else {
 		switch order.BusinessType {
 		case TopupOrderBusinessBalance:
-			planID := strings.TrimSpace(input.PlanID)
+			planID := normalizedPlanID
 			if planID != "" {
 				resolvedPlan, err := ResolveTopupPlan(planID)
 				if err != nil {
