@@ -277,44 +277,17 @@ func buildTopupOrderRedirectURL(baseLink string, order TopupOrder) (string, erro
 	return parsed.String(), nil
 }
 
-func buildLegacyTopupOrderRedirectURL(baseLink string, order TopupOrder) (string, error) {
-	trimmedBaseLink := strings.TrimSpace(baseLink)
-	if trimmedBaseLink == "" {
-		return "", fmt.Errorf("超级管理员未设置充值链接")
-	}
-	parsed, err := url.Parse(trimmedBaseLink)
-	if err != nil {
-		return "", fmt.Errorf("充值链接配置无效")
-	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", fmt.Errorf("充值链接配置无效")
-	}
-	query := parsed.Query()
-	query.Set("user_id", strings.TrimSpace(order.UserID))
-	query.Set("transaction_id", strings.TrimSpace(order.TransactionID))
-	query.Set("order_id", strings.TrimSpace(order.Id))
-	if strings.TrimSpace(order.Username) != "" {
-		query.Set("username", strings.TrimSpace(order.Username))
-	}
-	parsed.RawQuery = query.Encode()
-	return parsed.String(), nil
-}
-
 func CreateTopupOrderWithDB(db *gorm.DB, userID string, username string, input CreateTopupOrderInput) (TopupOrder, error) {
 	if db == nil {
 		return TopupOrder{}, fmt.Errorf("database handle is nil")
 	}
-	isLegacyMode := strings.TrimSpace(input.BusinessType) == "" &&
-		input.Amount <= 0 &&
-		strings.TrimSpace(input.PackageID) == "" &&
-		input.Quota <= 0
 	businessType := normalizeTopupOrderBusinessType(input.BusinessType)
-	if businessType == "" && !isLegacyMode {
+	if businessType == "" {
 		return TopupOrder{}, fmt.Errorf("无效的业务类型")
 	}
 	amount := normalizeTopupOrderAmount(input.Amount)
 	normalizedPlanID := strings.TrimSpace(input.PlanID)
-	if amount <= 0 && !isLegacyMode && businessType == TopupOrderBusinessBalance && normalizedPlanID == "" {
+	if amount <= 0 && businessType == TopupOrderBusinessBalance && normalizedPlanID == "" {
 		return TopupOrder{}, fmt.Errorf("支付金额必须大于 0")
 	}
 	currency := normalizeTopupOrderCurrency(input.Currency)
@@ -339,93 +312,85 @@ func CreateTopupOrderWithDB(db *gorm.DB, userID string, username string, input C
 	}
 	var redirectURL string
 	var err error
-	if isLegacyMode {
-		order.BusinessType = ""
-		redirectURL, err = buildLegacyTopupOrderRedirectURL(config.TopUpLink, order)
-		if err != nil {
-			return TopupOrder{}, err
-		}
-	} else {
-		switch order.BusinessType {
-		case TopupOrderBusinessBalance:
-			planID := normalizedPlanID
-			if planID != "" {
-				resolvedPlan, err := ResolveTopupPlan(planID)
+	switch order.BusinessType {
+	case TopupOrderBusinessBalance:
+		planID := normalizedPlanID
+		if planID != "" {
+			resolvedPlan, err := ResolveTopupPlan(planID)
+			if err != nil {
+				return TopupOrder{}, err
+			}
+			order.Amount = normalizeTopupOrderAmount(resolvedPlan.Amount)
+			order.Currency = normalizeTopupOrderCurrency(resolvedPlan.AmountCurrency)
+			order.Quota = normalizeTopupOrderQuota(resolvedPlan.QuotaYYC)
+			if strings.TrimSpace(input.Title) != "" {
+				order.Title = strings.TrimSpace(input.Title)
+			} else {
+				order.Title = resolvedPlan.Name + " / " + formatTopupPlanNumber(resolvedPlan.QuotaAmount) + " " + resolvedPlan.QuotaCurrency
+				if strings.TrimSpace(resolvedPlan.GroupName) != "" {
+					order.Title += " / " + strings.TrimSpace(resolvedPlan.GroupName)
+				}
+			}
+		} else {
+			order.Currency = BillingCurrencyCodeCNY
+			if order.Amount <= 0 {
+				return TopupOrder{}, fmt.Errorf("充值金额必须大于 0")
+			}
+			if order.Quota <= 0 {
+				yycPerUnit, err := GetBillingCurrencyYYCPerUnit(order.Currency)
 				if err != nil {
 					return TopupOrder{}, err
 				}
-				order.Amount = normalizeTopupOrderAmount(resolvedPlan.Amount)
-				order.Currency = normalizeTopupOrderCurrency(resolvedPlan.AmountCurrency)
-				order.Quota = normalizeTopupOrderQuota(resolvedPlan.QuotaYYC)
-				if strings.TrimSpace(input.Title) != "" {
-					order.Title = strings.TrimSpace(input.Title)
-				} else {
-					order.Title = resolvedPlan.Name + " / " + formatTopupPlanNumber(resolvedPlan.QuotaAmount) + " " + resolvedPlan.QuotaCurrency
-					if strings.TrimSpace(resolvedPlan.GroupName) != "" {
-						order.Title += " / " + strings.TrimSpace(resolvedPlan.GroupName)
-					}
-				}
-			} else {
-				order.Currency = BillingCurrencyCodeCNY
-				if order.Amount <= 0 {
-					return TopupOrder{}, fmt.Errorf("充值金额必须大于 0")
-				}
-				if order.Quota <= 0 {
-					yycPerUnit, err := GetBillingCurrencyYYCPerUnit(order.Currency)
-					if err != nil {
-						return TopupOrder{}, err
-					}
-					order.Quota = normalizeTopupOrderQuota(int64(math.Round(order.Amount * yycPerUnit)))
-				}
-				if strings.TrimSpace(input.Title) != "" {
-					order.Title = strings.TrimSpace(input.Title)
-				} else {
-					order.Title = "账户充值"
-				}
+				order.Quota = normalizeTopupOrderQuota(int64(math.Round(order.Amount * yycPerUnit)))
 			}
-			if order.Quota <= 0 {
-				return TopupOrder{}, fmt.Errorf("充值额度不能为空")
-			}
-		case TopupOrderBusinessPackage:
-			if strings.TrimSpace(order.PackageID) == "" {
-				return TopupOrder{}, fmt.Errorf("套餐 ID 不能为空")
-			}
-			servicePackage, err := getServicePackageByIDWithDB(db, order.PackageID)
-			if err != nil {
-				if err == gorm.ErrRecordNotFound {
-					return TopupOrder{}, fmt.Errorf("套餐不存在")
-				}
-				return TopupOrder{}, err
-			}
-			if !servicePackage.Enabled {
-				return TopupOrder{}, fmt.Errorf("套餐已禁用")
-			}
-			order.Amount = normalizeTopupOrderAmount(servicePackage.SalePrice)
-			order.Currency = normalizeTopupOrderCurrency(servicePackage.SaleCurrency)
-			if order.Amount <= 0 {
-				return TopupOrder{}, fmt.Errorf("套餐售价未配置")
-			}
-			order.PackageName = strings.TrimSpace(servicePackage.Name)
 			if strings.TrimSpace(input.Title) != "" {
 				order.Title = strings.TrimSpace(input.Title)
-			} else if order.PackageName != "" {
-				order.Title = "购买套餐：" + order.PackageName
 			} else {
-				order.Title = "购买套餐"
+				order.Title = "账户充值"
 			}
-		default:
-			return TopupOrder{}, fmt.Errorf("无效的业务类型")
 		}
-		if order.CallbackURL == "" {
-			return TopupOrder{}, fmt.Errorf("回调地址未配置")
+		if order.Quota <= 0 {
+			return TopupOrder{}, fmt.Errorf("充值额度不能为空")
 		}
-		if config.EffectiveTopUpMode() == config.TopUpModeAPI {
-			order.Source = TopupOrderSourceTopUpAPI
+	case TopupOrderBusinessPackage:
+		if strings.TrimSpace(order.PackageID) == "" {
+			return TopupOrder{}, fmt.Errorf("套餐 ID 不能为空")
+		}
+		servicePackage, err := getServicePackageByIDWithDB(db, order.PackageID)
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return TopupOrder{}, fmt.Errorf("套餐不存在")
+			}
+			return TopupOrder{}, err
+		}
+		if !servicePackage.Enabled {
+			return TopupOrder{}, fmt.Errorf("套餐已禁用")
+		}
+		order.Amount = normalizeTopupOrderAmount(servicePackage.SalePrice)
+		order.Currency = normalizeTopupOrderCurrency(servicePackage.SaleCurrency)
+		if order.Amount <= 0 {
+			return TopupOrder{}, fmt.Errorf("套餐售价未配置")
+		}
+		order.PackageName = strings.TrimSpace(servicePackage.Name)
+		if strings.TrimSpace(input.Title) != "" {
+			order.Title = strings.TrimSpace(input.Title)
+		} else if order.PackageName != "" {
+			order.Title = "购买套餐：" + order.PackageName
 		} else {
-			redirectURL, err = buildTopupOrderRedirectURL(config.TopUpLink, order)
-			if err != nil {
-				return TopupOrder{}, err
-			}
+			order.Title = "购买套餐"
+		}
+	default:
+		return TopupOrder{}, fmt.Errorf("无效的业务类型")
+	}
+	if order.CallbackURL == "" {
+		return TopupOrder{}, fmt.Errorf("回调地址未配置")
+	}
+	if config.EffectiveTopUpMode() == config.TopUpModeAPI {
+		order.Source = TopupOrderSourceTopUpAPI
+	} else {
+		redirectURL, err = buildTopupOrderRedirectURL(config.TopUpLink, order)
+		if err != nil {
+			return TopupOrder{}, err
 		}
 	}
 	now := helper.GetTimestamp()
