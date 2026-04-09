@@ -57,6 +57,13 @@
     height: 100%;
 }
 
+.dashboard-package-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .dashboard-spend-summary {
     display: flex;
     flex-direction: column;
@@ -67,6 +74,10 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+}
+
+.dashboard-package-metrics-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .dashboard-spend-metric {
@@ -343,6 +354,14 @@
     .dashboard-container {
         padding: 10px 16px;   /* 移动端也相应减小内边距 */
         max-width: 100%;      /* 移动端占满全宽 */
+    }
+
+    .dashboard-package-header-row {
+        flex-wrap: wrap;
+    }
+
+    .dashboard-package-metrics-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     
     .chart-container {

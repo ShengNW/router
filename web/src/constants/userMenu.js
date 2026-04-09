@@ -37,6 +37,11 @@ export const buildUserWorkspaceMenuItems = ({ includeChat = false } = {}) => {
           to: '/workspace/service/pricing',
           icon: 'tags',
         },
+        {
+          name: 'header.task',
+          to: '/workspace/task',
+          icon: 'tasks',
+        },
       ],
     },
   ];
@@ -105,11 +110,6 @@ export const buildUserWorkspaceMenuItems = ({ includeChat = false } = {}) => {
           icon: 'book',
         },
       ],
-    },
-    {
-      name: 'header.task',
-      to: '/workspace/task',
-      icon: 'tasks',
     },
     {
       key: 'help',

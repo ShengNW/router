@@ -995,25 +995,27 @@ const Dashboard = () => {
     <div className='dashboard-container'>
       <Card fluid className='chart-card dashboard-spend-card'>
         <Card.Content>
-          <Card.Header className='router-card-header router-section-title'>
-            {t('dashboard.spending.package_daily.title')}
-          </Card.Header>
+          <div className='dashboard-package-header-row'>
+            <Card.Header className='router-card-header router-section-title'>
+              {t('dashboard.spending.package_daily.title')}
+            </Card.Header>
+            <Button
+              type='button'
+              className='router-inline-button'
+              loading={dailyPackageBalanceLoading}
+              onClick={() => fetchDailyPackageBalanceSummary()}
+            >
+              {t('dashboard.admin.buttons.refresh')}
+            </Button>
+          </div>
           <div className='dashboard-spend-summary'>
             <div className='dashboard-spend-period-row'>
-                <div className='dashboard-spend-label'>
-                  {t('dashboard.spending.package_daily.group')}
+              <div className='dashboard-spend-label'>
+                {t('dashboard.spending.package_daily.group')}
                 : {dailyPackageBalanceSummary?.group_name || '-'}
               </div>
-              <Button
-                type='button'
-                className='router-inline-button'
-                loading={dailyPackageBalanceLoading}
-                onClick={() => fetchDailyPackageBalanceSummary()}
-              >
-                {t('dashboard.admin.buttons.refresh')}
-              </Button>
             </div>
-            <div className='dashboard-spend-summary-row'>
+            <div className='dashboard-spend-summary-row dashboard-package-metrics-row'>
               <div className='dashboard-spend-metric'>
                 <div className='dashboard-spend-label'>
                   {t('dashboard.spending.package_daily.remaining')}
@@ -1026,8 +1028,6 @@ const Dashboard = () => {
                 </div>
                 <div className='dashboard-spend-value'>{packageUsedDisplay}</div>
               </div>
-            </div>
-            <div className='dashboard-spend-summary-row'>
               <div className='dashboard-spend-metric'>
                 <div className='dashboard-spend-label'>
                   {t('dashboard.spending.package_daily.limit')}
