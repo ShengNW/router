@@ -62,6 +62,26 @@ type AdminRedemptionRecord struct {
 	CreatedTime        int64   `json:"created_time"`
 }
 
+type AdminTopupReconcileRecord struct {
+	ID              string  `json:"id"`
+	UserID          string  `json:"user_id"`
+	Username        string  `json:"username"`
+	Status          string  `json:"status"`
+	Source          string  `json:"source"`
+	ProviderName    string  `json:"provider_name"`
+	ProviderOrderID string  `json:"provider_order_id"`
+	TransactionID   string  `json:"transaction_id"`
+	Title           string  `json:"title"`
+	BusinessType    string  `json:"business_type"`
+	Amount          float64 `json:"amount"`
+	Currency        string  `json:"currency"`
+	StatusMessage   string  `json:"status_message"`
+	PaidAt          int64   `json:"paid_at"`
+	RedeemedAt      int64   `json:"redeemed_at"`
+	CreatedAt       int64   `json:"created_at"`
+	UpdatedAt       int64   `json:"updated_at"`
+}
+
 func normalizeBusinessFlowPage(page int, pageSize int) (int, int) {
 	if page < 1 {
 		page = 1
@@ -227,6 +247,58 @@ func ListAdminRedemptionRecordsPageWithDB(db *gorm.DB, page int, pageSize int, k
 			r.redeemed_time,
 			r.created_time`).
 		Order("r.redeemed_time desc, r.id desc").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Scan(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+func ListAdminTopupReconcileRecordsPageWithDB(db *gorm.DB, page int, pageSize int, keyword string, status string) ([]AdminTopupReconcileRecord, int64, error) {
+	if db == nil {
+		return nil, 0, fmt.Errorf("database handle is nil")
+	}
+	page, pageSize = normalizeBusinessFlowPage(page, pageSize)
+	query := db.Table(TopupOrdersTableName + " AS o").
+		Joins("LEFT JOIN users u ON u.id = o.user_id").
+		Where("o.source = ?", TopupOrderSourceTopUpAPI)
+	if normalizedStatus := NormalizeTopupOrderStatus(status); normalizedStatus != "" {
+		query = query.Where("o.status = ?", normalizedStatus)
+	}
+	query = applyKeywordFilter(query, keyword, []string{
+		"LOWER(o.id) LIKE ?",
+		"LOWER(COALESCE(NULLIF(o.username, ''), u.username, '')) LIKE ?",
+		"LOWER(COALESCE(o.transaction_id, '')) LIKE ?",
+		"LOWER(COALESCE(o.provider_order_id, '')) LIKE ?",
+		"LOWER(COALESCE(o.title, '')) LIKE ?",
+		"LOWER(COALESCE(o.status_message, '')) LIKE ?",
+	}, nil)
+	total := int64(0)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	rows := make([]AdminTopupReconcileRecord, 0, pageSize)
+	if err := query.
+		Select(`
+			o.id,
+			o.user_id,
+			COALESCE(NULLIF(o.username, ''), u.username, '') AS username,
+			o.status,
+			o.source,
+			o.provider_name,
+			o.provider_order_id,
+			o.transaction_id,
+			o.title,
+			o.business_type,
+			o.amount,
+			o.currency,
+			o.status_message,
+			o.paid_at,
+			o.redeemed_at,
+			o.created_at,
+			o.updated_at`).
+		Order("o.updated_at desc, o.created_at desc, o.id desc").
 		Limit(pageSize).
 		Offset((page - 1) * pageSize).
 		Scan(&rows).Error; err != nil {

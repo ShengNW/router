@@ -58,6 +58,37 @@ const renderPackageStatus = (status, t) => {
   }
 };
 
+const formatTopupBusinessType = (type, t) => {
+  switch ((type || '').toString().trim()) {
+    case 'balance_topup':
+      return t('topup.business_type.balance_topup');
+    case 'package_purchase':
+      return t('topup.business_type.package_purchase');
+    default:
+      return readOnlyText(type);
+  }
+};
+
+const renderReconcileStage = (row, t) => {
+  const status = normalizeTopupStatus(row?.status);
+  switch (status) {
+    case 'created':
+      return <Label basic className='router-tag'>{t('flow.topup_reconcile.stage.awaiting_payment')}</Label>;
+    case 'pending':
+      return <Label basic color='blue' className='router-tag'>{t('flow.topup_reconcile.stage.payment_processing')}</Label>;
+    case 'paid':
+      return <Label basic color='orange' className='router-tag'>{t('flow.topup_reconcile.stage.awaiting_fulfillment')}</Label>;
+    case 'fulfilled':
+      return <Label basic color='green' className='router-tag'>{t('flow.topup_reconcile.stage.done')}</Label>;
+    case 'failed':
+      return <Label basic color='red' className='router-tag'>{t('flow.topup_reconcile.stage.payment_failed')}</Label>;
+    case 'canceled':
+      return <Label basic color='grey' className='router-tag'>{t('flow.topup_reconcile.stage.canceled')}</Label>;
+    default:
+      return <Label basic color='grey' className='router-tag'>{readOnlyText(row?.status)}</Label>;
+  }
+};
+
 const BusinessFlowTable = ({ kind }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -68,6 +99,7 @@ const BusinessFlowTable = ({ kind }) => {
   const [totalCount, setTotalCount] = useState(0);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [refreshingRowID, setRefreshingRowID] = useState('');
   const [displayUnit, setDisplayUnit] = useState('USD');
   const [currencyIndex, setCurrencyIndex] = useState(
     buildBillingCurrencyIndex([], { activeOnly: true })
@@ -213,6 +245,91 @@ const BusinessFlowTable = ({ kind }) => {
             key: 'updated_at',
             label: t('user.table.updated_at'),
             render: (row) => formatDateTime(row.updated_at),
+          },
+        ],
+      };
+    }
+
+    if (kind === 'topup-reconcile') {
+      return {
+        endpoint: '/api/v1/admin/flow/topup-reconcile-records',
+        searchPlaceholder: t('flow.topup_reconcile.search_placeholder'),
+        emptyText: t('flow.topup_reconcile.empty'),
+        statusOptions: [
+          { key: 'all', value: '', text: t('task.filters.status_all') },
+          { key: 'created', value: 'created', text: t('topup.external_topup_orders.status.created') },
+          { key: 'pending', value: 'pending', text: t('topup.external_topup_orders.status.pending') },
+          { key: 'paid', value: 'paid', text: t('topup.external_topup_orders.status.paid') },
+          { key: 'fulfilled', value: 'fulfilled', text: t('topup.external_topup_orders.status.fulfilled') },
+          { key: 'failed', value: 'failed', text: t('topup.external_topup_orders.status.failed') },
+          { key: 'canceled', value: 'canceled', text: t('topup.external_topup_orders.status.canceled') },
+        ],
+        columns: [
+          compactUserColumn,
+          {
+            key: 'stage',
+            label: t('flow.topup_reconcile.columns.stage'),
+            render: (row) => renderReconcileStage(row, t),
+          },
+          {
+            key: 'status',
+            label: t('topup.external_topup_orders.columns.status'),
+            render: (row) => renderTopupStatus(row.status, t),
+          },
+          {
+            key: 'business_type',
+            label: t('topup.external_topup_orders.columns.business_type'),
+            render: (row) => formatTopupBusinessType(row.business_type, t),
+          },
+          {
+            key: 'amount',
+            label: t('topup.external_topup_orders.columns.amount'),
+            render: (row) =>
+              Number(row.amount || 0) > 0
+                ? `${row.currency || 'CNY'} ${Number(row.amount || 0).toFixed(2)}`
+                : '-',
+          },
+          {
+            key: 'order',
+            label: t('flow.topup_reconcile.columns.order'),
+            render: (row) => (
+              <div>
+                <div>{renderText(readOnlyText(row.title), 24)}</div>
+                <div className='router-text-muted'>
+                  {renderText(readOnlyText(row.transaction_id || row.provider_order_id), 20)}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'message',
+            label: t('flow.topup_reconcile.columns.message'),
+            render: (row) => (
+              <div>
+                <div>{readOnlyText(row.status_message)}</div>
+                <div className='router-text-muted'>
+                  {formatDateTime(row.updated_at)}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'actions',
+            label: t('redemption.table.actions'),
+            collapsing: true,
+            render: (row) => (
+              <Button
+                type='button'
+                className='router-inline-button'
+                loading={refreshingRowID === row.id}
+                disabled={refreshingRowID === row.id}
+                onClick={() => {
+                  handleRefreshReconcileRow(row?.id);
+                }}
+              >
+                {t('flow.topup_reconcile.actions.refresh')}
+              </Button>
+            ),
           },
         ],
       };
@@ -382,7 +499,7 @@ const BusinessFlowTable = ({ kind }) => {
         },
       ],
     };
-  }, [currencyIndex, currentPagePath, displayUnit, displayUnitOptions, kind, navigate, t]);
+  }, [currencyIndex, currentPagePath, displayUnit, displayUnitOptions, kind, navigate, refreshingRowID, t]);
 
   const loadCurrencyCatalog = useCallback(async () => {
     try {
@@ -465,6 +582,29 @@ const BusinessFlowTable = ({ kind }) => {
     },
     [keyword, statusFilter, loadItems],
   );
+
+  async function handleRefreshReconcileRow(rowID) {
+    const normalizedRowID = (rowID || '').toString().trim();
+    if (!normalizedRowID) {
+      return;
+    }
+    setRefreshingRowID(normalizedRowID);
+    try {
+      const res = await API.post(
+        `/api/v1/admin/flow/topup-reconcile-records/${encodeURIComponent(normalizedRowID)}/refresh`,
+      );
+      const { success, message } = res.data || {};
+      if (!success) {
+        showError(message || t('flow.messages.load_failed'));
+        return;
+      }
+      loadItems(activePage, keyword, statusFilter).then();
+    } catch (error) {
+      showError(error?.message || error);
+    } finally {
+      setRefreshingRowID('');
+    }
+  }
 
   return (
     <>

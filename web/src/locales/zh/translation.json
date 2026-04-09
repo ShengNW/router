@@ -58,6 +58,10 @@
       "refresh": "刷新",
       "order_title": "订单记录",
       "order_empty": "暂无订单记录",
+      "continue_pay": "继续支付",
+      "refresh_status": "刷新状态",
+      "order_paid": "订单已支付，状态已更新",
+      "redirect_missing": "当前订单缺少支付链接，请重新下单或联系管理员",
       "tabs": {
         "orders": "订单记录",
         "redemptions": "兑换记录"
@@ -138,16 +142,25 @@
         "status": "状态",
         "amount": "金额",
         "detail": "明细",
+        "action": "操作",
         "order_id": "订单号",
         "transaction_id": "交易号"
       },
       "status": {
-        "created": "已创建",
-        "pending": "处理中",
-        "paid": "已支付",
+        "created": "待支付",
+        "pending": "支付处理中",
+        "paid": "已支付待发放",
         "fulfilled": "已完成",
-        "failed": "失败",
+        "failed": "支付失败",
         "canceled": "已取消"
+      },
+      "status_hint": {
+        "created": "订单已创建，等待你完成支付",
+        "pending": "已拉起支付，正在等待支付结果",
+        "paid": "支付已确认，正在补齐发放结果",
+        "fulfilled": "支付和发放都已完成",
+        "failed": "支付未成功，可以重新发起支付",
+        "canceled": "订单已取消，不会继续处理"
       }
     },
     "redemption_records": {
@@ -199,6 +212,27 @@
         "source": "来源",
         "redemption": "关联兑换",
         "order": "订单信息"
+      }
+    },
+    "topup_reconcile": {
+      "title": "支付补偿",
+      "search_placeholder": "搜索用户、订单号、渠道单号、标题、状态说明...",
+      "empty": "暂无支付补偿记录",
+      "columns": {
+        "stage": "补偿阶段",
+        "order": "订单信息",
+        "message": "状态说明"
+      },
+      "stage": {
+        "awaiting_payment": "待支付",
+        "payment_processing": "支付处理中",
+        "awaiting_fulfillment": "待补发放",
+        "done": "已完成",
+        "payment_failed": "支付失败",
+        "canceled": "已取消"
+      },
+      "actions": {
+        "refresh": "手动补偿"
       }
     },
     "package": {

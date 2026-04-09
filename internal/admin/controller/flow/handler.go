@@ -70,6 +70,35 @@ func GetTopupOrderRecords(c *gin.Context) {
 	writeFlowList(c, rows, total, page, pageSize)
 }
 
+func GetTopupReconcileRecords(c *gin.Context) {
+	page, pageSize, keyword, status := parseFlowPageParams(c)
+	rows, total, err := model.ListAdminTopupReconcileRecordsPageWithDB(model.DB, page, pageSize, keyword, status)
+	if err != nil {
+		writeFlowError(c, err)
+		return
+	}
+	writeFlowList(c, rows, total, page, pageSize)
+}
+
+func RefreshTopupReconcileRecord(c *gin.Context) {
+	orderID := strings.TrimSpace(c.Param("id"))
+	order, err := model.GetTopupOrderByIDForAdminWithDB(model.DB, orderID)
+	if err != nil {
+		writeFlowError(c, err)
+		return
+	}
+	refreshedOrder, err := model.RefreshTopupOrderStatusWithDB(model.DB, order.Id, order.UserID)
+	if err != nil {
+		writeFlowError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    refreshedOrder,
+	})
+}
+
 func GetPackageRecords(c *gin.Context) {
 	page, pageSize, keyword, status := parseFlowPageParams(c)
 	statusCode := 0

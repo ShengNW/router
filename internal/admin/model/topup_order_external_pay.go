@@ -17,6 +17,7 @@ import (
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/common/random"
+	"gorm.io/gorm"
 )
 
 const (
@@ -38,6 +39,23 @@ type externalPayCreateResponseData struct {
 	ProviderPayload externalPayCreateProviderData `json:"provider_payload"`
 }
 
+type externalPayQueryResponse struct {
+	Code int                          `json:"code"`
+	Msg  string                       `json:"msg"`
+	Data externalPayQueryResponseData `json:"data"`
+}
+
+type externalPayQueryResponseData struct {
+	TradeNo         string                        `json:"trade_no"`
+	Status          int                           `json:"status"`
+	CallbackStatus  int                           `json:"callback_status"`
+	ProviderName    string                        `json:"provider_name"`
+	ProviderOrderID string                        `json:"provider_order_id"`
+	ReturnURL       string                        `json:"return_url"`
+	PayTime         int64                         `json:"pay_time"`
+	ProviderPayload externalPayCreateProviderData `json:"provider_payload"`
+}
+
 type externalPayCreateProviderData struct {
 	TradeType string `json:"trade_type"`
 	CodeURL   string `json:"code_url"`
@@ -49,6 +67,16 @@ type topupExternalPayCreateResult struct {
 	RedirectURL     string
 	ProviderOrderID string
 	ProviderName    string
+}
+
+type topupExternalPayQueryResult struct {
+	TradeNo         string
+	Status          int
+	CallbackStatus  int
+	ProviderName    string
+	ProviderOrderID string
+	ReturnURL       string
+	PayTime         int64
 }
 
 func normalizeTopupOrderClientType(value string) string {
@@ -71,6 +99,24 @@ func buildExternalPayCreateURL() (string, error) {
 	}
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("支付 API 地址配置无效")
+	}
+	query := parsed.Query()
+	query.Set("uniacid", strconv.Itoa(config.TopUpAPIUniacidValue()))
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func buildExternalPayQueryURL() (string, error) {
+	baseURL := strings.TrimSpace(config.ResolvedTopUpAPIQueryURL())
+	if baseURL == "" {
+		return "", fmt.Errorf("超级管理员未设置支付状态查询 API 地址")
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("支付状态查询 API 地址配置无效")
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("支付状态查询 API 地址配置无效")
 	}
 	query := parsed.Query()
 	query.Set("uniacid", strconv.Itoa(config.TopUpAPIUniacidValue()))
@@ -103,6 +149,18 @@ func buildExternalPayCreatePayload(order TopupOrder, clientType string) map[stri
 	}
 	if strings.TrimSpace(order.PackageName) != "" {
 		payload["package_name"] = strings.TrimSpace(order.PackageName)
+	}
+	payload["sign"] = signTopupOrderPayload(payload, config.TopUpSignSecret)
+	return payload
+}
+
+func buildExternalPayQueryPayload(order TopupOrder) map[string]string {
+	payload := map[string]string{
+		"merchant_app": config.TopUpMerchantAppValue(),
+		"order_id":     strings.TrimSpace(order.Id),
+		"trade_no":     strings.TrimSpace(order.ProviderOrderID),
+		"timestamp":    strconv.FormatInt(helper.GetTimestamp(), 10),
+		"nonce":        random.GetUUID(),
 	}
 	payload["sign"] = signTopupOrderPayload(payload, config.TopUpSignSecret)
 	return payload
@@ -258,4 +316,154 @@ func createTopupOrderByExternalPayAPI(order TopupOrder, clientType string) (topu
 		ProviderOrderID: providerOrderID,
 		ProviderName:    providerName,
 	}, nil
+}
+
+func queryTopupOrderByExternalPayAPI(order TopupOrder) (topupExternalPayQueryResult, error) {
+	requestURL, err := buildExternalPayQueryURL()
+	if err != nil {
+		return topupExternalPayQueryResult{}, err
+	}
+	payload := buildExternalPayQueryPayload(order)
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return topupExternalPayQueryResult{}, fmt.Errorf("构造支付状态查询请求失败")
+	}
+	request, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return topupExternalPayQueryResult{}, fmt.Errorf("构造支付状态查询请求失败")
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{
+		Timeout: time.Duration(config.TopUpAPITimeoutSecondsValue()) * time.Second,
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return topupExternalPayQueryResult{}, fmt.Errorf("调用支付状态查询 API 失败: %w", err)
+	}
+	defer response.Body.Close()
+
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return topupExternalPayQueryResult{}, fmt.Errorf("读取支付状态查询 API 响应失败")
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return topupExternalPayQueryResult{}, fmt.Errorf(
+			"支付状态查询 API 请求失败: status=%d body=%s",
+			response.StatusCode,
+			previewExternalPayResponse(responseBody),
+		)
+	}
+
+	var payloadResponse externalPayQueryResponse
+	if err := json.Unmarshal(responseBody, &payloadResponse); err != nil {
+		return topupExternalPayQueryResult{}, fmt.Errorf("解析支付状态查询 API 响应失败: %s", previewExternalPayResponse(responseBody))
+	}
+	if payloadResponse.Code != 1 {
+		message := strings.TrimSpace(payloadResponse.Msg)
+		if message == "" {
+			message = "支付状态查询 API 返回失败"
+		}
+		return topupExternalPayQueryResult{}, fmt.Errorf(message)
+	}
+
+	return topupExternalPayQueryResult{
+		TradeNo:         strings.TrimSpace(payloadResponse.Data.TradeNo),
+		Status:          payloadResponse.Data.Status,
+		CallbackStatus:  payloadResponse.Data.CallbackStatus,
+		ProviderName:    strings.TrimSpace(payloadResponse.Data.ProviderName),
+		ProviderOrderID: strings.TrimSpace(payloadResponse.Data.ProviderOrderID),
+		ReturnURL:       strings.TrimSpace(payloadResponse.Data.ReturnURL),
+		PayTime:         payloadResponse.Data.PayTime,
+	}, nil
+}
+
+func mapExternalPayTradeStatus(status int) string {
+	switch status {
+	case 0:
+		return TopupOrderStatusCreated
+	case 1:
+		return TopupOrderStatusPending
+	case 2:
+		return TopupOrderStatusPaid
+	case 3:
+		return TopupOrderStatusCanceled
+	case 4:
+		return TopupOrderStatusFailed
+	default:
+		return ""
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func RefreshTopupOrderStatusWithDB(db *gorm.DB, orderID string, userID string) (TopupOrder, error) {
+	if db == nil {
+		return TopupOrder{}, fmt.Errorf("database handle is nil")
+	}
+	order, err := GetTopupOrderByIDWithDB(db, orderID, userID)
+	if err != nil {
+		return TopupOrder{}, err
+	}
+	if order.Source != TopupOrderSourceTopUpAPI {
+		return order, nil
+	}
+	if order.Status == TopupOrderStatusFulfilled || order.Status == TopupOrderStatusCanceled {
+		return order, nil
+	}
+	if strings.TrimSpace(order.ProviderOrderID) == "" {
+		return order, nil
+	}
+
+	queryResult, err := queryTopupOrderByExternalPayAPI(order)
+	if err != nil {
+		return TopupOrder{}, err
+	}
+	nextStatus := mapExternalPayTradeStatus(queryResult.Status)
+	if nextStatus == "" {
+		return order, nil
+	}
+
+	if nextStatus == TopupOrderStatusPaid || nextStatus == TopupOrderStatusFulfilled {
+		order, err = ApplyTopupOrderCallbackWithDB(db, TopupOrderCallbackInput{
+			OrderID:         order.Id,
+			TransactionID:   order.TransactionID,
+			ProviderOrderID: order.ProviderOrderID,
+			Status:          TopupOrderStatusPaid,
+			ProviderName:    firstNonEmptyString(queryResult.ProviderName, order.ProviderName),
+			StatusMessage:   "reconciled from external payment query",
+			PaidAt:          queryResult.PayTime,
+		})
+		if err != nil {
+			return TopupOrder{}, err
+		}
+		order, _, err = FulfillTopupOrderWithDB(db, order.Id)
+		if err != nil {
+			return TopupOrder{}, err
+		}
+		return order, nil
+	}
+
+	if nextStatus != order.Status {
+		order, err = ApplyTopupOrderCallbackWithDB(db, TopupOrderCallbackInput{
+			OrderID:         order.Id,
+			TransactionID:   order.TransactionID,
+			ProviderOrderID: order.ProviderOrderID,
+			Status:          nextStatus,
+			ProviderName:    firstNonEmptyString(queryResult.ProviderName, order.ProviderName),
+			StatusMessage:   "reconciled from external payment query",
+		})
+		if err != nil {
+			return TopupOrder{}, err
+		}
+	}
+
+	return order, nil
 }

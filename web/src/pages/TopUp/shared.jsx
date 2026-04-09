@@ -143,6 +143,25 @@ export const renderTopupOrderStatus = (status, t) => {
   }
 };
 
+export const formatTopupOrderStatusHint = (status, t) => {
+  switch ((status || '').trim()) {
+    case 'created':
+      return t('topup.external_topup_orders.status_hint.created');
+    case 'pending':
+      return t('topup.external_topup_orders.status_hint.pending');
+    case 'paid':
+      return t('topup.external_topup_orders.status_hint.paid');
+    case 'fulfilled':
+      return t('topup.external_topup_orders.status_hint.fulfilled');
+    case 'failed':
+      return t('topup.external_topup_orders.status_hint.failed');
+    case 'canceled':
+      return t('topup.external_topup_orders.status_hint.canceled');
+    default:
+      return '';
+  }
+};
+
 export const formatTopupBusinessType = (type, t) => {
   switch ((type || '').trim()) {
     case 'balance_topup':

@@ -456,6 +456,14 @@ function App() {
           }
         />
         <Route
+          path='/admin/flow/topup-reconcile'
+          element={
+            <Suspense fallback={<Loading />}>
+              <FlowPage kind='topup-reconcile' />
+            </Suspense>
+          }
+        />
+        <Route
           path='/admin/flow/package'
           element={
             <Suspense fallback={<Loading />}>

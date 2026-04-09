@@ -58,6 +58,10 @@
       "refresh": "Refresh",
       "order_title": "Order Records",
       "order_empty": "No order records yet",
+      "continue_pay": "Continue Pay",
+      "refresh_status": "Refresh Status",
+      "order_paid": "The order has been paid and refreshed",
+      "redirect_missing": "This order is missing a payment link. Please create a new order or contact admin.",
       "tabs": {
         "orders": "Order Records",
         "redemptions": "Redemption Records"
@@ -138,16 +142,25 @@
         "status": "Status",
         "amount": "Amount",
         "detail": "Detail",
+        "action": "Action",
         "order_id": "Order ID",
         "transaction_id": "Transaction ID"
       },
       "status": {
-        "created": "Created",
-        "pending": "Pending",
-        "paid": "Paid",
+        "created": "Awaiting Payment",
+        "pending": "Payment Processing",
+        "paid": "Paid, Pending Fulfillment",
         "fulfilled": "Fulfilled",
-        "failed": "Failed",
+        "failed": "Payment Failed",
         "canceled": "Canceled"
+      },
+      "status_hint": {
+        "created": "The order is created and waiting for payment",
+        "pending": "Payment has been initiated and the result is being confirmed",
+        "paid": "Payment is confirmed and fulfillment is being reconciled",
+        "fulfilled": "Payment and fulfillment are both completed",
+        "failed": "Payment did not succeed. You can start payment again",
+        "canceled": "The order has been canceled and will not continue"
       }
     },
     "redemption_records": {
@@ -199,6 +212,27 @@
         "source": "Source",
         "redemption": "Redemption",
         "order": "Order"
+      }
+    },
+    "topup_reconcile": {
+      "title": "Payment Reconcile",
+      "search_placeholder": "Search user, order ID, provider order, title, or status message...",
+      "empty": "No payment reconcile records",
+      "columns": {
+        "stage": "Reconcile Stage",
+        "order": "Order",
+        "message": "Status Message"
+      },
+      "stage": {
+        "awaiting_payment": "Awaiting Payment",
+        "payment_processing": "Payment Processing",
+        "awaiting_fulfillment": "Awaiting Fulfillment",
+        "done": "Completed",
+        "payment_failed": "Payment Failed",
+        "canceled": "Canceled"
+      },
+      "actions": {
+        "refresh": "Reconcile Now"
       }
     },
     "package": {

@@ -158,6 +158,15 @@ const TopUpWorkspaceProvider = ({ children }) => {
           showError(message || t('topup.external_topup.request_failed'));
           return false;
         }
+        const currentStatus = (data?.status || '').trim();
+        if (currentStatus === 'paid' || currentStatus === 'fulfilled') {
+          if (!popup.closed) {
+            popup.close();
+          }
+          await loadUserBalance();
+          showSuccess(t('topup.records.order_paid'));
+          return true;
+        }
         const redirectURL = data?.redirect_url;
         if (!redirectURL) {
           if (!popup.closed) {
@@ -177,7 +186,7 @@ const TopUpWorkspaceProvider = ({ children }) => {
         return false;
       }
     },
-    [t],
+    [loadUserBalance, t],
   );
 
   const submitRedemption = useCallback(

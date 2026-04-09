@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Label, Pagination, Table } from 'semantic-ui-react';
-import { API, timestamp2string, showError } from '../../helpers';
+import { API, timestamp2string, showError, showSuccess } from '../../helpers';
 import {
   formatTopupBusinessType,
+  formatTopupOrderStatusHint,
   normalizeRedemptionRecord,
   useTopUpWorkspace,
   renderTopupOrderStatus,
@@ -21,6 +22,7 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersTotal, setOrdersTotal] = useState(0);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [refreshingOrderID, setRefreshingOrderID] = useState('');
   const [redemptionRecords, setRedemptionRecords] = useState([]);
   const [redemptionPage, setRedemptionPage] = useState(1);
   const [redemptionTotal, setRedemptionTotal] = useState(0);
@@ -129,6 +131,73 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
   const redemptionTotalPages = Math.max(
     1,
     Math.ceil(redemptionTotal / PAGE_SIZE),
+  );
+
+  const refreshOrderStatus = useCallback(
+    async (orderID) => {
+      const normalizedOrderID = (orderID || '').trim();
+      if (!normalizedOrderID) {
+        return null;
+      }
+      setRefreshingOrderID(normalizedOrderID);
+      try {
+        const res = await API.post(
+          `/api/v1/public/user/topup/orders/${normalizedOrderID}/refresh`,
+        );
+        const { success, message, data } = res?.data || {};
+        if (!success) {
+          showError(message || t('topup.external_topup.request_failed'));
+          return null;
+        }
+        setOrders((previous) =>
+          previous.map((item) =>
+            item.id === normalizedOrderID ? { ...item, ...data } : item,
+          ),
+        );
+        return data || null;
+      } catch (error) {
+        showError(error?.message || t('topup.external_topup.request_failed'));
+        return null;
+      } finally {
+        setRefreshingOrderID('');
+      }
+    },
+    [t],
+  );
+
+  const continuePay = useCallback(
+    async (order) => {
+      const refreshedOrder = await refreshOrderStatus(order?.id);
+      const targetOrder = refreshedOrder || order;
+      if (!targetOrder) {
+        return;
+      }
+      if (['paid', 'fulfilled'].includes(targetOrder.status)) {
+        showSuccess(t('topup.records.order_paid'));
+        loadOrders(ordersPage).then();
+        return;
+      }
+      const redirectURL = (targetOrder.redirect_url || '').trim();
+      if (redirectURL === '') {
+        showError(t('topup.records.redirect_missing'));
+        return;
+      }
+      const popup = window.open(redirectURL, '_blank');
+      if (!popup) {
+        showError(t('topup.external_topup.popup_blocked'));
+      }
+    },
+    [loadOrders, ordersPage, refreshOrderStatus, t],
+  );
+
+  const manualRefreshOrder = useCallback(
+    async (orderID) => {
+      const refreshedOrder = await refreshOrderStatus(orderID);
+      if (refreshedOrder && ['paid', 'fulfilled'].includes(refreshedOrder.status)) {
+        showSuccess(t('topup.records.order_paid'));
+      }
+    },
+    [refreshOrderStatus, t],
   );
 
   const actionButton = useMemo(() => {
@@ -258,12 +327,15 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
                   <Table.HeaderCell>
                     {t('topup.external_topup_orders.columns.detail')}
                   </Table.HeaderCell>
+                  <Table.HeaderCell width={3}>
+                    {t('topup.external_topup_orders.columns.action')}
+                  </Table.HeaderCell>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
                 {orders.length === 0 ? (
                   <Table.Row>
-                    <Table.Cell colSpan='5' className='router-text-muted'>
+                    <Table.Cell colSpan='6' className='router-text-muted'>
                       {loadingOrders
                         ? t('common.loading')
                         : t('topup.records.order_empty')}
@@ -278,7 +350,14 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
                       <Table.Cell>
                         {formatTopupBusinessType(order.business_type, t)}
                       </Table.Cell>
-                      <Table.Cell>{renderTopupOrderStatus(order.status, t)}</Table.Cell>
+                      <Table.Cell>
+                        <div>{renderTopupOrderStatus(order.status, t)}</div>
+                        {formatTopupOrderStatusHint(order.status, t) ? (
+                          <div className='router-text-muted' style={{ marginTop: '0.35rem' }}>
+                            {formatTopupOrderStatusHint(order.status, t)}
+                          </div>
+                        ) : null}
+                      </Table.Cell>
                       <Table.Cell>
                         {order.amount > 0
                           ? `${order.currency || 'CNY'} ${Number(order.amount || 0).toFixed(2)}`
@@ -291,6 +370,28 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
                         <div className='router-text-muted'>
                           {order.transaction_id || order.provider_order_id || '-'}
                         </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Button
+                          size='tiny'
+                          basic
+                          onClick={() => manualRefreshOrder(order.id)}
+                          loading={refreshingOrderID === order.id}
+                          disabled={refreshingOrderID === order.id}
+                        >
+                          {t('topup.records.refresh_status')}
+                        </Button>
+                        {['created', 'pending'].includes(order.status) ? (
+                          <Button
+                            size='tiny'
+                            primary
+                            onClick={() => continuePay(order)}
+                            loading={refreshingOrderID === order.id}
+                            disabled={refreshingOrderID === order.id}
+                          >
+                            {t('topup.records.continue_pay')}
+                          </Button>
+                        ) : null}
                       </Table.Cell>
                     </Table.Row>
                   ))

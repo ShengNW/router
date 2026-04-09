@@ -93,6 +93,7 @@ func SetApiRouter(engine *gin.Engine) {
 				publicSelfRoute.GET("/packages", plan.GetPublicPackages)
 				publicSelfRoute.GET("/topup/orders", user.GetTopUpOrders)
 				publicSelfRoute.GET("/topup/orders/:id", user.GetTopUpOrder)
+				publicSelfRoute.POST("/topup/orders/:id/refresh", user.RefreshTopUpOrder)
 				publicSelfRoute.POST("/topup/orders", user.CreateTopUpOrder)
 				publicSelfRoute.POST("/topup", user.TopUp)
 			}
@@ -276,6 +277,8 @@ func SetApiRouter(engine *gin.Engine) {
 		adminFlowRoute.Use(middleware.AdminAuth())
 		{
 			adminFlowRoute.GET("/topup-orders", flow.GetTopupOrderRecords)
+			adminFlowRoute.GET("/topup-reconcile-records", flow.GetTopupReconcileRecords)
+			adminFlowRoute.POST("/topup-reconcile-records/:id/refresh", flow.RefreshTopupReconcileRecord)
 			adminFlowRoute.GET("/package-records", flow.GetPackageRecords)
 			adminFlowRoute.GET("/redemption-records", flow.GetRedemptionRecords)
 		}

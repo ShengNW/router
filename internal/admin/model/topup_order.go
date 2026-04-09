@@ -432,6 +432,12 @@ func CreateTopupOrderWithDB(db *gorm.DB, userID string, username string, input C
 	order.UpdatedAt = now
 	normalizeTopupOrderRow(&order)
 
+	if reusedOrder, reused, err := findReusableTopupOrderWithDB(db, order); err != nil {
+		return TopupOrder{}, err
+	} else if reused {
+		return reusedOrder, nil
+	}
+
 	if order.Source == TopupOrderSourceTopUpAPI {
 		if err := db.Create(&order).Error; err != nil {
 			return TopupOrder{}, err
@@ -477,6 +483,62 @@ func CreateTopupOrderWithDB(db *gorm.DB, userID string, username string, input C
 	return order, nil
 }
 
+func findReusableTopupOrderWithDB(db *gorm.DB, order TopupOrder) (TopupOrder, bool, error) {
+	if db == nil {
+		return TopupOrder{}, false, fmt.Errorf("database handle is nil")
+	}
+	query := db.Model(&TopupOrder{}).
+		Where("user_id = ?", order.UserID).
+		Where("status IN ?", []string{
+			TopupOrderStatusCreated,
+			TopupOrderStatusPending,
+			TopupOrderStatusPaid,
+		})
+
+	switch order.BusinessType {
+	case TopupOrderBusinessPackage:
+		query = query.Where("business_type = ?", TopupOrderBusinessPackage).
+			Where("package_id = ?", order.PackageID)
+	case TopupOrderBusinessBalance:
+		query = query.Where("business_type = ?", TopupOrderBusinessBalance).
+			Where("amount = ?", order.Amount).
+			Where("currency = ?", order.Currency).
+			Where("quota = ?", order.Quota)
+	default:
+		return TopupOrder{}, false, nil
+	}
+
+	rows := make([]TopupOrder, 0, 5)
+	if err := query.Order("created_at desc, id desc").Limit(5).Find(&rows).Error; err != nil {
+		return TopupOrder{}, false, err
+	}
+	for i := range rows {
+		candidate := rows[i]
+		normalizeTopupOrderRow(&candidate)
+		if candidate.Source == TopupOrderSourceTopUpAPI &&
+			strings.TrimSpace(candidate.ProviderOrderID) != "" &&
+			(candidate.Status == TopupOrderStatusCreated ||
+				candidate.Status == TopupOrderStatusPending ||
+				candidate.Status == TopupOrderStatusPaid) {
+			refreshedOrder, err := RefreshTopupOrderStatusWithDB(db, candidate.Id, candidate.UserID)
+			if err == nil {
+				candidate = refreshedOrder
+			}
+		}
+		switch candidate.Status {
+		case TopupOrderStatusCreated, TopupOrderStatusPending:
+			return candidate, true, nil
+		case TopupOrderStatusPaid:
+			fulfilledOrder, _, err := FulfillTopupOrderWithDB(db, candidate.Id)
+			if err != nil {
+				return TopupOrder{}, false, err
+			}
+			return fulfilledOrder, true, nil
+		}
+	}
+	return TopupOrder{}, false, nil
+}
+
 func GetTopupOrderByIDWithDB(db *gorm.DB, orderID string, userID string) (TopupOrder, error) {
 	if db == nil {
 		return TopupOrder{}, fmt.Errorf("database handle is nil")
@@ -488,6 +550,22 @@ func GetTopupOrderByIDWithDB(db *gorm.DB, orderID string, userID string) (TopupO
 	}
 	row := TopupOrder{}
 	if err := db.Where("id = ? AND user_id = ?", normalizedOrderID, normalizedUserID).First(&row).Error; err != nil {
+		return TopupOrder{}, err
+	}
+	normalizeTopupOrderRow(&row)
+	return row, nil
+}
+
+func GetTopupOrderByIDForAdminWithDB(db *gorm.DB, orderID string) (TopupOrder, error) {
+	if db == nil {
+		return TopupOrder{}, fmt.Errorf("database handle is nil")
+	}
+	normalizedOrderID := strings.TrimSpace(orderID)
+	if normalizedOrderID == "" {
+		return TopupOrder{}, gorm.ErrRecordNotFound
+	}
+	row := TopupOrder{}
+	if err := db.Where("id = ?", normalizedOrderID).First(&row).Error; err != nil {
 		return TopupOrder{}, err
 	}
 	normalizeTopupOrderRow(&row)
@@ -524,6 +602,33 @@ func ListTopupOrdersPageWithDB(db *gorm.DB, userID string, businessType string, 
 		normalizeTopupOrderRow(&rows[i])
 	}
 	return rows, total, nil
+}
+
+func ListTopupOrderReconcileCandidatesWithDB(db *gorm.DB, limit int, maxUpdatedAt int64) ([]TopupOrder, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database handle is nil")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	query := db.Model(&TopupOrder{}).
+		Where("source = ?", TopupOrderSourceTopUpAPI).
+		Where("status IN ?", []string{
+			TopupOrderStatusCreated,
+			TopupOrderStatusPending,
+			TopupOrderStatusPaid,
+		})
+	if maxUpdatedAt > 0 {
+		query = query.Where("updated_at <= ?", maxUpdatedAt)
+	}
+	rows := make([]TopupOrder, 0, limit)
+	if err := query.Order("updated_at asc, created_at asc, id asc").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		normalizeTopupOrderRow(&rows[i])
+	}
+	return rows, nil
 }
 
 func applyTopupOrderBusinessTypeFilter(query *gorm.DB, db *gorm.DB, businessType string) *gorm.DB {

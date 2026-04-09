@@ -2114,6 +2114,33 @@ func GetTopUpOrder(c *gin.Context) {
 	})
 }
 
+// RefreshTopUpOrder godoc
+// @Summary Refresh current user top up order status
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Order ID"
+// @Success 200 {object} docs.UserTopUpOrderDetailResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup/orders/{id}/refresh [post]
+func RefreshTopUpOrder(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	orderID := strings.TrimSpace(c.Param("id"))
+	order, err := model.RefreshTopupOrderStatusWithDB(model.DB, orderID, userID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    order,
+	})
+}
+
 // TopUp godoc
 // @Summary User top up
 // @Tags public
