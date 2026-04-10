@@ -300,12 +300,6 @@ const CurrentPackagePage = () => {
         value: activeSubscription.package_name || '-',
       },
       {
-        key: 'group_name',
-        label: t('user.detail.package_group'),
-        value:
-          activeSubscription.group_name || activeSubscription.group_id || '-',
-      },
-      {
         key: 'status',
         label: t('user.detail.package_status'),
         value: renderPackageStatus(activeSubscription.status, t),
@@ -326,11 +320,6 @@ const CurrentPackagePage = () => {
         key: 'timezone',
         label: t('user.detail.package_timezone'),
         value: activeSubscription.quota_reset_timezone || '-',
-      },
-      {
-        key: 'source',
-        label: t('user.detail.package_source'),
-        value: activeSubscription.source || '-',
       },
       {
         key: 'started_at',
