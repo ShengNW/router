@@ -48,9 +48,20 @@ export const normalizeRedemptionRecord = (raw) => {
   if (!raw || typeof raw !== 'object') {
     return null;
   }
+  const redeemedTime = Number(raw?.redeemed_time ?? raw?.redeemed_at ?? 0) || 0;
+  const createdAt = Number(raw?.created_at ?? 0) || 0;
+  const normalizedTime = redeemedTime || createdAt;
   return {
     ...raw,
-    yycAmount: Number(raw?.yyc_amount ?? raw?.quota ?? 0) || 0,
+    created_at: normalizedTime,
+    yycAmount: Number(raw?.yyc_amount ?? raw?.yyc_value ?? raw?.quota ?? 0) || 0,
+    redemptionName:
+      String(raw?.redemption_name || raw?.name || '').trim(),
+    redemptionCode: String(raw?.code || '').trim(),
+    groupName: String(raw?.group_name || '').trim(),
+    faceValueAmount: Number(raw?.face_value_amount ?? 0) || 0,
+    faceValueUnit: String(raw?.face_value_unit || '').trim().toUpperCase(),
+    detailText: String(raw?.content || '').trim(),
   };
 };
 

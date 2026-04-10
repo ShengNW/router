@@ -63,6 +63,13 @@ type userRecentRedemptionsPayload struct {
 	Items []*presenter.Redemption `json:"items"`
 }
 
+type currentUserTopupRedemptionsData struct {
+	Items    []*presenter.Redemption `json:"items"`
+	Page     int                     `json:"page"`
+	PageSize int                     `json:"page_size"`
+	Total    int64                   `json:"total"`
+}
+
 func exposedUser(user *model.User) *presenter.User {
 	if user == nil {
 		return nil
@@ -632,6 +639,83 @@ func GetUserRecentRedemptions(c *gin.Context) {
 		"message": "",
 		"data": userRecentRedemptionsPayload{
 			Items: presenter.NewRedemptions(rows),
+		},
+	})
+}
+
+// GetCurrentUserTopupRedemptions godoc
+// @Summary Get current user redemption top-up records
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param page query int false "Page (1-based)"
+// @Param page_size query int false "Page size"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup/redemptions [get]
+func GetCurrentUserTopupRedemptions(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	if userID == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "用户 ID 不能为空",
+		})
+		return
+	}
+	page, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page", "1")))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page_size", strconv.Itoa(config.ItemsPerPage))))
+	if pageSize <= 0 {
+		pageSize = config.ItemsPerPage
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	var total int64
+	baseQuery := model.DB.Model(&model.Redemption{}).
+		Where("redeemed_by_user_id = ? AND redeemed_time > 0 AND status = ?", userID, model.RedemptionCodeStatusUsed)
+	if err := baseQuery.Count(&total).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	rows := make([]*model.Redemption, 0, pageSize)
+	if err := baseQuery.
+		Order("redeemed_time desc, id desc").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&rows).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		row.RedeemedByUsername = model.GetUsernameById(userID)
+		groupID := strings.TrimSpace(row.GroupID)
+		if groupID == "" {
+			continue
+		}
+		if groupRow, err := model.GetGroupCatalogByID(groupID); err == nil {
+			row.GroupName = strings.TrimSpace(groupRow.Name)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": currentUserTopupRedemptionsData{
+			Items:    presenter.NewRedemptions(rows),
+			Page:     page,
+			PageSize: pageSize,
+			Total:    total,
 		},
 	})
 }

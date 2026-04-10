@@ -76,21 +76,26 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
     async (page = 1) => {
       setLoadingRedemptionRecords(true);
       try {
-        const res = await API.get('/api/v1/public/log', {
+        const res = await API.get('/api/v1/public/user/topup/redemptions', {
           params: {
             page,
-            type: 1,
+            page_size: PAGE_SIZE,
           },
         });
         const { success, message, data, meta } = res?.data || {};
         if (success) {
+          const items = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.items)
+              ? data.items
+              : [];
           setRedemptionRecords(
-            Array.isArray(data)
-              ? data.map(normalizeRedemptionRecord).filter(Boolean)
-              : [],
+            items.map(normalizeRedemptionRecord).filter(Boolean),
           );
-          setRedemptionPage(Number(meta?.page || page) || 1);
-          setRedemptionTotal(Number(meta?.total || 0) || 0);
+          setRedemptionPage(
+            Number(data?.page || meta?.page || page) || 1,
+          );
+          setRedemptionTotal(Number(data?.total || meta?.total || 0) || 0);
           return;
         }
         showError(message || t('topup.redeem.request_failed'));
@@ -330,7 +335,7 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
                 ) : (
                   redemptionRecords.map((log) => (
                     <Table.Row
-                      key={log.trace_id || `${log.created_at}-${log.content}`}
+                      key={log.id || log.trace_id || `${log.created_at}-${log.content}`}
                     >
                       <Table.Cell>
                         {log.created_at ? timestamp2string(log.created_at) : '-'}
@@ -344,7 +349,37 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
                           '-'
                         )}
                       </Table.Cell>
-                      <Table.Cell>{log.content || '-'}</Table.Cell>
+                      <Table.Cell>
+                        {(() => {
+                          const detailTitle =
+                            log.redemptionName ||
+                            log.redemptionCode ||
+                            log.detailText ||
+                            '-';
+                          const detailParts = [];
+                          if (log.redemptionCode) {
+                            detailParts.push(log.redemptionCode);
+                          }
+                          if (log.faceValueAmount > 0) {
+                            detailParts.push(
+                              `${log.faceValueAmount} ${log.faceValueUnit || 'YYC'}`,
+                            );
+                          }
+                          if (log.groupName) {
+                            detailParts.push(log.groupName);
+                          }
+                          return (
+                            <>
+                              <div>{detailTitle}</div>
+                              {detailParts.length > 0 ? (
+                                <div className='router-text-muted'>
+                                  {detailParts.join(' / ')}
+                                </div>
+                              ) : null}
+                            </>
+                          );
+                        })()}
+                      </Table.Cell>
                     </Table.Row>
                   ))
                 )}
