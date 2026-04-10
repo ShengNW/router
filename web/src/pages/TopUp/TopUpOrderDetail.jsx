@@ -81,11 +81,6 @@ const TopUpOrderDetailInner = () => {
     return `/workspace/topup?tab=records&record=${recordKey}`;
   }, [location.state?.from, recordKey]);
 
-  const recordLabel = useMemo(
-    () => t(`topup.record_nav.${recordKey}`),
-    [recordKey, t],
-  );
-
   const refreshOrderStatus = useCallback(async () => {
     const normalizedOrderID = String(order?.id || '').trim();
     if (normalizedOrderID === '') {
@@ -166,6 +161,13 @@ const TopUpOrderDetailInner = () => {
       ? t('topup.external_topup_orders.detail_title_package')
       : t('topup.external_topup_orders.detail_title_topup');
 
+  const detailPathLabel =
+    recordKey === 'package'
+      ? t('topup.external_topup_orders.detail_path_package')
+      : t('topup.external_topup_orders.detail_path_topup');
+
+  const detailPathOrderID = String(order?.id || id || '').trim() || '-';
+
   return (
     <div className='dashboard-container'>
       <Card fluid className='chart-card'>
@@ -173,16 +175,12 @@ const TopUpOrderDetailInner = () => {
           <div className='router-entity-detail-page'>
             <div className='router-entity-detail-breadcrumb'>
               <Breadcrumb size='small'>
-                <Breadcrumb.Section link onClick={() => navigate('/workspace/topup?tab=records')}>
-                  {t('header.records')}
-                </Breadcrumb.Section>
-                <Breadcrumb.Divider icon='right chevron' />
                 <Breadcrumb.Section link onClick={() => navigate(listPath)}>
-                  {recordLabel}
+                  {detailPathLabel}
                 </Breadcrumb.Section>
                 <Breadcrumb.Divider icon='right chevron' />
                 <Breadcrumb.Section active>
-                  {t('topup.external_topup_orders.detail_path')}
+                  {detailPathOrderID}
                 </Breadcrumb.Section>
               </Breadcrumb>
             </div>
@@ -341,4 +339,3 @@ const TopUpOrderDetail = () => {
 };
 
 export default TopUpOrderDetail;
-

@@ -179,6 +179,8 @@
       "detail_title_topup": "Top-up Detail",
       "detail_title_package": "Purchase Detail",
       "detail_path": "Detail",
+      "detail_path_topup": "Top-up Detail",
+      "detail_path_package": "Purchase Detail",
       "fields": {
         "title": "Order Title",
         "provider_order_id": "Provider Order ID",
