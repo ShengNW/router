@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -71,12 +73,14 @@ func Distribute() func(c *gin.Context) {
 					logger.SysError(fmt.Sprintf("渠道不存在：%s", channel.Id))
 					message = "数据库一致性已被破坏，请联系管理员"
 				}
+				emitNoAvailableChannelCard(ctx, userId, userGroup, requestModel, c.Request.URL.Path, message)
 				abortWithMessage(c, http.StatusServiceUnavailable, message)
 				return
 			}
 			channel = pickChannelByPriority(candidates, false)
 			if channel == nil {
 				message := fmt.Sprintf("当前分组 %s 下对于模型 %s 无可用渠道", userGroup, requestModel)
+				emitNoAvailableChannelCard(ctx, userId, userGroup, requestModel, c.Request.URL.Path, message)
 				abortWithMessage(c, http.StatusServiceUnavailable, message)
 				return
 			}
@@ -85,6 +89,28 @@ func Distribute() func(c *gin.Context) {
 		SetupContextForSelectedChannel(c, channel, requestModel)
 		c.Next()
 	}
+}
+
+func emitNoAvailableChannelCard(ctx context.Context, userID string, groupID string, modelName string, endpoint string, message string) {
+	impactSummary := fmt.Sprintf("分组 %s 下模型 %s 当前没有可用渠道，请求无法转发", strings.TrimSpace(groupID), strings.TrimSpace(modelName))
+	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
+		EventType:     "channel_no_available",
+		Domain:        "channel",
+		Subtype:       "no_available_channel",
+		Severity:      "critical",
+		Title:         "分组无可用渠道",
+		Summary:       strings.TrimSpace(message),
+		BizStatus:     "failed",
+		ErrorCode:     "NO_AVAILABLE_CHANNEL",
+		ErrorMessage:  strings.TrimSpace(message),
+		ImpactScope:   "group",
+		ImpactSummary: impactSummary,
+		UserID:        strings.TrimSpace(userID),
+		GroupID:       strings.TrimSpace(groupID),
+		Endpoint:      strings.TrimSpace(endpoint),
+		ModelName:     strings.TrimSpace(modelName),
+		HTTPStatus:    http.StatusServiceUnavailable,
+	})
 }
 
 func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, modelName string) {

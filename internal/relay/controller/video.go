@@ -452,15 +452,18 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 			}
 			if err != nil {
 				logger.SysError("error consuming token remain quota: " + err.Error())
+				emitVideoBillingFailureCard(ctx, "post_consume_token_quota_failed", "POST_CONSUME_TOKEN_QUOTA_FAILED", err.Error(), meta, videoRequest.Model, quota)
 			}
 		} else if billingPlan.ChargeUserBalance() {
 			if err := model.DecreaseUserQuota(meta.UserId, quota); err != nil {
 				logger.SysError("error consuming user quota: " + err.Error())
+				emitVideoBillingFailureCard(ctx, "post_consume_user_quota_failed", "POST_CONSUME_USER_QUOTA_FAILED", err.Error(), meta, videoRequest.Model, quota)
 			}
 		}
 		if billingPlan.ChargeUserBalance() {
 			if err := model.CacheUpdateUserQuota(ctx, meta.UserId); err != nil {
 				logger.SysError("error update user quota cache: " + err.Error())
+				emitVideoBillingFailureCard(ctx, "update_user_quota_cache_failed", "UPDATE_USER_QUOTA_CACHE_FAILED", err.Error(), meta, videoRequest.Model, quota)
 			}
 			if quota > 0 {
 				consumedFromLots, consumeErr := model.ConsumeUserBalanceLots(meta.UserId, quota)
@@ -506,4 +509,29 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}
 	c.Set(ctxkey.UpstreamStatus, resp.StatusCode)
 	return relayVideoRawResponse(c, resp, responseBody)
+}
+
+func emitVideoBillingFailureCard(ctx context.Context, subtype string, errorCode string, message string, relayMeta *meta.Meta, modelName string, quota int64) {
+	tags := map[string]string{}
+	if quota != 0 {
+		tags["quota"] = strconv.FormatInt(quota, 10)
+	}
+	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
+		EventType:     "group_billing_video_error",
+		Domain:        "group_billing",
+		Subtype:       strings.TrimSpace(subtype),
+		Severity:      "error",
+		Title:         "分组计费失败",
+		Summary:       strings.TrimSpace(message),
+		BizStatus:     "failed",
+		ErrorCode:     strings.TrimSpace(errorCode),
+		ErrorMessage:  strings.TrimSpace(message),
+		ImpactScope:   "single_user",
+		ImpactSummary: "视频请求已完成但后扣费失败，账务可能不一致",
+		UserID:        strings.TrimSpace(relayMeta.UserId),
+		GroupID:       strings.TrimSpace(relayMeta.Group),
+		ChannelID:     strings.TrimSpace(relayMeta.ChannelId),
+		ModelName:     strings.TrimSpace(modelName),
+		Tags:          tags,
+	})
 }

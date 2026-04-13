@@ -245,6 +245,106 @@ func logExternalPayCreateFailure(
 		previewExternalPayResponse(responseBody),
 		requestError,
 	)
+	emitExternalPayFailureCard(order, "topup_create_failed", "TOPUP_CREATE_FAILED", "充值下单失败", requestURL, httpStatus, upstreamCode, upstreamMessage, responseBody, requestErr)
+}
+
+func logExternalPayQueryFailure(
+	order TopupOrder,
+	requestURL string,
+	payload map[string]string,
+	httpStatus int,
+	upstreamCode int,
+	upstreamMessage string,
+	responseBody []byte,
+	requestErr error,
+) {
+	requestError := ""
+	if requestErr != nil {
+		requestError = requestErr.Error()
+	}
+	logger.SysWarnf(
+		"[topup.external_pay] query_failed order_id=%q transaction_id=%q provider_order_id=%q merchant_app=%q uniacid=%q url=%q sign_fields=%s sign_base=%q sign=%q secret_fp=%q http_status=%d upstream_code=%d upstream_msg=%q response=%q err=%q",
+		strings.TrimSpace(order.Id),
+		strings.TrimSpace(order.TransactionID),
+		strings.TrimSpace(order.ProviderOrderID),
+		strings.TrimSpace(payload["merchant_app"]),
+		externalPayUniacidFromURL(requestURL),
+		strings.TrimSpace(requestURL),
+		marshalExternalPaySignFields(payload),
+		topupOrderSigningBaseString(payload),
+		strings.TrimSpace(payload["sign"]),
+		topupSignSecretFingerprint(config.TopUpSignSecret),
+		httpStatus,
+		upstreamCode,
+		strings.TrimSpace(upstreamMessage),
+		previewExternalPayResponse(responseBody),
+		requestError,
+	)
+	emitExternalPayFailureCard(order, "topup_query_failed", "TOPUP_QUERY_FAILED", "充值查单失败", requestURL, httpStatus, upstreamCode, upstreamMessage, responseBody, requestErr)
+}
+
+func emitExternalPayFailureCard(
+	order TopupOrder,
+	subtype string,
+	errorCode string,
+	title string,
+	requestURL string,
+	httpStatus int,
+	upstreamCode int,
+	upstreamMessage string,
+	responseBody []byte,
+	requestErr error,
+) {
+	severity := "error"
+	if requestErr != nil || httpStatus >= http.StatusInternalServerError {
+		severity = "critical"
+	}
+	errorMessage := strings.TrimSpace(upstreamMessage)
+	if requestErr != nil {
+		errorMessage = strings.TrimSpace(requestErr.Error())
+	}
+	if errorMessage == "" {
+		errorMessage = previewExternalPayResponse(responseBody)
+	}
+	impactSummary := fmt.Sprintf("订单 %s 的支付流程失败，用户可能无法完成支付或看不到最新状态", strings.TrimSpace(order.Id))
+	tags := map[string]string{
+		"transaction_id":    strings.TrimSpace(order.TransactionID),
+		"provider_order_id": strings.TrimSpace(order.ProviderOrderID),
+		"provider_name":     strings.TrimSpace(order.ProviderName),
+		"business_type":     strings.TrimSpace(order.BusinessType),
+		"request_url":       strings.TrimSpace(requestURL),
+	}
+	if value := strings.TrimSpace(payloadExternalPayMerchantApp()); value != "" {
+		tags["merchant_app"] = value
+	}
+	if uniacid := strings.TrimSpace(externalPayUniacidFromURL(requestURL)); uniacid != "" {
+		tags["uniacid"] = uniacid
+	}
+	event := logger.ErrorCardEvent{
+		EventType:      "payment_external_pay_error",
+		Domain:         "payment",
+		Subtype:        strings.TrimSpace(subtype),
+		Severity:       severity,
+		Title:          strings.TrimSpace(title),
+		Summary:        errorMessage,
+		BizStatus:      "failed",
+		ErrorCode:      strings.TrimSpace(errorCode),
+		ErrorMessage:   errorMessage,
+		ImpactScope:    "single_user",
+		ImpactSummary:  impactSummary,
+		UserID:         strings.TrimSpace(order.UserID),
+		HTTPStatus:     httpStatus,
+		ProviderStatus: strings.TrimSpace(upstreamMessage),
+		Tags:           tags,
+	}
+	if upstreamCode != 0 {
+		event.ProviderCode = strconv.Itoa(upstreamCode)
+	}
+	logger.EmitFeishuCardError(nil, event)
+}
+
+func payloadExternalPayMerchantApp() string {
+	return strings.TrimSpace(config.TopUpMerchantAppValue())
 }
 
 func createTopupOrderByExternalPayAPI(order TopupOrder, clientType string) (topupExternalPayCreateResult, error) {
@@ -342,15 +442,18 @@ func queryTopupOrderByExternalPayAPI(order TopupOrder) (topupExternalPayQueryRes
 	}
 	response, err := httpClient.Do(request)
 	if err != nil {
+		logExternalPayQueryFailure(order, requestURL, payload, 0, 0, "", nil, err)
 		return topupExternalPayQueryResult{}, fmt.Errorf("调用支付状态查询 API 失败: %w", err)
 	}
 	defer response.Body.Close()
 
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
+		logExternalPayQueryFailure(order, requestURL, payload, response.StatusCode, 0, "read_body_failed", nil, err)
 		return topupExternalPayQueryResult{}, fmt.Errorf("读取支付状态查询 API 响应失败")
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		logExternalPayQueryFailure(order, requestURL, payload, response.StatusCode, 0, "", responseBody, nil)
 		return topupExternalPayQueryResult{}, fmt.Errorf(
 			"支付状态查询 API 请求失败: status=%d body=%s",
 			response.StatusCode,
@@ -360,6 +463,7 @@ func queryTopupOrderByExternalPayAPI(order TopupOrder) (topupExternalPayQueryRes
 
 	var payloadResponse externalPayQueryResponse
 	if err := json.Unmarshal(responseBody, &payloadResponse); err != nil {
+		logExternalPayQueryFailure(order, requestURL, payload, response.StatusCode, 0, "invalid_json", responseBody, err)
 		return topupExternalPayQueryResult{}, fmt.Errorf("解析支付状态查询 API 响应失败: %s", previewExternalPayResponse(responseBody))
 	}
 	if payloadResponse.Code != 1 {
@@ -367,6 +471,7 @@ func queryTopupOrderByExternalPayAPI(order TopupOrder) (topupExternalPayQueryRes
 		if message == "" {
 			message = "支付状态查询 API 返回失败"
 		}
+		logExternalPayQueryFailure(order, requestURL, payload, response.StatusCode, payloadResponse.Code, message, responseBody, nil)
 		return topupExternalPayQueryResult{}, fmt.Errorf(message)
 	}
 

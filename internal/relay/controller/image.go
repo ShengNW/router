@@ -254,21 +254,25 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 				err := model.PostConsumeTokenQuota(meta.TokenId, quota)
 				if err != nil {
 					logger.SysError("error consuming token remain quota: " + err.Error())
+					emitImageBillingFailureCard(ctx, "post_consume_token_quota_failed", "POST_CONSUME_TOKEN_QUOTA_FAILED", err.Error(), meta, imageRequest.Model, quota)
 				}
 			} else {
 				err := model.PostConsumeTokenRemainQuota(meta.TokenId, quota)
 				if err != nil {
 					logger.SysError("error consuming token remain quota: " + err.Error())
+					emitImageBillingFailureCard(ctx, "post_consume_token_quota_failed", "POST_CONSUME_TOKEN_QUOTA_FAILED", err.Error(), meta, imageRequest.Model, quota)
 				}
 			}
 		} else if billingPlan.ChargeUserBalance() && quota != 0 {
 			if err := model.DecreaseUserQuota(meta.UserId, quota); err != nil {
 				logger.SysError("error consuming user quota: " + err.Error())
+				emitImageBillingFailureCard(ctx, "post_consume_user_quota_failed", "POST_CONSUME_USER_QUOTA_FAILED", err.Error(), meta, imageRequest.Model, quota)
 			}
 		}
 		if billingPlan.ChargeUserBalance() {
 			if err := model.CacheUpdateUserQuota(ctx, meta.UserId); err != nil {
 				logger.SysError("error update user quota cache: " + err.Error())
+				emitImageBillingFailureCard(ctx, "update_user_quota_cache_failed", "UPDATE_USER_QUOTA_CACHE_FAILED", err.Error(), meta, imageRequest.Model, quota)
 			}
 			if quota > 0 {
 				consumedFromLots, consumeErr := model.ConsumeUserBalanceLots(meta.UserId, quota)
@@ -313,4 +317,29 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}
 
 	return nil
+}
+
+func emitImageBillingFailureCard(ctx context.Context, subtype string, errorCode string, message string, relayMeta *meta.Meta, modelName string, quota int64) {
+	tags := map[string]string{}
+	if quota != 0 {
+		tags["quota"] = fmt.Sprintf("%d", quota)
+	}
+	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
+		EventType:     "group_billing_image_error",
+		Domain:        "group_billing",
+		Subtype:       strings.TrimSpace(subtype),
+		Severity:      "error",
+		Title:         "分组计费失败",
+		Summary:       strings.TrimSpace(message),
+		BizStatus:     "failed",
+		ErrorCode:     strings.TrimSpace(errorCode),
+		ErrorMessage:  strings.TrimSpace(message),
+		ImpactScope:   "single_user",
+		ImpactSummary: "图片请求已完成但后扣费失败，账务可能不一致",
+		UserID:        strings.TrimSpace(relayMeta.UserId),
+		GroupID:       strings.TrimSpace(relayMeta.Group),
+		ChannelID:     strings.TrimSpace(relayMeta.ChannelId),
+		ModelName:     strings.TrimSpace(modelName),
+		Tags:          tags,
+	})
 }
