@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/random"
@@ -71,14 +70,9 @@ func resolveBalanceCreditExpiresAt(grantedAt int64, validityDays int) int64 {
 	if grantedAt <= 0 {
 		grantedAt = helper.GetTimestamp()
 	}
-	locationName := normalizeGroupQuotaResetTimezone(DefaultGroupQuotaResetTimezone)
-	location, err := time.LoadLocation(locationName)
-	if err != nil {
-		location = time.FixedZone(DefaultGroupQuotaResetTimezone, 8*3600)
-	}
-	bizTime := time.Unix(grantedAt, 0).In(location)
-	dayStart := time.Date(bizTime.Year(), bizTime.Month(), bizTime.Day(), 0, 0, 0, 0, location)
-	return dayStart.Add(time.Duration(normalizedDays)*24*time.Hour - time.Second).Unix()
+	// Validity is a precise rolling window: granted_at + N * 24h.
+	// Example: 2026-04-13 15:12:22 + 3 days => 2026-04-16 15:12:22.
+	return grantedAt + int64(normalizedDays)*86400
 }
 
 func ResolveBalanceCreditExpiresAt(grantedAt int64, validityDays int) int64 {

@@ -137,7 +137,10 @@ const BalanceStatusPage = () => {
         <Card.Content>
           <div className='router-toolbar router-block-gap-sm' style={{ marginBottom: '0.75rem' }}>
             <div className='router-toolbar-start'>
-              <div className='router-section-title' style={{ margin: 0 }}>
+              <div
+                className='router-section-title'
+                style={{ margin: 0, fontWeight: 700 }}
+              >
                 {t('topup.balance_lots.title')}
               </div>
             </div>
