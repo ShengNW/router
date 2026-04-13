@@ -454,6 +454,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return tx.AutoMigrate(&TopupPlan{}, &TopupOrder{}, &UserBalanceLot{})
 			},
 		},
+		{
+			Version:     "202604131930_balance_lot_transactions",
+			Description: "add user balance lot transaction ledger table",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&UserBalanceLotTransaction{})
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

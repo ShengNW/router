@@ -37,14 +37,15 @@ const (
 )
 
 type TopupOrder struct {
-	Id              string  `json:"id" gorm:"type:char(36);primaryKey"`
-	UserID          string  `json:"user_id" gorm:"type:char(36);index"`
-	Username        string  `json:"username" gorm:"type:varchar(255);default:'';index"`
-	Status          string  `json:"status" gorm:"type:varchar(32);default:'created';index"`
-	Source          string  `json:"source" gorm:"type:varchar(64);default:'top_up_link';index"`
-	ProviderName    string  `json:"provider_name" gorm:"type:varchar(128);default:''"`
-	ProviderOrderID string  `json:"provider_order_id" gorm:"type:varchar(255);default:'';index"`
-	RedemptionID    string  `json:"redemption_id" gorm:"type:char(36);index"`
+	Id              string `json:"id" gorm:"type:char(36);primaryKey"`
+	UserID          string `json:"user_id" gorm:"type:char(36);index"`
+	Username        string `json:"username" gorm:"type:varchar(255);default:'';index"`
+	Status          string `json:"status" gorm:"type:varchar(32);default:'created';index"`
+	Source          string `json:"source" gorm:"type:varchar(64);default:'top_up_link';index"`
+	ProviderName    string `json:"provider_name" gorm:"type:varchar(128);default:''"`
+	ProviderOrderID string `json:"provider_order_id" gorm:"type:varchar(255);default:'';index"`
+	// Keep for historical linkage compatibility in storage only; do not expose in query APIs.
+	RedemptionID    string  `json:"-" gorm:"type:char(36);index"`
 	TransactionID   string  `json:"transaction_id" gorm:"type:varchar(64);uniqueIndex"`
 	BusinessType    string  `json:"business_type" gorm:"type:varchar(32);default:'balance_topup';index"`
 	OperationType   string  `json:"operation_type" gorm:"type:varchar(32);default:'';index"`

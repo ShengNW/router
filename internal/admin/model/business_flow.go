@@ -15,12 +15,8 @@ type AdminTopupOrderRecord struct {
 	Source          string  `json:"source"`
 	ProviderName    string  `json:"provider_name"`
 	ProviderOrderID string  `json:"provider_order_id"`
-	RedemptionID    string  `json:"redemption_id"`
-	RedemptionName  string  `json:"redemption_name"`
-	GroupID         string  `json:"group_id"`
-	GroupName       string  `json:"group_name"`
-	FaceValueAmount float64 `json:"face_value_amount"`
-	FaceValueUnit   string  `json:"face_value_unit"`
+	Amount          float64 `json:"amount"`
+	Currency        string  `json:"currency"`
 	YYCValue        int64   `json:"yyc_value"`
 	TransactionID   string  `json:"transaction_id"`
 	StatusMessage   string  `json:"status_message"`
@@ -49,7 +45,6 @@ type AdminUserPackageRecord struct {
 
 type AdminRedemptionRecord struct {
 	ID                 string  `json:"id"`
-	TopupOrderID       string  `json:"topup_order_id"`
 	RedeemedByUserID   string  `json:"redeemed_by_user_id"`
 	RedeemedByUsername string  `json:"redeemed_by_username"`
 	GroupID            string  `json:"group_id"`
@@ -115,9 +110,7 @@ func ListAdminTopupOrderRecordsPageWithDB(db *gorm.DB, page int, pageSize int, k
 	}
 	page, pageSize = normalizeBusinessFlowPage(page, pageSize)
 	query := db.Table(TopupOrdersTableName + " AS o").
-		Joins("LEFT JOIN users u ON u.id = o.user_id").
-		Joins("LEFT JOIN redemptions r ON r.id = o.redemption_id").
-		Joins("LEFT JOIN " + GroupCatalog{}.TableName() + " g ON g.id = r.group_id")
+		Joins("LEFT JOIN users u ON u.id = o.user_id")
 	if normalizedStatus := NormalizeTopupOrderStatus(status); normalizedStatus != "" {
 		query = query.Where("o.status = ?", normalizedStatus)
 	}
@@ -125,8 +118,6 @@ func ListAdminTopupOrderRecordsPageWithDB(db *gorm.DB, page int, pageSize int, k
 		"LOWER(o.id) LIKE ?",
 		"LOWER(COALESCE(NULLIF(o.username, ''), u.username, '')) LIKE ?",
 		"LOWER(COALESCE(o.transaction_id, '')) LIKE ?",
-		"LOWER(COALESCE(r.name, '')) LIKE ?",
-		"LOWER(COALESCE(g.name, '')) LIKE ?",
 		"LOWER(COALESCE(o.status, '')) LIKE ?",
 	}, nil)
 	total := int64(0)
@@ -143,13 +134,9 @@ func ListAdminTopupOrderRecordsPageWithDB(db *gorm.DB, page int, pageSize int, k
 			o.source,
 			o.provider_name,
 			o.provider_order_id,
-			o.redemption_id,
-			COALESCE(r.name, '') AS redemption_name,
-			COALESCE(r.group_id, '') AS group_id,
-			COALESCE(g.name, '') AS group_name,
-			COALESCE(r.face_value_amount, 0) AS face_value_amount,
-			COALESCE(r.face_value_unit, '') AS face_value_unit,
-			COALESCE(r.quota, 0) AS yyc_value,
+			o.amount,
+			o.currency,
+			COALESCE(o.quota, 0) AS yyc_value,
 			o.transaction_id,
 			o.status_message,
 			o.paid_at,
@@ -235,7 +222,6 @@ func ListAdminRedemptionRecordsPageWithDB(db *gorm.DB, page int, pageSize int, k
 	if err := query.
 		Select(`
 			r.id,
-			r.topup_order_id,
 			r.redeemed_by_user_id,
 			COALESCE(u.username, '') AS redeemed_by_username,
 			r.group_id,
@@ -260,7 +246,7 @@ func ListAdminTopupReconcileRecordsPageWithDB(db *gorm.DB, page int, pageSize in
 		return nil, 0, fmt.Errorf("database handle is nil")
 	}
 	page, pageSize = normalizeBusinessFlowPage(page, pageSize)
-	query := db.Table(TopupOrdersTableName + " AS o").
+	query := db.Table(TopupOrdersTableName+" AS o").
 		Joins("LEFT JOIN users u ON u.id = o.user_id").
 		Where("o.source = ?", TopupOrderSourceTopUpAPI)
 	if normalizedStatus := NormalizeTopupOrderStatus(status); normalizedStatus != "" {

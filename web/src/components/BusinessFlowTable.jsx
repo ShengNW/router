@@ -208,16 +208,28 @@ const BusinessFlowTable = ({ kind }) => {
           {
             key: 'amount',
             label: t('flow.topup.columns.amount'),
-            render: (row) => (
-              <div>
+            render: (row) => {
+              const amountValue = Number(
+                row?.amount ?? row?.face_value_amount ?? 0,
+              );
+              const amountUnit = String(
+                row?.currency || row?.face_value_unit || '',
+              )
+                .trim()
+                .toUpperCase();
+              return (
                 <div>
-                  {row.face_value_unit
-                    ? formatAmountWithUnit(row.face_value_amount, row.face_value_unit, 6)
-                    : '-'}
+                  <div>
+                    {amountValue > 0 && amountUnit
+                      ? formatAmountWithUnit(amountValue, amountUnit, 6)
+                      : '-'}
+                  </div>
+                  <div className='router-text-muted'>
+                    {formatYYCValue(row?.yyc_value || 0)}
+                  </div>
                 </div>
-                <div className='router-text-muted'>{formatYYCValue(row.yyc_value || 0)}</div>
-              </div>
-            ),
+              );
+            },
           },
           {
             key: 'order',

@@ -1427,6 +1427,74 @@ func GetUserTopUpBalanceLots(c *gin.Context) {
 	})
 }
 
+// GetUserTopUpBalanceLotTransactions godoc
+// @Summary List user balance lot transactions (admin)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "User ID"
+// @Param page query int false "Page number"
+// @Param page_size query int false "Page size"
+// @Param source_type query string false "Source type: topup_order/redemption/legacy_migration"
+// @Param tx_type query string false "Transaction type: credit/consume/expire"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/admin/user/{id}/topup/balance/transactions [get]
+func GetUserTopUpBalanceLotTransactions(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "id 为空",
+		})
+		return
+	}
+	targetUser, err := usersvc.GetByID(id, false)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if !requesterCanReadUser(c, targetUser) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无权获取同级或更高等级用户的信息",
+		})
+		return
+	}
+	page, pageSize, sourceType, txType, err := parseTopupBalanceLotTransactionPageParams(c)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if _, expireErr := model.ExpireUserBalanceLots(id); expireErr != nil {
+		logger.Error(c.Request.Context(), "expire user balance lots failed: "+expireErr.Error())
+	}
+	items, total, err := model.ListUserBalanceLotTransactionsPageWithDB(model.DB, id, sourceType, txType, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": topUpBalanceLotTransactionListData{
+			Items:    items,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		},
+	})
+}
+
 // UpdateUser godoc
 // @Summary Update user (admin)
 // @Tags admin
@@ -2090,6 +2158,13 @@ type topUpBalanceLotListData struct {
 	PageSize int                    `json:"page_size"`
 }
 
+type topUpBalanceLotTransactionListData struct {
+	Items    []model.UserBalanceLotTransaction `json:"items"`
+	Total    int64                             `json:"total"`
+	Page     int                               `json:"page"`
+	PageSize int                               `json:"page_size"`
+}
+
 type createTopUpOrderRequest struct {
 	BusinessType  string  `json:"business_type"`
 	OperationType string  `json:"operation_type"`
@@ -2173,6 +2248,41 @@ func parseTopupBalanceLotPageParams(c *gin.Context) (int, int, string, string, b
 		return 0, 0, "", "", false, fmt.Errorf("无效的 positive_only 参数")
 	}
 	return page, pageSize, sourceType, status, positiveOnly, nil
+}
+
+func parseTopupBalanceLotTransactionPageParams(c *gin.Context) (int, int, string, string, error) {
+	page, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page", "1")))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page_size", "20")))
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	rawSourceType := strings.TrimSpace(strings.ToLower(c.Query("source_type")))
+	sourceType := ""
+	switch rawSourceType {
+	case "":
+		sourceType = ""
+	case model.UserBalanceLotSourceTopup, model.UserBalanceLotSourceRedeem, model.UserBalanceLotSourceLegacy:
+		sourceType = rawSourceType
+	default:
+		return 0, 0, "", "", fmt.Errorf("无效的来源类型")
+	}
+	rawTxType := strings.TrimSpace(strings.ToLower(c.Query("tx_type")))
+	txType := ""
+	switch rawTxType {
+	case "":
+		txType = ""
+	case model.UserBalanceLotTxTypeCredit, model.UserBalanceLotTxTypeConsume, model.UserBalanceLotTxTypeExpire:
+		txType = rawTxType
+	default:
+		return 0, 0, "", "", fmt.Errorf("无效的交易类型")
+	}
+	return page, pageSize, sourceType, txType, nil
 }
 
 func minInt64(a int64, b int64) int64 {
@@ -2324,6 +2434,58 @@ func GetCurrentUserTopUpBalanceLots(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data": topUpBalanceLotListData{
+			Items:    items,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		},
+	})
+}
+
+// GetCurrentUserTopUpBalanceLotTransactions godoc
+// @Summary List current user balance lot transactions
+// @Tags public
+// @Security BearerAuth
+// @Produce json
+// @Param page query int false "Page number"
+// @Param page_size query int false "Page size"
+// @Param source_type query string false "Source type: topup_order/redemption/legacy_migration"
+// @Param tx_type query string false "Transaction type: credit/consume/expire"
+// @Success 200 {object} docs.StandardResponse
+// @Failure 401 {object} docs.ErrorResponse
+// @Router /api/v1/public/user/topup/balance/transactions [get]
+func GetCurrentUserTopUpBalanceLotTransactions(c *gin.Context) {
+	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
+	if userID == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的 user id",
+		})
+		return
+	}
+	page, pageSize, sourceType, txType, err := parseTopupBalanceLotTransactionPageParams(c)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if _, expireErr := model.ExpireUserBalanceLots(userID); expireErr != nil {
+		logger.Error(c.Request.Context(), "expire user balance lots failed: "+expireErr.Error())
+	}
+	items, total, err := model.ListUserBalanceLotTransactionsPageWithDB(model.DB, userID, sourceType, txType, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": topUpBalanceLotTransactionListData{
 			Items:    items,
 			Total:    total,
 			Page:     page,

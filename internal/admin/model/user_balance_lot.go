@@ -215,6 +215,21 @@ func CreditUserBalanceLotWithDB(db *gorm.DB, input UserBalanceLotCreditInput) (U
 	row = existing
 	normalizeUserBalanceLotRow(&row)
 	created := createResult.RowsAffected > 0
+	if created {
+		if _, err := CreateUserBalanceLotTransactionWithDB(db, UserBalanceLotTransactionInput{
+			UserID:             row.UserID,
+			LotID:              row.Id,
+			SourceType:         row.SourceType,
+			SourceID:           row.SourceID,
+			TxType:             UserBalanceLotTxTypeCredit,
+			DeltaYYC:           row.TotalYYC,
+			LotRemainingBefore: 0,
+			LotRemainingAfter:  row.RemainingYYC,
+			OccurredAt:         row.GrantedAt,
+		}); err != nil {
+			return UserBalanceLot{}, false, err
+		}
+	}
 	return row, created, nil
 }
 
@@ -251,6 +266,19 @@ func expireUserBalanceLotsInTx(tx *gorm.DB, userID string, now int64) (int64, er
 			"updated_at":    effectiveNow,
 		}
 		if err := tx.Model(&UserBalanceLot{}).Where("id = ?", row.Id).Updates(updated).Error; err != nil {
+			return 0, err
+		}
+		if _, err := CreateUserBalanceLotTransactionWithDB(tx, UserBalanceLotTransactionInput{
+			UserID:             row.UserID,
+			LotID:              row.Id,
+			SourceType:         row.SourceType,
+			SourceID:           row.SourceID,
+			TxType:             UserBalanceLotTxTypeExpire,
+			DeltaYYC:           -expiredAmount,
+			LotRemainingBefore: row.RemainingYYC,
+			LotRemainingAfter:  0,
+			OccurredAt:         effectiveNow,
+		}); err != nil {
 			return 0, err
 		}
 		expiredTotal += expiredAmount
@@ -343,6 +371,19 @@ func ConsumeUserBalanceLotsWithDB(db *gorm.DB, userID string, quota int64, now i
 				"status":        nextStatus,
 				"updated_at":    effectiveNow,
 			}).Error; err != nil {
+				return err
+			}
+			if _, err := CreateUserBalanceLotTransactionWithDB(tx, UserBalanceLotTransactionInput{
+				UserID:             row.UserID,
+				LotID:              row.Id,
+				SourceType:         row.SourceType,
+				SourceID:           row.SourceID,
+				TxType:             UserBalanceLotTxTypeConsume,
+				DeltaYYC:           -delta,
+				LotRemainingBefore: available,
+				LotRemainingAfter:  nextRemaining,
+				OccurredAt:         effectiveNow,
+			}); err != nil {
 				return err
 			}
 			remainingToConsume -= delta
