@@ -769,8 +769,6 @@ const UserDetail = () => {
         email,
         group,
         quota: Math.trunc(yycBalance),
-        daily_quota_limit: Math.trunc(Number(inputs.daily_amount || 0)),
-        package_emergency_quota_limit: Math.trunc(Number(inputs.emergency_amount || 0)),
         quota_reset_timezone: inputs.reset_timezone || 'Asia/Shanghai',
         role: Number(inputs.role || 1),
         status: Number(inputs.status || 1),
@@ -794,8 +792,6 @@ const UserDetail = () => {
       setActionLoading('');
     }
   }, [
-    inputs.daily_amount,
-    inputs.emergency_amount,
     inputs.role,
     inputs.status,
     inputs.reset_timezone,
