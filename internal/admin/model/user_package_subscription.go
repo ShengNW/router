@@ -53,7 +53,7 @@ func markExpiredUserPackageSubscriptionsWithDB(db *gorm.DB, userID string, now i
 		return fmt.Errorf("database handle is nil")
 	}
 	query := db.Model(&UserPackageSubscription{}).
-		Where("status = ? AND expires_at > 0 AND expires_at < ?", UserPackageSubscriptionStatusActive, now)
+		Where("status = ? AND expires_at > 0 AND expires_at <= ?", UserPackageSubscriptionStatusActive, now)
 	if strings.TrimSpace(userID) != "" {
 		query = query.Where("user_id = ?", strings.TrimSpace(userID))
 	}
@@ -81,7 +81,7 @@ func syncUserPackageSubscriptionsWithDB(db *gorm.DB, userID string, now int64) e
 		}
 		activeCount := int64(0)
 		if err := tx.Model(&UserPackageSubscription{}).
-			Where("user_id = ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at >= ?)",
+			Where("user_id = ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at > ?)",
 				normalizedUserID,
 				UserPackageSubscriptionStatusActive,
 				effectiveNow,
@@ -140,7 +140,7 @@ func getActiveUserPackageSubscriptionWithDB(db *gorm.DB, userID string) (UserPac
 		return UserPackageSubscription{}, err
 	}
 	row := UserPackageSubscription{}
-	err := db.Where("user_id = ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at >= ?)", normalizedUserID, UserPackageSubscriptionStatusActive, now, now).
+	err := db.Where("user_id = ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at > ?)", normalizedUserID, UserPackageSubscriptionStatusActive, now, now).
 		Order("updated_at desc").
 		First(&row).Error
 	if err != nil {
@@ -166,7 +166,7 @@ func getActiveUserPackageSubscriptionForGroupWithDB(db *gorm.DB, userID string, 
 		return UserPackageSubscription{}, err
 	}
 	row := UserPackageSubscription{}
-	err := db.Where("user_id = ? AND group_id = ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at >= ?)", normalizedUserID, normalizedGroupID, UserPackageSubscriptionStatusActive, now, now).
+	err := db.Where("user_id = ? AND group_id = ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at > ?)", normalizedUserID, normalizedGroupID, UserPackageSubscriptionStatusActive, now, now).
 		Order("updated_at desc").
 		First(&row).Error
 	if err != nil {
@@ -216,7 +216,7 @@ func AssignServicePackageToUserWithDB(db *gorm.DB, packageID string, userID stri
 	effectiveDurationDays := normalizeServicePackageDurationDays(servicePackage.DurationDays)
 	expiresAt := int64(0)
 	if effectiveDurationDays > 0 {
-		expiresAt = effectiveStartAt + int64(effectiveDurationDays)*86400 - 1
+		expiresAt = effectiveStartAt + int64(effectiveDurationDays)*86400
 	}
 	subscription := UserPackageSubscription{
 		UserID:                     normalizedUserID,
@@ -238,7 +238,7 @@ func AssignServicePackageToUserWithDB(db *gorm.DB, packageID string, userID stri
 			return err
 		}
 		if err := tx.Model(&UserPackageSubscription{}).
-			Where("user_id = ? AND status IN ? AND started_at <= ? AND (expires_at = 0 OR expires_at >= ?)",
+			Where("user_id = ? AND status IN ? AND started_at <= ? AND (expires_at = 0 OR expires_at > ?)",
 				normalizedUserID,
 				[]int{UserPackageSubscriptionStatusActive, UserPackageSubscriptionStatusPending},
 				effectiveStartAt,
@@ -336,8 +336,8 @@ func RenewServicePackageForUserWithDB(db *gorm.DB, packageID string, userID stri
 		return UserPackageSubscription{}, fmt.Errorf("当前套餐无到期时间，无法续费")
 	}
 	nextStartAt := effectiveNow
-	if tailEnd >= effectiveNow {
-		nextStartAt = tailEnd + 1
+	if tailEnd > effectiveNow {
+		nextStartAt = tailEnd
 	}
 	return AssignServicePackageToUserWithDB(db, normalizedPackageID, normalizedUserID, nextStartAt)
 }
@@ -412,7 +412,7 @@ func ListActiveUserPackageSubscriptionsByUserIDs(userIDs []string) ([]UserPackag
 	now := helper.GetTimestamp()
 	rows := make([]UserPackageSubscription, 0, len(normalizedIDs))
 	if err := DB.
-		Where("user_id IN ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at >= ?)",
+		Where("user_id IN ? AND status = ? AND started_at <= ? AND (expires_at = 0 OR expires_at > ?)",
 			normalizedIDs,
 			UserPackageSubscriptionStatusActive,
 			now,

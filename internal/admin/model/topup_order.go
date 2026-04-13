@@ -376,7 +376,7 @@ func calcUpgradePayableYYCWithDB(db *gorm.DB, activeSubscription UserPackageSubs
 		return 0, nil
 	}
 
-	periodSeconds := activeSubscription.ExpiresAt - activeSubscription.StartedAt + 1
+	periodSeconds := activeSubscription.ExpiresAt - activeSubscription.StartedAt
 	if periodSeconds <= 0 {
 		durationDays := normalizeServicePackageDurationDays(currentPackage.DurationDays)
 		periodSeconds = int64(durationDays) * 86400
@@ -384,7 +384,7 @@ func calcUpgradePayableYYCWithDB(db *gorm.DB, activeSubscription UserPackageSubs
 	if periodSeconds <= 0 {
 		return diffYYC, nil
 	}
-	remainingSeconds := activeSubscription.ExpiresAt - now + 1
+	remainingSeconds := activeSubscription.ExpiresAt - now
 	if remainingSeconds <= 0 {
 		return 0, nil
 	}
@@ -461,13 +461,13 @@ func PreviewPackagePurchaseWithDB(db *gorm.DB, userID string, packageID string, 
 			return PackagePurchasePreview{}, fmt.Errorf("当前套餐无到期时间，无法续费")
 		}
 		startAt := effectiveNow
-		if tailEnd >= effectiveNow {
-			startAt = tailEnd + 1
+		if tailEnd > effectiveNow {
+			startAt = tailEnd
 		}
 		durationDays := normalizeServicePackageDurationDays(targetPackage.DurationDays)
 		expiresAt := int64(0)
 		if durationDays > 0 {
-			expiresAt = startAt + int64(durationDays)*86400 - 1
+			expiresAt = startAt + int64(durationDays)*86400
 		}
 		preview.StartAt = startAt
 		preview.ExpiresAt = expiresAt
@@ -507,7 +507,7 @@ func PreviewPackagePurchaseWithDB(db *gorm.DB, userID string, packageID string, 
 		durationDays := normalizeServicePackageDurationDays(targetPackage.DurationDays)
 		expiresAt := int64(0)
 		if durationDays > 0 {
-			expiresAt = effectiveNow + int64(durationDays)*86400 - 1
+			expiresAt = effectiveNow + int64(durationDays)*86400
 		}
 		preview.StartAt = effectiveNow
 		preview.ExpiresAt = expiresAt
