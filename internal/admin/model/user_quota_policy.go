@@ -15,28 +15,6 @@ type UserQuotaPolicy struct {
 	Timezone              string
 }
 
-func normalizeUserDailyQuotaLimit(value int64) int64 {
-	if value < 0 {
-		return 0
-	}
-	return value
-}
-
-func NormalizeUserDailyQuotaLimitForWrite(value int64) int64 {
-	return normalizeUserDailyQuotaLimit(value)
-}
-
-func normalizeUserPackageEmergencyQuotaLimit(value int64) int64 {
-	if value < 0 {
-		return 0
-	}
-	return value
-}
-
-func NormalizeUserPackageEmergencyQuotaLimitForWrite(value int64) int64 {
-	return normalizeUserPackageEmergencyQuotaLimit(value)
-}
-
 func normalizeUserQuotaResetTimezone(value string) string {
 	return normalizeGroupQuotaResetTimezone(value)
 }
@@ -68,8 +46,7 @@ func GetUserQuotaPolicyWithDB(db *gorm.DB, userID string) (UserQuotaPolicy, erro
 		PackageEmergencyLimit: 0,
 		Timezone:              normalizeUserQuotaResetTimezone(row.QuotaResetTimezone),
 	}
-	// Quota policy now follows active package only. User row fields are kept as
-	// compatibility snapshots for UI and historical data, not as runtime source.
+	// Runtime quota policy follows active package only.
 	activeSubscription, err := getActiveUserPackageSubscriptionWithDB(db, normalizedUserID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
