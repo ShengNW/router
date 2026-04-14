@@ -213,6 +213,44 @@ func TestRelayResponsesStreamAsChatResponse(t *testing.T) {
 	}
 }
 
+func TestRelayResponsesStreamAsResponsesResponse(t *testing.T) {
+	ctx, recorder := newBridgeTestContext()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"text/event-stream"},
+			"X-Upstream":   []string{"ok"},
+		},
+		Body: io.NopCloser(strings.NewReader(
+			"event: response.output_text.delta\n" +
+				"data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello \"}\n\n" +
+				"event: response.output_text.delta\n" +
+				"data: {\"type\":\"response.output_text.delta\",\"delta\":\"world\"}\n\n" +
+				"event: response.completed\n" +
+				"data: {\"response\":{\"id\":\"resp_abc\",\"model\":\"gpt-5.4\",\"created_at\":1710000000,\"usage\":{\"input_tokens\":11,\"output_tokens\":7,\"total_tokens\":18}}}\n\n" +
+				"data: [DONE]\n",
+		)),
+	}
+
+	usage, relayErr := relayResponsesStreamAsResponsesResponse(ctx, resp, "gpt-5.4", 11)
+	if relayErr != nil {
+		t.Fatalf("relayResponsesStreamAsResponsesResponse returned error: %+v", relayErr)
+	}
+	if usage == nil || usage.PromptTokens != 11 || usage.CompletionTokens != 7 || usage.TotalTokens != 18 {
+		t.Fatalf("unexpected usage: %#v", usage)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"object":"response"`) || !strings.Contains(body, `"output_text":"hello world"`) {
+		t.Fatalf("unexpected bridged responses payload: %s", body)
+	}
+	if !strings.Contains(body, `"type":"message"`) || !strings.Contains(body, `"type":"output_text"`) {
+		t.Fatalf("expected output message block in payload: %s", body)
+	}
+	if recorder.Header().Get("X-Upstream") != "ok" {
+		t.Fatalf("expected upstream header to be copied, got %q", recorder.Header().Get("X-Upstream"))
+	}
+}
+
 func TestStreamResponsesAsChatHandlerNoDuplicateContentFromCompleted(t *testing.T) {
 	ctx, recorder := newBridgeTestContext()
 	resp := &http.Response{

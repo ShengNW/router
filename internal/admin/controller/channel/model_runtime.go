@@ -561,8 +561,9 @@ func runSingleChannelModelTestWithContext(ctx context.Context, channel *model.Ch
 			}, execution), execution
 		}
 		execution := executeChannelTextModelTest(ctx, channel, model.ChannelModelEndpointResponses, &relaymodel.GeneralOpenAIRequest{
-			Model: row.Model,
-			Input: config.TestPrompt,
+			Model:  row.Model,
+			Input:  config.TestPrompt,
+			Stream: row.IsStreamOnly,
 		})
 		return buildChannelModelTestResult(model.ChannelModel{
 			Model:         row.Model,
@@ -736,6 +737,7 @@ func executeChannelTextModelTest(ctx context.Context, channel *model.Channel, pa
 	}
 	relayMeta.OriginModelName = request.Model
 	relayMeta.ActualModelName = request.Model
+	relayMeta.ForceUpstreamStream = request.Stream
 	if path == model.ChannelModelEndpointResponses {
 		if request.Input == nil && len(request.Messages) > 0 {
 			request.Input = request.Messages

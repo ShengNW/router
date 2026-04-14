@@ -22,6 +22,7 @@ type ChannelModel struct {
 	Endpoints     []string `json:"endpoints,omitempty" gorm:"-"`
 	Inactive      bool     `json:"inactive,omitempty" gorm:"not null;default:false;index"`
 	Selected      bool     `json:"selected" gorm:"default:false;index"`
+	IsStreamOnly  bool     `json:"is_stream_only,omitempty" gorm:"not null;default:false"`
 	InputPrice    *float64 `json:"input_price,omitempty" gorm:"type:double precision"`
 	OutputPrice   *float64 `json:"output_price,omitempty" gorm:"type:double precision"`
 	PriceUnit     string   `json:"price_unit,omitempty" gorm:"type:varchar(64);default:''"`

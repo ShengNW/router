@@ -24,9 +24,12 @@ func TestResolveChannelTextUpstreamOpenAIResponsesModelDownstreamChatBridgesToRe
 		}},
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
+	mode, path, streamOnly, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
+	}
+	if streamOnly {
+		t.Fatalf("streamOnly = true, want false")
 	}
 	if mode != relaymode.Responses || path != adminmodel.ChannelModelEndpointResponses {
 		t.Fatalf("resolveChannelTextUpstream selected responses bridge = (%d, %q), want (%d, %q)", mode, path, relaymode.Responses, adminmodel.ChannelModelEndpointResponses)
@@ -47,12 +50,38 @@ func TestResolveChannelTextUpstreamOpenAIResponsesModelDownstreamResponsesUsesRe
 		}},
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
 	if mode != relaymode.Responses || path != adminmodel.ChannelModelEndpointResponses {
 		t.Fatalf("resolveChannelTextUpstream selected responses = (%d, %q), want (%d, %q)", mode, path, relaymode.Responses, adminmodel.ChannelModelEndpointResponses)
+	}
+}
+
+func TestResolveChannelTextUpstreamReturnsStreamOnlyFromSelectedModel(t *testing.T) {
+	meta := &meta.Meta{
+		Mode:           relaymode.Responses,
+		RequestURLPath: adminmodel.ChannelModelEndpointResponses,
+		APIType:        apitype.OpenAI,
+		ChannelModelConfigs: []adminmodel.ChannelModel{{
+			Model:        "gpt-5.4",
+			Type:         adminmodel.ProviderModelTypeText,
+			Selected:     true,
+			Endpoint:     adminmodel.ChannelModelEndpointResponses,
+			IsStreamOnly: true,
+		}},
+	}
+
+	mode, path, streamOnly, err := resolveChannelTextUpstream(meta, "gpt-5.4", "gpt-5.4")
+	if err != nil {
+		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
+	}
+	if mode != relaymode.Responses || path != adminmodel.ChannelModelEndpointResponses {
+		t.Fatalf("resolveChannelTextUpstream selected responses = (%d, %q), want (%d, %q)", mode, path, relaymode.Responses, adminmodel.ChannelModelEndpointResponses)
+	}
+	if !streamOnly {
+		t.Fatal("streamOnly = false, want true")
 	}
 }
 
@@ -70,7 +99,7 @@ func TestResolveChannelTextUpstreamAnthropicMessagesModelDownstreamMessagesUsesM
 		}},
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "claude-sonnet-4-6", "claude-sonnet-4-6")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "claude-sonnet-4-6", "claude-sonnet-4-6")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
@@ -93,7 +122,7 @@ func TestResolveChannelTextUpstreamAnthropicMessagesModelDownstreamChatBridgesTo
 		}},
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "claude-sonnet-4-6", "claude-sonnet-4-6")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "claude-sonnet-4-6", "claude-sonnet-4-6")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
@@ -116,7 +145,7 @@ func TestResolveChannelTextUpstreamOpenAIDirectChatEndpointPreferredForDownstrea
 		}},
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
@@ -138,7 +167,7 @@ func TestResolveChannelTextUpstreamOpenAIChatOnlyModelDownstreamResponsesFallsBa
 		}},
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "gpt-4.1", "gpt-4.1")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
@@ -158,7 +187,7 @@ func TestResolveChannelTextUpstreamRejectsWhenRequestedModelNotSelected(t *testi
 		}},
 	}
 
-	_, _, err := resolveChannelTextUpstream(meta, "unknown", "unknown")
+	_, _, _, err := resolveChannelTextUpstream(meta, "unknown", "unknown")
 	if err == nil {
 		t.Fatalf("resolveChannelTextUpstream returned nil error, want model-not-selected error")
 	}
@@ -171,7 +200,7 @@ func TestResolveChannelTextUpstreamNoModelConfigsOpenAIDefaultsResponses(t *test
 		APIType:        apitype.OpenAI,
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "gpt-5.4", "gpt-5.4")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "gpt-5.4", "gpt-5.4")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
@@ -187,7 +216,7 @@ func TestResolveChannelTextUpstreamNoModelConfigsAnthropicDefaultsMessages(t *te
 		APIType:        apitype.Anthropic,
 	}
 
-	mode, path, err := resolveChannelTextUpstream(meta, "claude-sonnet-4-6", "claude-sonnet-4-6")
+	mode, path, _, err := resolveChannelTextUpstream(meta, "claude-sonnet-4-6", "claude-sonnet-4-6")
 	if err != nil {
 		t.Fatalf("resolveChannelTextUpstream returned error: %v", err)
 	}
@@ -573,5 +602,19 @@ func TestNormalizeRequestBodyForResponsesConvertsLegacyFunctionsAndFunctionCall(
 	}
 	if toolChoice["type"] != "function" || toolChoice["name"] != "legacy_lookup" {
 		t.Fatalf("payload.tool_choice = %#v, want legacy function_call conversion", toolChoice)
+	}
+}
+
+func TestShouldForceUpstreamTextStream_StreamOnlyResponses(t *testing.T) {
+	forced := shouldForceUpstreamTextStream(relaymode.Responses, relaymode.Responses, false, true)
+	if !forced {
+		t.Fatal("shouldForceUpstreamTextStream = false, want true")
+	}
+}
+
+func TestShouldForceUpstreamTextStream_ChatBridgeResponses(t *testing.T) {
+	forced := shouldForceUpstreamTextStream(relaymode.ChatCompletions, relaymode.Responses, false, false)
+	if !forced {
+		t.Fatal("shouldForceUpstreamTextStream = false, want true")
 	}
 }

@@ -501,65 +501,66 @@ func hasSelectedTextChannelModelConfigs(rows []adminmodel.ChannelModel) bool {
 	return false
 }
 
-func resolveChannelTextUpstream(meta *meta.Meta, originModelName string, actualModelName string) (int, string, error) {
+func resolveChannelTextUpstream(meta *meta.Meta, originModelName string, actualModelName string) (int, string, bool, error) {
 	if meta == nil {
-		return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, nil
+		return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, false, nil
 	}
 	requestEndpoint := resolveRequestedTextEndpoint(meta)
 	if row, ok := adminmodel.FindSelectedChannelModelConfig(meta.ChannelModelConfigs, originModelName, actualModelName); ok {
 		supportsChat, supportsResponses, supportsMessagesDirect := resolveSelectedModelDirectTextEndpointSupport(meta, row, originModelName, actualModelName)
 		supportsMessages := supportsMessagesDirect && supportsMessagesUpstream(meta)
+		streamOnly := row.IsStreamOnly
 
 		switch requestEndpoint {
 		case adminmodel.ChannelModelEndpointChat:
 			if supportsChat {
-				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, nil
+				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, streamOnly, nil
 			}
 			if supportsMessages {
-				return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, nil
+				return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, streamOnly, nil
 			}
 			if supportsResponses {
-				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, nil
+				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, streamOnly, nil
 			}
 		case adminmodel.ChannelModelEndpointMessages:
 			if supportsMessages {
-				return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, nil
+				return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, streamOnly, nil
 			}
 			if supportsChat {
-				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, nil
+				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, streamOnly, nil
 			}
 			if supportsResponses {
-				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, nil
+				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, streamOnly, nil
 			}
 		case adminmodel.ChannelModelEndpointResponses:
 			if supportsResponses {
-				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, nil
+				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, streamOnly, nil
 			}
 			if supportsChat {
-				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, nil
+				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, streamOnly, nil
 			}
 		}
 
 		if supportsMessagesUpstream(meta) {
 			if supportsMessages {
-				return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, nil
+				return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, streamOnly, nil
 			}
 			if supportsChat {
-				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, nil
+				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, streamOnly, nil
 			}
 			if supportsResponses {
-				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, nil
+				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, streamOnly, nil
 			}
 		} else {
 			if supportsResponses {
-				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, nil
+				return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, streamOnly, nil
 			}
 			if supportsChat {
-				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, nil
+				return relaymode.ChatCompletions, adminmodel.ChannelModelEndpointChat, streamOnly, nil
 			}
 		}
 
-		return 0, "", fmt.Errorf(
+		return 0, "", false, fmt.Errorf(
 			"channel model %q does not support request endpoint %s",
 			strings.TrimSpace(row.Model),
 			requestEndpoint,
@@ -573,15 +574,15 @@ func resolveChannelTextUpstream(meta *meta.Meta, originModelName string, actualM
 		if requestModel == "" {
 			requestModel = "(empty)"
 		}
-		return 0, "", fmt.Errorf("requested model %q is not selected for this channel", requestModel)
+		return 0, "", false, fmt.Errorf("requested model %q is not selected for this channel", requestModel)
 	}
 	if supportsMessagesUpstream(meta) {
 		if requestEndpoint == adminmodel.ChannelModelEndpointResponses {
-			return 0, "", fmt.Errorf("channel does not support %s without selected model endpoint config", adminmodel.ChannelModelEndpointResponses)
+			return 0, "", false, fmt.Errorf("channel does not support %s without selected model endpoint config", adminmodel.ChannelModelEndpointResponses)
 		}
-		return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, nil
+		return relaymode.Messages, adminmodel.ChannelModelEndpointMessages, false, nil
 	}
-	return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, nil
+	return relaymode.Responses, adminmodel.ChannelModelEndpointResponses, false, nil
 }
 
 func convertTextRequestForUpstream(req *relaymodel.GeneralOpenAIRequest, downstreamMode int, upstreamMode int) (*relaymodel.GeneralOpenAIRequest, error) {
@@ -857,9 +858,12 @@ func normalizeRequestBodyForResponses(raw []byte) ([]byte, error) {
 	return json.Marshal(payload)
 }
 
-func shouldForceUpstreamTextStream(downstreamMode int, upstreamMode int, downstreamStream bool) bool {
+func shouldForceUpstreamTextStream(downstreamMode int, upstreamMode int, downstreamStream bool, upstreamStreamOnly bool) bool {
 	if downstreamStream {
 		return false
+	}
+	if upstreamStreamOnly {
+		return upstreamMode == relaymode.Responses || upstreamMode == relaymode.Messages
 	}
 	if downstreamMode != relaymode.ChatCompletions {
 		return false

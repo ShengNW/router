@@ -40,7 +40,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	meta.OriginModelName = textRequest.Model
 	textRequest.Model, _ = getMappedModelName(textRequest.Model, meta.ModelMapping)
 	meta.ActualModelName = textRequest.Model
-	upstreamMode, upstreamPath, err := resolveChannelTextUpstream(meta, meta.OriginModelName, textRequest.Model)
+	upstreamMode, upstreamPath, upstreamStreamOnly, err := resolveChannelTextUpstream(meta, meta.OriginModelName, textRequest.Model)
 	if err != nil {
 		return openai.ErrorWrapper(err, "unsupported_channel_endpoint", http.StatusBadRequest)
 	}
@@ -104,7 +104,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	if err != nil {
 		return openai.ErrorWrapper(err, "convert_request_failed", http.StatusBadRequest)
 	}
-	if shouldForceUpstreamTextStream(meta.Mode, upstreamMode, meta.IsStream) {
+	if shouldForceUpstreamTextStream(meta.Mode, upstreamMode, meta.IsStream, upstreamStreamOnly) {
 		upstreamRequest.Stream = true
 		meta.ForceUpstreamStream = true
 	}

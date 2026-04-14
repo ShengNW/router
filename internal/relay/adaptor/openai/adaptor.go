@@ -159,6 +159,9 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Met
 			}
 			return usage, nil
 		}
+		if meta.ForceUpstreamStream {
+			return relayResponsesStreamAsResponsesResponse(c, resp, meta.ActualModelName, meta.PromptTokens)
+		}
 		usage, respErr := relayResponsesResponse(c, resp)
 		if respErr != nil {
 			return nil, respErr

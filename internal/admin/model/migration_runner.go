@@ -509,6 +509,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return dropLegacyUserQuotaSnapshotColumnsWithDB(tx)
 			},
 		},
+		{
+			Version:     "202604141700_channel_model_is_stream_only",
+			Description: "add is_stream_only flag to channel model configs",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&ChannelModel{})
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

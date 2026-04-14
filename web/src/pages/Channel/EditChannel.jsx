@@ -634,6 +634,8 @@ const normalizeChannelModelConfigRow = (row, protocol) => {
     endpoints: normalizedEndpoints,
     inactive: row.inactive === true,
     selected: row.selected === true,
+    is_stream_only:
+      row.is_stream_only === true || row.isStreamOnly === true,
     input_price: normalizePriceOverrideValue(row.input_price),
     output_price: normalizePriceOverrideValue(row.output_price),
     price_unit: normalizePriceUnitValue(row.price_unit),
@@ -3940,6 +3942,28 @@ const EditChannel = () => {
                       toggleModelSelection(
                         detailEditingModelRow.upstream_model,
                         checked,
+                      )
+                    }
+                  />
+                </div>
+                <div className='router-channel-model-editor-toggle-row'>
+                  <div className='router-channel-model-editor-toggle-copy'>
+                    <div className='router-channel-model-editor-toggle-label'>
+                      {t('channel.edit.model_selector.editor.stream_only_label')}
+                    </div>
+                    <div className='router-channel-model-editor-toggle-hint'>
+                      {t('channel.edit.model_selector.editor.stream_only_hint')}
+                    </div>
+                  </div>
+                  <Checkbox
+                    toggle
+                    checked={!!detailEditingModelRow.is_stream_only}
+                    disabled={detailModelMutating}
+                    onChange={(e, { checked }) =>
+                      updateModelConfigField(
+                        detailEditingModelRow.upstream_model,
+                        'is_stream_only',
+                        !!checked,
                       )
                     }
                   />
