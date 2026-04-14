@@ -3,6 +3,8 @@ package channel
 import (
 	"strings"
 	"testing"
+
+	adminmodel "github.com/yeying-community/router/internal/admin/model"
 )
 
 func TestParseTextModelTestResponse_ChatJSON(t *testing.T) {
@@ -24,6 +26,42 @@ func TestParseTextModelTestResponse_ResponsesJSON(t *testing.T) {
 	}
 	if got != "responses ok" {
 		t.Fatalf("unexpected parsed text: %q", got)
+	}
+}
+
+func TestParseTextModelTestResponse_ResponsesJSONOutputText(t *testing.T) {
+	resp := `{"status":"completed","output_text":"responses output_text ok","output":[]}`
+	got, err := parseTextModelTestResponse(resp)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got != "responses output_text ok" {
+		t.Fatalf("unexpected parsed text: %q", got)
+	}
+}
+
+func TestParseTextModelTestResponse_ResponsesJSONEmptyOutput(t *testing.T) {
+	resp := `{"status":"completed","output":[]}`
+	_, err := parseResponsesModelTestResponse(resp)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "output is empty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseTextModelTestResponseByEndpoint_ResponsesOnlyError(t *testing.T) {
+	resp := `{"status":"completed","output":[]}`
+	_, err := parseTextModelTestResponseByEndpoint(adminmodel.ChannelModelEndpointResponses, resp)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if strings.Contains(err.Error(), "parse as chat failed") || strings.Contains(err.Error(), "parse as messages failed") {
+		t.Fatalf("unexpected mixed parser error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "parse as responses failed") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

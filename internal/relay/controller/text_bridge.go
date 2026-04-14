@@ -634,6 +634,229 @@ func convertTextRequestForUpstream(req *relaymodel.GeneralOpenAIRequest, downstr
 	return cloned, nil
 }
 
+func parsePositiveIntFromAny(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		if typed > 0 {
+			return typed, true
+		}
+	case int32:
+		if typed > 0 {
+			return int(typed), true
+		}
+	case int64:
+		if typed > 0 {
+			return int(typed), true
+		}
+	case float64:
+		parsed := int(typed)
+		if parsed > 0 && float64(parsed) == typed {
+			return parsed, true
+		}
+	case json.Number:
+		if parsed, err := typed.Int64(); err == nil && parsed > 0 {
+			return int(parsed), true
+		}
+	}
+	return 0, false
+}
+
+func normalizeResponsesToolDefinitions(payload map[string]any) {
+	toolsRaw, ok := payload["tools"].([]any)
+	if !ok || len(toolsRaw) == 0 {
+		return
+	}
+	normalized := make([]any, 0, len(toolsRaw))
+	changed := false
+	for _, toolAny := range toolsRaw {
+		toolMap, ok := toolAny.(map[string]any)
+		if !ok {
+			normalized = append(normalized, toolAny)
+			continue
+		}
+		functionAny, hasFunction := toolMap["function"]
+		if !hasFunction {
+			normalized = append(normalized, toolAny)
+			continue
+		}
+		functionMap, ok := functionAny.(map[string]any)
+		if !ok {
+			normalized = append(normalized, toolAny)
+			continue
+		}
+
+		flat := make(map[string]any, len(toolMap)+4)
+		for key, value := range toolMap {
+			if key == "function" {
+				continue
+			}
+			flat[key] = value
+		}
+		if strings.TrimSpace(fmt.Sprint(flat["type"])) == "" {
+			flat["type"] = "function"
+		}
+		if name := strings.TrimSpace(fmt.Sprint(functionMap["name"])); name != "" {
+			flat["name"] = name
+		}
+		if description := strings.TrimSpace(fmt.Sprint(functionMap["description"])); description != "" {
+			flat["description"] = description
+		}
+		if parameters, exists := functionMap["parameters"]; exists {
+			flat["parameters"] = parameters
+		}
+		if strict, exists := functionMap["strict"]; exists {
+			flat["strict"] = strict
+		}
+		normalized = append(normalized, flat)
+		changed = true
+	}
+	if changed {
+		payload["tools"] = normalized
+	}
+}
+
+func normalizeResponsesLegacyFunctions(payload map[string]any) {
+	functionsRaw, ok := payload["functions"].([]any)
+	if !ok || len(functionsRaw) == 0 {
+		return
+	}
+	toolsRaw, _ := payload["tools"].([]any)
+	normalizedTools := make([]any, 0, len(toolsRaw)+len(functionsRaw))
+	normalizedTools = append(normalizedTools, toolsRaw...)
+	for _, functionAny := range functionsRaw {
+		functionMap, ok := functionAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		tool := map[string]any{
+			"type": "function",
+		}
+		if name := strings.TrimSpace(fmt.Sprint(functionMap["name"])); name != "" {
+			tool["name"] = name
+		}
+		if description := strings.TrimSpace(fmt.Sprint(functionMap["description"])); description != "" {
+			tool["description"] = description
+		}
+		if parameters, exists := functionMap["parameters"]; exists {
+			tool["parameters"] = parameters
+		}
+		normalizedTools = append(normalizedTools, tool)
+	}
+	if len(normalizedTools) > 0 {
+		payload["tools"] = normalizedTools
+	}
+	delete(payload, "functions")
+}
+
+func normalizeResponsesToolChoice(payload map[string]any) {
+	toolChoice, exists := payload["tool_choice"]
+	if exists {
+		toolChoiceMap, ok := toolChoice.(map[string]any)
+		if ok {
+			if functionAny, hasFunction := toolChoiceMap["function"]; hasFunction {
+				if functionMap, ok := functionAny.(map[string]any); ok {
+					if name := strings.TrimSpace(fmt.Sprint(functionMap["name"])); name != "" {
+						payload["tool_choice"] = map[string]any{
+							"type": "function",
+							"name": name,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if payload["tool_choice"] != nil {
+		return
+	}
+	functionCall, exists := payload["function_call"]
+	if !exists {
+		return
+	}
+	switch typed := functionCall.(type) {
+	case string:
+		candidate := strings.TrimSpace(typed)
+		if candidate == "auto" || candidate == "none" || candidate == "required" {
+			payload["tool_choice"] = candidate
+		}
+	case map[string]any:
+		if name := strings.TrimSpace(fmt.Sprint(typed["name"])); name != "" {
+			payload["tool_choice"] = map[string]any{
+				"type": "function",
+				"name": name,
+			}
+		}
+	}
+	delete(payload, "function_call")
+}
+
+func normalizeResponsesOutputFormat(payload map[string]any) {
+	responseFormatAny, exists := payload["response_format"]
+	if !exists {
+		return
+	}
+	responseFormat, ok := responseFormatAny.(map[string]any)
+	if !ok {
+		return
+	}
+	formatType := strings.TrimSpace(fmt.Sprint(responseFormat["type"]))
+	if formatType == "" {
+		return
+	}
+	format := map[string]any{
+		"type": formatType,
+	}
+	if formatType == "json_schema" {
+		if schemaAny, ok := responseFormat["json_schema"].(map[string]any); ok {
+			for _, key := range []string{"name", "schema", "strict", "description"} {
+				if value, exists := schemaAny[key]; exists {
+					format[key] = value
+				}
+			}
+		}
+	}
+	text, _ := payload["text"].(map[string]any)
+	if text == nil {
+		text = map[string]any{}
+	}
+	text["format"] = format
+	payload["text"] = text
+	delete(payload, "response_format")
+}
+
+func normalizeResponsesMaxTokens(payload map[string]any) {
+	if _, exists := payload["max_output_tokens"]; !exists {
+		if maxOutput, ok := parsePositiveIntFromAny(payload["max_completion_tokens"]); ok {
+			payload["max_output_tokens"] = maxOutput
+		} else if maxOutput, ok := parsePositiveIntFromAny(payload["max_tokens"]); ok {
+			payload["max_output_tokens"] = maxOutput
+		}
+	}
+	delete(payload, "max_completion_tokens")
+	delete(payload, "max_tokens")
+}
+
+func normalizeRequestBodyForResponses(raw []byte) ([]byte, error) {
+	if len(raw) == 0 {
+		return raw, nil
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+
+	normalizeResponsesLegacyFunctions(payload)
+	normalizeResponsesToolDefinitions(payload)
+	normalizeResponsesToolChoice(payload)
+	normalizeResponsesOutputFormat(payload)
+	normalizeResponsesMaxTokens(payload)
+
+	// responses does not support `n`; keep single-choice semantics only.
+	delete(payload, "n")
+
+	return json.Marshal(payload)
+}
+
 func shouldForceUpstreamTextStream(downstreamMode int, upstreamMode int, downstreamStream bool) bool {
 	if downstreamStream {
 		return false

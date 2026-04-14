@@ -562,10 +562,7 @@ func runSingleChannelModelTestWithContext(ctx context.Context, channel *model.Ch
 		}
 		execution := executeChannelTextModelTest(ctx, channel, model.ChannelModelEndpointResponses, &relaymodel.GeneralOpenAIRequest{
 			Model: row.Model,
-			Input: []relaymodel.Message{{
-				Role:    "user",
-				Content: config.TestPrompt,
-			}},
+			Input: config.TestPrompt,
 		})
 		return buildChannelModelTestResult(model.ChannelModel{
 			Model:         row.Model,
@@ -711,60 +708,6 @@ func parseChannelUpstreamError(statusCode int, body []byte) error {
 	return fmt.Errorf("http status code: %d, error message: %s", statusCode, message)
 }
 
-func normalizeResponsesTestInput(request *relaymodel.GeneralOpenAIRequest) {
-	if request == nil {
-		return
-	}
-	switch value := request.Input.(type) {
-	case string:
-		if strings.TrimSpace(value) == "" {
-			return
-		}
-		request.Input = []relaymodel.Message{{
-			Role:    "user",
-			Content: value,
-		}}
-	case []string:
-		if len(value) == 0 {
-			return
-		}
-		messages := make([]relaymodel.Message, 0, len(value))
-		for _, item := range value {
-			if strings.TrimSpace(item) == "" {
-				continue
-			}
-			messages = append(messages, relaymodel.Message{
-				Role:    "user",
-				Content: item,
-			})
-		}
-		if len(messages) > 0 {
-			request.Input = messages
-		}
-	case []any:
-		if len(value) == 0 {
-			return
-		}
-		messages := make([]relaymodel.Message, 0, len(value))
-		for _, item := range value {
-			text, ok := item.(string)
-			if !ok {
-				return
-			}
-			if strings.TrimSpace(text) == "" {
-				continue
-			}
-			messages = append(messages, relaymodel.Message{
-				Role:    "user",
-				Content: text,
-			})
-		}
-		if len(messages) > 0 {
-			request.Input = messages
-		}
-	}
-}
-
 func executeChannelTextModelTest(ctx context.Context, channel *model.Channel, path string, request *relaymodel.GeneralOpenAIRequest) channelModelTestExecution {
 	execution := channelModelTestExecution{}
 	if request == nil {
@@ -798,7 +741,6 @@ func executeChannelTextModelTest(ctx context.Context, channel *model.Channel, pa
 			request.Input = request.Messages
 			request.Messages = nil
 		}
-		normalizeResponsesTestInput(request)
 	}
 	convertedRequest, err := adaptor.ConvertRequest(c, relayMeta.Mode, request)
 	if err != nil {
@@ -844,13 +786,53 @@ func executeChannelTextModelTest(ctx context.Context, channel *model.Channel, pa
 		execution.Err = parseChannelUpstreamError(resp.StatusCode, body)
 		return execution
 	}
-	message, parseErr := parseTextModelTestResponse(string(body))
+	message, parseErr := parseTextModelTestResponseByEndpoint(path, string(body))
 	if parseErr != nil {
 		execution.Err = parseErr
 		return execution
 	}
 	execution.Message = message
 	return execution
+}
+
+func parseTextModelTestResponseByEndpoint(path string, resp string) (string, error) {
+	endpoint := strings.TrimSpace(path)
+	switch endpoint {
+	case model.ChannelModelEndpointResponses:
+		responsesText, responsesErr := parseResponsesModelTestResponse(resp)
+		if responsesErr == nil {
+			return responsesText, nil
+		}
+		if isLikelySSEPayload(resp) {
+			streamText, streamErr := parseTextModelTestStreamResponse(resp)
+			if streamErr == nil {
+				return streamText, nil
+			}
+			return "", fmt.Errorf("parse as responses failed: %v; parse as stream failed: %v", responsesErr, streamErr)
+		}
+		return "", fmt.Errorf("parse as responses failed: %v", responsesErr)
+	case model.ChannelModelEndpointMessages:
+		messagesText, messagesErr := parseMessagesModelTestResponse(resp)
+		if messagesErr == nil {
+			return messagesText, nil
+		}
+		return "", fmt.Errorf("parse as messages failed: %v", messagesErr)
+	case model.ChannelModelEndpointChat:
+		_, chatText, chatErr := parseChatModelTestResponse(resp)
+		if chatErr == nil {
+			return chatText, nil
+		}
+		if isLikelySSEPayload(resp) {
+			streamText, streamErr := parseTextModelTestStreamResponse(resp)
+			if streamErr == nil {
+				return streamText, nil
+			}
+			return "", fmt.Errorf("parse as chat failed: %v; parse as stream failed: %v", chatErr, streamErr)
+		}
+		return "", fmt.Errorf("parse as chat failed: %v", chatErr)
+	default:
+		return parseTextModelTestResponse(resp)
+	}
 }
 
 const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnSUs8AAAAASUVORK5CYII="

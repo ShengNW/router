@@ -50,6 +50,40 @@ func TestRelayResponsesAsChatResponse(t *testing.T) {
 	}
 }
 
+func TestRelayResponsesAsChatResponse_ExtractsMessageOutputTextFromOutput(t *testing.T) {
+	ctx, recorder := newBridgeTestContext()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+		Body: io.NopCloser(strings.NewReader(`{
+			"id":"resp_456",
+			"object":"response",
+			"model":"gpt-5-2025-08-07",
+			"created_at":1756315696,
+			"output":[
+				{"id":"rs_x","type":"reasoning","content":[{"type":"output_text","text":"SHOULD_NOT_APPEAR"}]},
+				{"id":"msg_x","type":"message","role":"assistant","content":[{"type":"output_text","text":"hello from message"}]}
+			],
+			"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}
+		}`)),
+	}
+
+	usage, relayErr := relayResponsesAsChatResponse(ctx, resp, "gpt-5-2025-08-07", 10)
+	if relayErr != nil {
+		t.Fatalf("relayResponsesAsChatResponse returned error: %+v", relayErr)
+	}
+	if usage == nil || usage.TotalTokens != 15 || usage.PromptTokens != 10 || usage.CompletionTokens != 5 {
+		t.Fatalf("unexpected usage: %#v", usage)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"content":"hello from message"`) {
+		t.Fatalf("expected message output text to be bridged, got body: %s", body)
+	}
+	if strings.Contains(body, "SHOULD_NOT_APPEAR") {
+		t.Fatalf("unexpected non-message output leaked into chat response: %s", body)
+	}
+}
+
 func TestRelayChatAsResponsesResponse(t *testing.T) {
 	ctx, recorder := newBridgeTestContext()
 	resp := &http.Response{

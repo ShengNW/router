@@ -442,3 +442,136 @@ func TestNormalizeMessagesRequestBodyUpdatesModel(t *testing.T) {
 		t.Fatalf("payload.stream = %#v, want true", payload["stream"])
 	}
 }
+
+func TestNormalizeRequestBodyForResponsesConvertsToolsChoiceAndFormat(t *testing.T) {
+	raw := []byte(`{
+		"model":"gpt-5.4",
+		"max_completion_tokens":128,
+		"response_format":{
+			"type":"json_schema",
+			"json_schema":{
+				"name":"calendar_event",
+				"schema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]},
+				"strict":true
+			}
+		},
+		"tools":[
+			{
+				"type":"function",
+				"function":{
+					"name":"lookup_weather",
+					"description":"lookup weather",
+					"parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]},
+					"strict":true
+				}
+			}
+		],
+		"tool_choice":{
+			"type":"function",
+			"function":{"name":"lookup_weather"}
+		},
+		"n":1
+	}`)
+	normalized, err := normalizeRequestBodyForResponses(raw)
+	if err != nil {
+		t.Fatalf("normalizeRequestBodyForResponses returned error: %v", err)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatalf("json.Unmarshal normalized body returned error: %v", err)
+	}
+	if _, exists := payload["response_format"]; exists {
+		t.Fatalf("payload.response_format should be removed, got %#v", payload["response_format"])
+	}
+	if _, exists := payload["n"]; exists {
+		t.Fatalf("payload.n should be removed, got %#v", payload["n"])
+	}
+	if payload["max_output_tokens"] != float64(128) {
+		t.Fatalf("payload.max_output_tokens = %#v, want 128", payload["max_output_tokens"])
+	}
+	if _, exists := payload["max_completion_tokens"]; exists {
+		t.Fatalf("payload.max_completion_tokens should be removed, got %#v", payload["max_completion_tokens"])
+	}
+	text, ok := payload["text"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.text = %#v, want map", payload["text"])
+	}
+	format, ok := text["format"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.text.format = %#v, want map", text["format"])
+	}
+	if format["type"] != "json_schema" || format["name"] != "calendar_event" || format["strict"] != true {
+		t.Fatalf("payload.text.format = %#v, want json_schema with name/strict", format)
+	}
+	tools, ok := payload["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("payload.tools = %#v, want one tool", payload["tools"])
+	}
+	tool, ok := tools[0].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.tools[0] = %#v, want map", tools[0])
+	}
+	if tool["type"] != "function" || tool["name"] != "lookup_weather" {
+		t.Fatalf("payload.tools[0] = %#v, want flattened function tool", tool)
+	}
+	if _, exists := tool["function"]; exists {
+		t.Fatalf("payload.tools[0].function should be removed, got %#v", tool["function"])
+	}
+	toolChoice, ok := payload["tool_choice"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.tool_choice = %#v, want map", payload["tool_choice"])
+	}
+	if toolChoice["type"] != "function" || toolChoice["name"] != "lookup_weather" {
+		t.Fatalf("payload.tool_choice = %#v, want flattened function choice", toolChoice)
+	}
+}
+
+func TestNormalizeRequestBodyForResponsesConvertsLegacyFunctionsAndFunctionCall(t *testing.T) {
+	raw := []byte(`{
+		"model":"gpt-5.4",
+		"functions":[
+			{
+				"name":"legacy_lookup",
+				"description":"legacy",
+				"parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}
+			}
+		],
+		"function_call":{"name":"legacy_lookup"},
+		"max_tokens":64
+	}`)
+	normalized, err := normalizeRequestBodyForResponses(raw)
+	if err != nil {
+		t.Fatalf("normalizeRequestBodyForResponses returned error: %v", err)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatalf("json.Unmarshal normalized body returned error: %v", err)
+	}
+	if _, exists := payload["functions"]; exists {
+		t.Fatalf("payload.functions should be removed, got %#v", payload["functions"])
+	}
+	if _, exists := payload["function_call"]; exists {
+		t.Fatalf("payload.function_call should be removed, got %#v", payload["function_call"])
+	}
+	if payload["max_output_tokens"] != float64(64) {
+		t.Fatalf("payload.max_output_tokens = %#v, want 64", payload["max_output_tokens"])
+	}
+	tools, ok := payload["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("payload.tools = %#v, want one legacy-converted tool", payload["tools"])
+	}
+	tool, ok := tools[0].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.tools[0] = %#v, want map", tools[0])
+	}
+	if tool["type"] != "function" || tool["name"] != "legacy_lookup" {
+		t.Fatalf("payload.tools[0] = %#v, want converted legacy function", tool)
+	}
+	toolChoice, ok := payload["tool_choice"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.tool_choice = %#v, want map", payload["tool_choice"])
+	}
+	if toolChoice["type"] != "function" || toolChoice["name"] != "legacy_lookup" {
+		t.Fatalf("payload.tool_choice = %#v, want legacy function_call conversion", toolChoice)
+	}
+}

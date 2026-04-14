@@ -214,6 +214,10 @@ func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *model.GeneralO
 		if err != nil {
 			return nil, err
 		}
+		jsonData, err = normalizeRequestBodyForResponses(jsonData)
+		if err != nil {
+			return nil, err
+		}
 		logger.Debugf(
 			c.Request.Context(),
 			"[responses_body] len=%d model=%s stream=%t",

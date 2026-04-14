@@ -11,6 +11,7 @@ import (
 )
 
 type responsesEnvelope struct {
+	OutputText string `json:"output_text"`
 	Output []struct {
 		Content []struct {
 			Type       string `json:"type"`
@@ -49,6 +50,9 @@ func parseResponsesModelTestResponse(resp string) (string, error) {
 	if err := json.Unmarshal([]byte(resp), &env); err != nil {
 		return "", err
 	}
+	if strings.TrimSpace(env.OutputText) != "" {
+		return strings.TrimSpace(env.OutputText), nil
+	}
 	contentTypes := make([]string, 0)
 	for _, output := range env.Output {
 		for _, content := range output.Content {
@@ -64,6 +68,9 @@ func parseResponsesModelTestResponse(resp string) (string, error) {
 				return content.OutputText, nil
 			}
 		}
+	}
+	if len(contentTypes) == 0 {
+		return "", errors.New("response has no output text, output is empty")
 	}
 	return "", errors.New("response has no output text, content types: " + strings.Join(contentTypes, ","))
 }

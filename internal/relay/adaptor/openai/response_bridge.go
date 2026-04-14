@@ -62,10 +62,14 @@ func openAIUsageToResponses(usage model.Usage) *responsesUsage {
 
 func extractResponsesOutputText(envelope responsesBridgeEnvelope) string {
 	if strings.TrimSpace(envelope.OutputText) != "" {
-		return strings.TrimSpace(envelope.OutputText)
+		return envelope.OutputText
 	}
 	builder := strings.Builder{}
 	for _, item := range envelope.Output {
+		itemType := strings.ToLower(strings.TrimSpace(item.Type))
+		if itemType != "" && itemType != "message" {
+			continue
+		}
 		if strings.TrimSpace(item.OutputText) != "" {
 			builder.WriteString(item.OutputText)
 		}
@@ -73,6 +77,10 @@ func extractResponsesOutputText(envelope responsesBridgeEnvelope) string {
 			builder.WriteString(item.Text)
 		}
 		for _, content := range item.Content {
+			contentType := strings.ToLower(strings.TrimSpace(content.Type))
+			if contentType != "" && contentType != "output_text" {
+				continue
+			}
 			if strings.TrimSpace(content.OutputText) != "" {
 				builder.WriteString(content.OutputText)
 			}
