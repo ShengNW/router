@@ -3575,6 +3575,23 @@ const EditChannel = () => {
           isActiveAsyncTaskStatus(item?.status),
         );
         setChannelTasks(normalizeAsyncTasks(nextTasks));
+        if (stillActive) {
+          try {
+            const nextTests = await loadChannelTestsFromServer(targetChannelId);
+            if (Array.isArray(nextTests?.items) && nextTests.items.length > 0) {
+              setModelTestResults((prev) =>
+                mergeModelTestResults(prev, nextTests.items),
+              );
+            }
+            const nextLastTestedAt = Number(nextTests?.lastTestedAt || 0);
+            if (nextLastTestedAt > 0) {
+              setModelTestedAt(nextLastTestedAt * 1000);
+            }
+          } catch {
+            // keep polling tasks; test results will be retried on next tick
+          }
+          return;
+        }
         if (!stillActive) {
           const refreshTaskId = pendingRefreshTaskIdRef.current;
           let completedRefreshTask = null;
@@ -3619,6 +3636,7 @@ const EditChannel = () => {
     creatingChannelId,
     hasChannelID,
     loadChannelTasksFromServer,
+    loadChannelTestsFromServer,
     refreshChannelRuntimeState,
   ]);
 
