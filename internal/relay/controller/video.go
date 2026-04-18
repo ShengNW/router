@@ -283,7 +283,7 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	meta := meta.GetByContext(c)
 	videoRequest, err := getVideoRequest(c, relayMode)
 	if err != nil {
-		logger.Errorf(ctx, "getVideoRequest failed: %s", err.Error())
+		logger.Errorf(ctx, "video relay get request failed user_id=%s group=%s channel_id=%s endpoint=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), c.Request.URL.Path, err.Error())
 		return openai.ErrorWrapper(err, "invalid_video_request", http.StatusBadRequest)
 	}
 
@@ -316,7 +316,7 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	if c.Request.Method == http.MethodGet {
 		resp, err := adaptor.DoRequest(c, meta, nil)
 		if err != nil {
-			logger.Errorf(ctx, "video status DoRequest failed: %s", err.Error())
+			logger.Errorf(ctx, "video relay status upstream request failed user_id=%s group=%s channel_id=%s model=%s endpoint=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), c.Request.URL.Path, err.Error())
 			return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
 		}
 		defer resp.Body.Close()
@@ -369,7 +369,7 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}
 	billingSnapshot, snapshotErr := billing.ComputeVideoBillingSnapshot(quantity, pricing, groupRatio)
 	if snapshotErr != nil {
-		logger.Error(ctx, "calculate video billing snapshot failed: "+snapshotErr.Error())
+		logger.Errorf(ctx, "video billing snapshot failed user_id=%s group=%s channel_id=%s model=%s quantity=%.4f err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), quantity, snapshotErr.Error())
 	}
 	billingPlan, quotaErr := reserveRelayQuota(ctx, meta.Group, meta.UserId, quota)
 	if quotaErr != nil {
@@ -384,7 +384,7 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}()
 	if billingPlan.ChargeUserBalance() {
 		if _, expireErr := model.ExpireUserBalanceLots(meta.UserId); expireErr != nil {
-			logger.Error(ctx, "expire user balance lots failed: "+expireErr.Error())
+			logger.Errorf(ctx, "video billing expire lots failed user_id=%s group=%s channel_id=%s model=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), expireErr.Error())
 		}
 		userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 		if err != nil {
@@ -405,7 +405,7 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 
 	resp, err := adaptor.DoRequest(c, meta, bytes.NewReader(requestBody))
 	if err != nil {
-		logger.Errorf(ctx, "video DoRequest failed: %s", err.Error())
+		logger.Errorf(ctx, "video relay upstream request failed user_id=%s group=%s channel_id=%s model=%s endpoint=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), c.Request.URL.Path, err.Error())
 		return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
 	}
 	defer resp.Body.Close()
@@ -451,26 +451,23 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 				err = model.PostConsumeTokenRemainQuota(meta.TokenId, quota)
 			}
 			if err != nil {
-				logger.SysError("error consuming token remain quota: " + err.Error())
-				emitVideoBillingFailureCard(ctx, "post_consume_token_quota_failed", "POST_CONSUME_TOKEN_QUOTA_FAILED", err.Error(), meta, videoRequest.Model, quota)
+				logger.Errorf(ctx, "video billing failed code=post_consume_token_quota_failed user_id=%s group=%s channel_id=%s model=%s token_id=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), strings.TrimSpace(meta.TokenId), quota, billingPlan.ChargeUserBalance(), err.Error())
 			}
 		} else if billingPlan.ChargeUserBalance() {
 			if err := model.DecreaseUserQuota(meta.UserId, quota); err != nil {
-				logger.SysError("error consuming user quota: " + err.Error())
-				emitVideoBillingFailureCard(ctx, "post_consume_user_quota_failed", "POST_CONSUME_USER_QUOTA_FAILED", err.Error(), meta, videoRequest.Model, quota)
+				logger.Errorf(ctx, "video billing failed code=post_consume_user_quota_failed user_id=%s group=%s channel_id=%s model=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), quota, billingPlan.ChargeUserBalance(), err.Error())
 			}
 		}
 		if billingPlan.ChargeUserBalance() {
 			if err := model.CacheUpdateUserQuota(ctx, meta.UserId); err != nil {
-				logger.SysError("error update user quota cache: " + err.Error())
-				emitVideoBillingFailureCard(ctx, "update_user_quota_cache_failed", "UPDATE_USER_QUOTA_CACHE_FAILED", err.Error(), meta, videoRequest.Model, quota)
+				logger.Errorf(ctx, "video billing failed code=update_user_quota_cache_failed user_id=%s group=%s channel_id=%s model=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), quota, billingPlan.ChargeUserBalance(), err.Error())
 			}
 			if quota > 0 {
 				consumedFromLots, consumeErr := model.ConsumeUserBalanceLots(meta.UserId, quota)
 				if consumeErr != nil {
-					logger.Error(ctx, "error consuming user balance lots: "+consumeErr.Error())
+					logger.Errorf(ctx, "video billing lots consume failed user_id=%s group=%s channel_id=%s model=%s quota=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), quota, consumeErr.Error())
 				} else if consumedFromLots < quota {
-					logger.Warnf(ctx, "user balance lot coverage partial user=%s consumed=%d requested=%d", strings.TrimSpace(meta.UserId), consumedFromLots, quota)
+					logger.Warnf(ctx, "video billing lots consume partial user_id=%s group=%s channel_id=%s model=%s consumed=%d requested=%d", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(videoRequest.Model), consumedFromLots, quota)
 				}
 			}
 		}
@@ -509,29 +506,4 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}
 	c.Set(ctxkey.UpstreamStatus, resp.StatusCode)
 	return relayVideoRawResponse(c, resp, responseBody)
-}
-
-func emitVideoBillingFailureCard(ctx context.Context, subtype string, errorCode string, message string, relayMeta *meta.Meta, modelName string, quota int64) {
-	tags := map[string]string{}
-	if quota != 0 {
-		tags["quota"] = strconv.FormatInt(quota, 10)
-	}
-	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
-		EventType:     "group_billing_video_error",
-		Domain:        "group_billing",
-		Subtype:       strings.TrimSpace(subtype),
-		Severity:      "error",
-		Title:         "分组计费失败",
-		Summary:       strings.TrimSpace(message),
-		BizStatus:     "failed",
-		ErrorCode:     strings.TrimSpace(errorCode),
-		ErrorMessage:  strings.TrimSpace(message),
-		ImpactScope:   "single_user",
-		ImpactSummary: "视频请求已完成但后扣费失败，账务可能不一致",
-		UserID:        strings.TrimSpace(relayMeta.UserId),
-		GroupID:       strings.TrimSpace(relayMeta.Group),
-		ChannelID:     strings.TrimSpace(relayMeta.ChannelId),
-		ModelName:     strings.TrimSpace(modelName),
-		Tags:          tags,
-	})
 }

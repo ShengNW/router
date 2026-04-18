@@ -52,18 +52,7 @@ func extractTopupCallbackToken(c *gin.Context) string {
 func ProcessTopupCallback(c *gin.Context) {
 	expectedToken := configuredTopupCallbackToken()
 	if expectedToken == "" {
-		emitTopupCallbackErrorCard(
-			c,
-			"callback_not_enabled",
-			"TOPUP_CALLBACK_NOT_ENABLED",
-			"充值回调未启用",
-			"支付回调入口被关闭，请求被拒绝",
-			"system",
-			"已支付订单可能无法自动发货，需要人工补偿处理",
-			nil,
-			http.StatusServiceUnavailable,
-			nil,
-		)
+		logTopupCallbackFailure(c, true, "callback_not_enabled", http.StatusServiceUnavailable, nil, nil)
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"success": false,
 			"message": "充值回调未启用",
@@ -72,18 +61,7 @@ func ProcessTopupCallback(c *gin.Context) {
 	}
 	receivedToken := extractTopupCallbackToken(c)
 	if receivedToken == "" || subtle.ConstantTimeCompare([]byte(receivedToken), []byte(expectedToken)) != 1 {
-		emitTopupCallbackErrorCard(
-			c,
-			"payment_signature_invalid",
-			"TOPUP_CALLBACK_TOKEN_INVALID",
-			"充值回调凭证无效",
-			"支付回调鉴权失败",
-			"system",
-			"本次支付回调未被接收，订单状态可能无法及时更新",
-			nil,
-			http.StatusUnauthorized,
-			nil,
-		)
+		logTopupCallbackFailure(c, true, "payment_signature_invalid", http.StatusUnauthorized, nil, nil)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "无效的充值回调凭证",
@@ -93,18 +71,7 @@ func ProcessTopupCallback(c *gin.Context) {
 
 	req := topupCallbackRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		emitTopupCallbackErrorCard(
-			c,
-			"callback_payload_invalid",
-			"TOPUP_CALLBACK_PAYLOAD_INVALID",
-			"充值回调请求体无效",
-			err.Error(),
-			"system",
-			"支付回调数据无法解析，订单状态未更新",
-			nil,
-			http.StatusBadRequest,
-			err,
-		)
+		logTopupCallbackFailure(c, true, "callback_payload_invalid", http.StatusBadRequest, nil, err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -123,18 +90,7 @@ func ProcessTopupCallback(c *gin.Context) {
 		RedeemedAt:      req.RedeemedAt,
 	})
 	if err != nil {
-		emitTopupCallbackErrorCard(
-			c,
-			"payment_callback_failed",
-			"TOPUP_CALLBACK_APPLY_FAILED",
-			"充值回调处理失败",
-			err.Error(),
-			"single_user",
-			"支付状态未成功回写到订单，用户可能看到订单仍未支付",
-			&req,
-			http.StatusOK,
-			err,
-		)
+		logTopupCallbackFailure(c, true, "payment_callback_apply_failed", http.StatusOK, &req, err)
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -144,24 +100,13 @@ func ProcessTopupCallback(c *gin.Context) {
 	if order.Status == model.TopupOrderStatusPaid {
 		fulfilledOrder, fulfilledNow, err := model.FulfillTopupOrderWithDB(model.DB, order.Id)
 		if err != nil {
-			emitTopupCallbackErrorCard(
-				c,
-				"payment_callback_failed",
-				"TOPUP_CALLBACK_FULFILL_FAILED",
-				"充值回调发货失败",
-				err.Error(),
-				"single_user",
-				"订单已支付但额度/套餐未发放，用户权益受影响",
-				&topupCallbackRequest{
-					OrderID:         order.Id,
-					TransactionID:   order.TransactionID,
-					ProviderOrderID: order.ProviderOrderID,
-					ProviderName:    order.ProviderName,
-					Status:          order.Status,
-				},
-				http.StatusOK,
-				err,
-			)
+			logTopupCallbackFailure(c, true, "payment_callback_fulfill_failed", http.StatusOK, &topupCallbackRequest{
+				OrderID:         order.Id,
+				TransactionID:   order.TransactionID,
+				ProviderOrderID: order.ProviderOrderID,
+				ProviderName:    order.ProviderName,
+				Status:          order.Status,
+			}, err)
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": err.Error(),
@@ -187,43 +132,36 @@ func ProcessTopupCallback(c *gin.Context) {
 	})
 }
 
-func emitTopupCallbackErrorCard(c *gin.Context, subtype string, errorCode string, title string, summary string, impactScope string, impactSummary string, req *topupCallbackRequest, httpStatus int, err error) {
-	tags := map[string]string{}
-	if req != nil {
-		if strings.TrimSpace(req.OrderID) != "" {
-			tags["order_id"] = strings.TrimSpace(req.OrderID)
-		}
-		if strings.TrimSpace(req.TransactionID) != "" {
-			tags["transaction_id"] = strings.TrimSpace(req.TransactionID)
-		}
-		if strings.TrimSpace(req.ProviderOrderID) != "" {
-			tags["provider_order_id"] = strings.TrimSpace(req.ProviderOrderID)
-		}
-		if strings.TrimSpace(req.ProviderName) != "" {
-			tags["provider_name"] = strings.TrimSpace(req.ProviderName)
-		}
-		if strings.TrimSpace(req.Status) != "" {
-			tags["status"] = strings.TrimSpace(req.Status)
-		}
+func logTopupCallbackFailure(c *gin.Context, asError bool, reason string, httpStatus int, req *topupCallbackRequest, err error) {
+	if c == nil || c.Request == nil {
+		return
 	}
-	errorMessage := strings.TrimSpace(summary)
+	orderID := ""
+	transactionID := ""
+	providerOrderID := ""
+	providerName := ""
+	status := ""
+	statusMessage := ""
+	paidAt := int64(0)
+	redeemedAt := int64(0)
+	if req != nil {
+		orderID = strings.TrimSpace(req.OrderID)
+		transactionID = strings.TrimSpace(req.TransactionID)
+		providerOrderID = strings.TrimSpace(req.ProviderOrderID)
+		providerName = strings.TrimSpace(req.ProviderName)
+		status = strings.TrimSpace(req.Status)
+		statusMessage = strings.TrimSpace(req.StatusMessage)
+		paidAt = req.PaidAt
+		redeemedAt = req.RedeemedAt
+	}
+	errorMessage := ""
 	if err != nil {
 		errorMessage = strings.TrimSpace(err.Error())
 	}
-	logger.EmitFeishuCardError(c.Request.Context(), logger.ErrorCardEvent{
-		EventType:     "payment_topup_callback_error",
-		Domain:        "payment",
-		Subtype:       strings.TrimSpace(subtype),
-		Severity:      "error",
-		Title:         strings.TrimSpace(title),
-		Summary:       strings.TrimSpace(summary),
-		BizStatus:     "failed",
-		ErrorCode:     strings.TrimSpace(errorCode),
-		ErrorMessage:  errorMessage,
-		ImpactScope:   strings.TrimSpace(impactScope),
-		ImpactSummary: strings.TrimSpace(impactSummary),
-		Endpoint:      c.Request.URL.Path,
-		HTTPStatus:    httpStatus,
-		Tags:          tags,
-	})
+	msg := "[topup.callback] failed reason=%s http_status=%d endpoint=%s ip=%s user_agent=%q order_id=%q transaction_id=%q provider_order_id=%q provider_name=%q status=%q status_message=%q paid_at=%d redeemed_at=%d err=%q"
+	if asError {
+		logger.Errorf(c.Request.Context(), msg, strings.TrimSpace(reason), httpStatus, c.Request.URL.Path, c.ClientIP(), c.GetHeader("User-Agent"), orderID, transactionID, providerOrderID, providerName, status, statusMessage, paidAt, redeemedAt, errorMessage)
+		return
+	}
+	logger.Warnf(c.Request.Context(), msg, strings.TrimSpace(reason), httpStatus, c.Request.URL.Path, c.ClientIP(), c.GetHeader("User-Agent"), orderID, transactionID, providerOrderID, providerName, status, statusMessage, paidAt, redeemedAt, errorMessage)
 }

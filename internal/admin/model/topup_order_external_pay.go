@@ -228,10 +228,16 @@ func logExternalPayCreateFailure(
 		requestError = requestErr.Error()
 	}
 	logger.SysWarnf(
-		"[topup.external_pay] create_failed order_id=%q transaction_id=%q business_type=%q merchant_app=%q uniacid=%q url=%q sign_fields=%s sign_base=%q sign=%q secret_fp=%q http_status=%d upstream_code=%d upstream_msg=%q response=%q err=%q",
+		"[topup.external_pay] create_failed order_id=%q user_id=%q username=%q transaction_id=%q provider_name=%q business_type=%q amount=%.2f currency=%q client_type=%q merchant_app=%q uniacid=%q url=%q sign_fields=%s sign_base=%q sign=%q secret_fp=%q http_status=%d upstream_code=%d upstream_msg=%q response=%q err=%q",
 		strings.TrimSpace(order.Id),
+		strings.TrimSpace(order.UserID),
+		strings.TrimSpace(order.Username),
 		strings.TrimSpace(order.TransactionID),
+		strings.TrimSpace(order.ProviderName),
 		strings.TrimSpace(order.BusinessType),
+		order.Amount,
+		strings.TrimSpace(order.Currency),
+		strings.TrimSpace(payload["client_type"]),
 		strings.TrimSpace(payload["merchant_app"]),
 		externalPayUniacidFromURL(requestURL),
 		strings.TrimSpace(requestURL),
@@ -245,7 +251,6 @@ func logExternalPayCreateFailure(
 		previewExternalPayResponse(responseBody),
 		requestError,
 	)
-	emitExternalPayFailureCard(order, "topup_create_failed", "TOPUP_CREATE_FAILED", "充值下单失败", requestURL, httpStatus, upstreamCode, upstreamMessage, responseBody, requestErr)
 }
 
 func logExternalPayQueryFailure(
@@ -263,10 +268,16 @@ func logExternalPayQueryFailure(
 		requestError = requestErr.Error()
 	}
 	logger.SysWarnf(
-		"[topup.external_pay] query_failed order_id=%q transaction_id=%q provider_order_id=%q merchant_app=%q uniacid=%q url=%q sign_fields=%s sign_base=%q sign=%q secret_fp=%q http_status=%d upstream_code=%d upstream_msg=%q response=%q err=%q",
+		"[topup.external_pay] query_failed order_id=%q user_id=%q username=%q transaction_id=%q provider_order_id=%q provider_name=%q business_type=%q amount=%.2f currency=%q merchant_app=%q uniacid=%q url=%q sign_fields=%s sign_base=%q sign=%q secret_fp=%q http_status=%d upstream_code=%d upstream_msg=%q response=%q err=%q",
 		strings.TrimSpace(order.Id),
+		strings.TrimSpace(order.UserID),
+		strings.TrimSpace(order.Username),
 		strings.TrimSpace(order.TransactionID),
 		strings.TrimSpace(order.ProviderOrderID),
+		strings.TrimSpace(order.ProviderName),
+		strings.TrimSpace(order.BusinessType),
+		order.Amount,
+		strings.TrimSpace(order.Currency),
 		strings.TrimSpace(payload["merchant_app"]),
 		externalPayUniacidFromURL(requestURL),
 		strings.TrimSpace(requestURL),
@@ -280,71 +291,6 @@ func logExternalPayQueryFailure(
 		previewExternalPayResponse(responseBody),
 		requestError,
 	)
-	emitExternalPayFailureCard(order, "topup_query_failed", "TOPUP_QUERY_FAILED", "充值查单失败", requestURL, httpStatus, upstreamCode, upstreamMessage, responseBody, requestErr)
-}
-
-func emitExternalPayFailureCard(
-	order TopupOrder,
-	subtype string,
-	errorCode string,
-	title string,
-	requestURL string,
-	httpStatus int,
-	upstreamCode int,
-	upstreamMessage string,
-	responseBody []byte,
-	requestErr error,
-) {
-	severity := "error"
-	if requestErr != nil || httpStatus >= http.StatusInternalServerError {
-		severity = "critical"
-	}
-	errorMessage := strings.TrimSpace(upstreamMessage)
-	if requestErr != nil {
-		errorMessage = strings.TrimSpace(requestErr.Error())
-	}
-	if errorMessage == "" {
-		errorMessage = previewExternalPayResponse(responseBody)
-	}
-	impactSummary := fmt.Sprintf("订单 %s 的支付流程失败，用户可能无法完成支付或看不到最新状态", strings.TrimSpace(order.Id))
-	tags := map[string]string{
-		"transaction_id":    strings.TrimSpace(order.TransactionID),
-		"provider_order_id": strings.TrimSpace(order.ProviderOrderID),
-		"provider_name":     strings.TrimSpace(order.ProviderName),
-		"business_type":     strings.TrimSpace(order.BusinessType),
-		"request_url":       strings.TrimSpace(requestURL),
-	}
-	if value := strings.TrimSpace(payloadExternalPayMerchantApp()); value != "" {
-		tags["merchant_app"] = value
-	}
-	if uniacid := strings.TrimSpace(externalPayUniacidFromURL(requestURL)); uniacid != "" {
-		tags["uniacid"] = uniacid
-	}
-	event := logger.ErrorCardEvent{
-		EventType:      "payment_external_pay_error",
-		Domain:         "payment",
-		Subtype:        strings.TrimSpace(subtype),
-		Severity:       severity,
-		Title:          strings.TrimSpace(title),
-		Summary:        errorMessage,
-		BizStatus:      "failed",
-		ErrorCode:      strings.TrimSpace(errorCode),
-		ErrorMessage:   errorMessage,
-		ImpactScope:    "single_user",
-		ImpactSummary:  impactSummary,
-		UserID:         strings.TrimSpace(order.UserID),
-		HTTPStatus:     httpStatus,
-		ProviderStatus: strings.TrimSpace(upstreamMessage),
-		Tags:           tags,
-	}
-	if upstreamCode != 0 {
-		event.ProviderCode = strconv.Itoa(upstreamCode)
-	}
-	logger.EmitFeishuCardError(nil, event)
-}
-
-func payloadExternalPayMerchantApp() string {
-	return strings.TrimSpace(config.TopUpMerchantAppValue())
 }
 
 func createTopupOrderByExternalPayAPI(order TopupOrder, clientType string) (topupExternalPayCreateResult, error) {
@@ -375,6 +321,7 @@ func createTopupOrderByExternalPayAPI(order TopupOrder, clientType string) (topu
 
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
+		logExternalPayCreateFailure(order, requestURL, payload, response.StatusCode, 0, "read_body_failed", nil, err)
 		return topupExternalPayCreateResult{}, fmt.Errorf("读取支付 API 响应失败")
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
@@ -402,10 +349,12 @@ func createTopupOrderByExternalPayAPI(order TopupOrder, clientType string) (topu
 
 	redirectURL := strings.TrimSpace(payloadResponse.Data.CashierURL)
 	if redirectURL == "" {
+		logExternalPayCreateFailure(order, requestURL, payload, response.StatusCode, payloadResponse.Code, "missing_cashier_url", responseBody, nil)
 		return topupExternalPayCreateResult{}, fmt.Errorf("支付 API 未返回 cashier_url")
 	}
 	providerOrderID := strings.TrimSpace(payloadResponse.Data.TradeNo)
 	if providerOrderID == "" {
+		logExternalPayCreateFailure(order, requestURL, payload, response.StatusCode, payloadResponse.Code, "missing_trade_no", responseBody, nil)
 		return topupExternalPayCreateResult{}, fmt.Errorf("支付 API 未返回 trade_no")
 	}
 

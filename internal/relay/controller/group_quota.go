@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/yeying-community/router/common/logger"
@@ -53,7 +52,7 @@ func formatPackageQuotaExceededMessage(requested int64, daily model.GroupDailyQu
 func reservePackageQuota(ctx context.Context, groupID string, userID string, quota int64) (model.PackageQuotaReservation, *relaymodel.ErrorWithStatusCode) {
 	reservation, allowed, err := model.ReservePackageQuota(groupID, userID, quota)
 	if err != nil {
-		emitGroupBillingErrorCard(ctx, "reserve_group_daily_quota_failed", "RESERVE_GROUP_DAILY_QUOTA_FAILED", "分组额度预占失败", err.Error(), strings.TrimSpace(groupID), strings.TrimSpace(userID), quota, "single_user", "当前请求无法预占分组额度，计费流程中断")
+		logger.Errorf(ctx, "group quota reserve failed code=reserve_group_daily_quota_failed group=%s user=%s requested_quota=%d err=%q", strings.TrimSpace(groupID), strings.TrimSpace(userID), quota, err.Error())
 		return model.PackageQuotaReservation{}, openai.ErrorWrapper(err, "reserve_group_daily_quota_failed", http.StatusInternalServerError)
 	}
 	if !allowed {
@@ -82,7 +81,6 @@ func reservePackageQuota(ctx context.Context, groupID string, userID string, quo
 			)
 			message = formatPackageQuotaExceededMessage(quota, dailySnapshot, emergencySnapshot)
 		}
-		emitGroupBillingErrorCard(ctx, groupDailyQuotaExceededCode, strings.ToUpper(groupDailyQuotaExceededCode), "分组额度不足", message, strings.TrimSpace(groupID), strings.TrimSpace(userID), quota, "single_user", "当前请求被分组/套餐额度限制拦截")
 		return model.PackageQuotaReservation{}, openai.ErrorWrapper(errors.New(message), groupDailyQuotaExceededCode, http.StatusForbidden)
 	}
 	return reservation, nil
@@ -93,8 +91,7 @@ func releasePackageQuotaReservation(ctx context.Context, reservation model.Packa
 		return
 	}
 	if err := model.ReleasePackageQuotaReservation(reservation); err != nil {
-		logger.Error(ctx, "release package quota reservation failed: "+err.Error())
-		emitGroupBillingErrorCard(ctx, "release_package_quota_reservation_failed", "RELEASE_PACKAGE_QUOTA_RESERVATION_FAILED", "分组额度释放失败", err.Error(), strings.TrimSpace(reservation.GroupDaily.GroupID), strings.TrimSpace(reservation.GroupDaily.UserID), reservation.GroupDaily.ReservedQuota+reservation.PackageEmergency.ReservedQuota, "single_user", "预占额度释放失败，可能影响后续可用额度计算")
+		logger.Errorf(ctx, "group quota release failed code=release_package_quota_reservation_failed group=%s user=%s daily_reserved=%d emergency_reserved=%d err=%q", strings.TrimSpace(reservation.GroupDaily.GroupID), strings.TrimSpace(reservation.GroupDaily.UserID), reservation.GroupDaily.ReservedQuota, reservation.PackageEmergency.ReservedQuota, err.Error())
 	}
 }
 
@@ -104,8 +101,7 @@ func settlePackageQuotaReservation(ctx context.Context, reservation model.Packag
 	}
 	dailyConsumed, emergencyConsumed, err := model.SettlePackageQuotaReservation(reservation, consumedQuota)
 	if err != nil {
-		logger.Error(ctx, "settle package quota reservation failed: "+err.Error())
-		emitGroupBillingErrorCard(ctx, "settle_package_quota_reservation_failed", "SETTLE_PACKAGE_QUOTA_RESERVATION_FAILED", "分组额度结算失败", err.Error(), strings.TrimSpace(reservation.GroupDaily.GroupID), strings.TrimSpace(reservation.GroupDaily.UserID), consumedQuota, "single_user", "本次调用已完成但分组额度结算失败，账务可能不一致")
+		logger.Errorf(ctx, "group quota settle failed code=settle_package_quota_reservation_failed group=%s user=%s consumed_quota=%d daily_reserved=%d emergency_reserved=%d err=%q", strings.TrimSpace(reservation.GroupDaily.GroupID), strings.TrimSpace(reservation.GroupDaily.UserID), consumedQuota, reservation.GroupDaily.ReservedQuota, reservation.PackageEmergency.ReservedQuota, err.Error())
 		return 0, 0
 	}
 	return dailyConsumed, emergencyConsumed
@@ -117,27 +113,4 @@ func IsGroupDailyQuotaExceededError(err *relaymodel.ErrorWithStatusCode) bool {
 	}
 	code := strings.TrimSpace(fmt.Sprint(err.Code))
 	return code == groupDailyQuotaExceededCode
-}
-
-func emitGroupBillingErrorCard(ctx context.Context, subtype string, errorCode string, title string, message string, groupID string, userID string, quota int64, impactScope string, impactSummary string) {
-	tags := map[string]string{}
-	if quota != 0 {
-		tags["quota"] = strconv.FormatInt(quota, 10)
-	}
-	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
-		EventType:     "group_billing_error",
-		Domain:        "group_billing",
-		Subtype:       strings.TrimSpace(subtype),
-		Severity:      "error",
-		Title:         strings.TrimSpace(title),
-		Summary:       strings.TrimSpace(message),
-		BizStatus:     "failed",
-		ErrorCode:     strings.TrimSpace(errorCode),
-		ErrorMessage:  strings.TrimSpace(message),
-		ImpactScope:   strings.TrimSpace(impactScope),
-		ImpactSummary: strings.TrimSpace(impactSummary),
-		UserID:        strings.TrimSpace(userID),
-		GroupID:       strings.TrimSpace(groupID),
-		Tags:          tags,
-	})
 }

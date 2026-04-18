@@ -77,7 +77,7 @@ func Relay(c *gin.Context) {
 	if trimmedChannelID := strings.TrimSpace(channelId); trimmedChannelID != "" {
 		failedChannelIDs[trimmedChannelID] = struct{}{}
 	}
-	go processChannelRelayError(ctx, userId, channelId, channelName, originalModel, requestPath, *bizErr)
+	go processChannelRelayError(ctx, userId, group, channelId, channelName, originalModel, requestPath, *bizErr)
 	traceID := c.GetString(helper.TraceIDKey)
 	retryAllRemainingCandidates := config.RetryTimes > 0
 	retryCount := 0
@@ -88,8 +88,10 @@ func Relay(c *gin.Context) {
 			Int("status", bizErr.StatusCode).
 			String("channel_id", channelId).
 			String("channel_name", channelName).
+			String("user_id", userId).
 			String("group", group).
 			String("model", originalModel).
+			String("endpoint", requestPath).
 			String("reason", "status_not_retryable").
 			Build())
 		retryAllRemainingCandidates = false
@@ -99,8 +101,10 @@ func Relay(c *gin.Context) {
 		if err != nil {
 			fields := relaylogging.NewFields("RETRY").
 				String("decision", "select_failed").
+				String("user_id", userId).
 				String("group", group).
 				String("model", originalModel).
+				String("endpoint", requestPath).
 				String("reason", resolveRetrySelectionFailureReason(selectionStats)).
 				String("selection_scope", selectionStats.SelectionScope).
 				Int("total_candidates", selectionStats.TotalCandidates).
@@ -121,8 +125,10 @@ func Relay(c *gin.Context) {
 		logger.RelayWarnf(ctx, relaylogging.NewFields("RETRY").
 			String("decision", "switch").
 			Int("attempt", retryCount).
+			String("user_id", userId).
 			String("group", group).
 			String("model", originalModel).
+			String("endpoint", requestPath).
 			String("from_channel_id", lastFailedChannelId).
 			String("to_channel_id", channel.Id).
 			String("to_channel_name", channel.DisplayName()).
@@ -147,7 +153,7 @@ func Relay(c *gin.Context) {
 		if trimmedChannelID := strings.TrimSpace(channelId); trimmedChannelID != "" {
 			failedChannelIDs[trimmedChannelID] = struct{}{}
 		}
-		go processChannelRelayError(ctx, userId, channelId, channelName, originalModel, requestPath, *bizErr)
+		go processChannelRelayError(ctx, userId, group, channelId, channelName, originalModel, requestPath, *bizErr)
 	}
 	if bizErr != nil {
 		upstreamStatus := bizErr.StatusCode
@@ -167,7 +173,6 @@ func Relay(c *gin.Context) {
 			Int("retry_count", retryCount).
 			String("error", bizErr.Error.Message).
 			Build())
-		emitChannelFailureCard(ctx, userId, group, lastFailedChannelId, channelName, originalModel, requestPath, retryCount, bizErr, upstreamStatus)
 
 		// BUG: bizErr is in race condition
 		bizErr.Error.Message = helper.MessageWithTraceID(bizErr.Error.Message, traceID)
@@ -175,49 +180,6 @@ func Relay(c *gin.Context) {
 			"error": bizErr.Error,
 		})
 	}
-}
-
-func emitChannelFailureCard(ctx context.Context, userID string, groupID string, channelID string, channelName string, modelName string, endpoint string, retryCount int, relayErr *model.ErrorWithStatusCode, upstreamStatus int) {
-	if relayErr == nil {
-		return
-	}
-	subtype := "upstream_error"
-	severity := "error"
-	if isUpstreamQuotaRelayError(relayErr) {
-		subtype = "upstream_quota"
-		severity = "critical"
-	} else if upstreamStatus >= http.StatusInternalServerError || relayErr.StatusCode >= http.StatusInternalServerError {
-		subtype = "upstream_5xx"
-		severity = "critical"
-	} else if upstreamStatus >= http.StatusBadRequest || relayErr.StatusCode >= http.StatusBadRequest {
-		subtype = "upstream_4xx"
-	}
-	impactSummary := fmt.Sprintf("分组 %s 下模型 %s 通过渠道 %s 调用失败，HTTP=%d，上游=%d", strings.TrimSpace(groupID), strings.TrimSpace(modelName), strings.TrimSpace(channelID), relayErr.StatusCode, upstreamStatus)
-	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
-		EventType:      "channel_relay_failed",
-		Domain:         "channel",
-		Subtype:        subtype,
-		Severity:       severity,
-		Title:          "渠道调用失败",
-		Summary:        strings.TrimSpace(relayErr.Error.Message),
-		BizStatus:      "failed",
-		ErrorCode:      errorCodeString(relayErr.Error.Code),
-		ErrorMessage:   strings.TrimSpace(relayErr.Error.Message),
-		ImpactScope:    "group",
-		ImpactSummary:  impactSummary,
-		UserID:         strings.TrimSpace(userID),
-		GroupID:        strings.TrimSpace(groupID),
-		ChannelID:      strings.TrimSpace(channelID),
-		Endpoint:       strings.TrimSpace(endpoint),
-		ModelName:      strings.TrimSpace(modelName),
-		HTTPStatus:     relayErr.StatusCode,
-		UpstreamStatus: upstreamStatus,
-		RetryCount:     retryCount,
-		ProviderStatus: fmt.Sprintf("%d", upstreamStatus),
-		Tags: map[string]string{
-			"channel_name": strings.TrimSpace(channelName),
-		},
-	})
 }
 
 func getEffectiveRelayMode(c *gin.Context) int {
@@ -338,13 +300,17 @@ func resolveRetrySelectionFailureReason(stats dbmodel.SatisfiedChannelSelectionS
 	return "selector_error"
 }
 
-func processChannelRelayError(ctx context.Context, userId string, channelId string, channelName string, requestModel string, requestPath string, err model.ErrorWithStatusCode) {
+func processChannelRelayError(ctx context.Context, userId string, groupID string, channelId string, channelName string, requestModel string, requestPath string, err model.ErrorWithStatusCode) {
 	msg := relaylogging.NewFields("UPSTREAM_ERR").
 		String("channel_id", channelId).
 		String("channel_name", channelName).
+		String("group", groupID).
 		String("model", requestModel).
+		String("endpoint", requestPath).
 		String("user_id", userId).
 		Int("status", err.StatusCode).
+		String("error_type", err.Type).
+		String("error_code", errorCodeString(err.Code)).
 		String("error", err.Message).
 		Build()
 	if err.StatusCode >= http.StatusInternalServerError {

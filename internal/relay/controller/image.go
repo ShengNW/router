@@ -111,7 +111,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	meta := meta.GetByContext(c)
 	imageRequest, err := getImageRequest(c, meta.Mode)
 	if err != nil {
-		logger.Errorf(ctx, "getImageRequest failed: %s", err.Error())
+		logger.Errorf(ctx, "image relay get request failed user_id=%s group=%s channel_id=%s endpoint=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), c.Request.URL.Path, err.Error())
 		return openai.ErrorWrapper(err, "invalid_image_request", http.StatusBadRequest)
 	}
 
@@ -200,7 +200,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}
 	billingSnapshot, snapshotErr := billing.ComputeImageBillingSnapshot(imageCount, imageCostRatio, pricing, groupRatio)
 	if snapshotErr != nil {
-		logger.Error(ctx, "calculate image billing snapshot failed: "+snapshotErr.Error())
+		logger.Errorf(ctx, "image billing snapshot failed user_id=%s group=%s channel_id=%s model=%s image_count=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), imageCount, snapshotErr.Error())
 	}
 	billingPlan, quotaErr := reserveRelayQuota(ctx, meta.Group, meta.UserId, quota)
 	if quotaErr != nil {
@@ -216,7 +216,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 
 	if billingPlan.ChargeUserBalance() {
 		if _, expireErr := model.ExpireUserBalanceLots(meta.UserId); expireErr != nil {
-			logger.Error(ctx, "expire user balance lots failed: "+expireErr.Error())
+			logger.Errorf(ctx, "image billing expire lots failed user_id=%s group=%s channel_id=%s model=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), expireErr.Error())
 		}
 		userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 		if err != nil {
@@ -230,7 +230,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	// do request
 	resp, err := adaptor.DoRequest(c, meta, requestBody)
 	if err != nil {
-		logger.Errorf(ctx, "DoRequest failed: %s", err.Error())
+		logger.Errorf(ctx, "image relay upstream request failed user_id=%s group=%s channel_id=%s model=%s endpoint=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), c.Request.URL.Path, err.Error())
 		return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
 	}
 
@@ -253,33 +253,29 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 			if billingPlan.ChargeUserBalance() {
 				err := model.PostConsumeTokenQuota(meta.TokenId, quota)
 				if err != nil {
-					logger.SysError("error consuming token remain quota: " + err.Error())
-					emitImageBillingFailureCard(ctx, "post_consume_token_quota_failed", "POST_CONSUME_TOKEN_QUOTA_FAILED", err.Error(), meta, imageRequest.Model, quota)
+					logger.Errorf(ctx, "image billing failed code=post_consume_token_quota_failed user_id=%s group=%s channel_id=%s model=%s token_id=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), strings.TrimSpace(meta.TokenId), quota, billingPlan.ChargeUserBalance(), err.Error())
 				}
 			} else {
 				err := model.PostConsumeTokenRemainQuota(meta.TokenId, quota)
 				if err != nil {
-					logger.SysError("error consuming token remain quota: " + err.Error())
-					emitImageBillingFailureCard(ctx, "post_consume_token_quota_failed", "POST_CONSUME_TOKEN_QUOTA_FAILED", err.Error(), meta, imageRequest.Model, quota)
+					logger.Errorf(ctx, "image billing failed code=post_consume_token_remain_quota_failed user_id=%s group=%s channel_id=%s model=%s token_id=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), strings.TrimSpace(meta.TokenId), quota, billingPlan.ChargeUserBalance(), err.Error())
 				}
 			}
 		} else if billingPlan.ChargeUserBalance() && quota != 0 {
 			if err := model.DecreaseUserQuota(meta.UserId, quota); err != nil {
-				logger.SysError("error consuming user quota: " + err.Error())
-				emitImageBillingFailureCard(ctx, "post_consume_user_quota_failed", "POST_CONSUME_USER_QUOTA_FAILED", err.Error(), meta, imageRequest.Model, quota)
+				logger.Errorf(ctx, "image billing failed code=post_consume_user_quota_failed user_id=%s group=%s channel_id=%s model=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), quota, billingPlan.ChargeUserBalance(), err.Error())
 			}
 		}
 		if billingPlan.ChargeUserBalance() {
 			if err := model.CacheUpdateUserQuota(ctx, meta.UserId); err != nil {
-				logger.SysError("error update user quota cache: " + err.Error())
-				emitImageBillingFailureCard(ctx, "update_user_quota_cache_failed", "UPDATE_USER_QUOTA_CACHE_FAILED", err.Error(), meta, imageRequest.Model, quota)
+				logger.Errorf(ctx, "image billing failed code=update_user_quota_cache_failed user_id=%s group=%s channel_id=%s model=%s quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), quota, billingPlan.ChargeUserBalance(), err.Error())
 			}
 			if quota > 0 {
 				consumedFromLots, consumeErr := model.ConsumeUserBalanceLots(meta.UserId, quota)
 				if consumeErr != nil {
-					logger.Error(ctx, "error consuming user balance lots: "+consumeErr.Error())
+					logger.Errorf(ctx, "image billing lots consume failed user_id=%s group=%s channel_id=%s model=%s quota=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), quota, consumeErr.Error())
 				} else if consumedFromLots < quota {
-					logger.Warnf(ctx, "user balance lot coverage partial user=%s consumed=%d requested=%d", strings.TrimSpace(meta.UserId), consumedFromLots, quota)
+					logger.Warnf(ctx, "image billing lots consume partial user_id=%s group=%s channel_id=%s model=%s consumed=%d requested=%d", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), consumedFromLots, quota)
 				}
 			}
 		}
@@ -312,34 +308,9 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	// do response
 	_, respErr := adaptor.DoResponse(c, resp, meta)
 	if respErr != nil {
-		logger.Errorf(ctx, "respErr is not nil: %+v", respErr)
+		logger.Errorf(ctx, "image relay response failed user_id=%s group=%s channel_id=%s model=%s endpoint=%s err=%+v", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), c.Request.URL.Path, respErr)
 		return respErr
 	}
 
 	return nil
-}
-
-func emitImageBillingFailureCard(ctx context.Context, subtype string, errorCode string, message string, relayMeta *meta.Meta, modelName string, quota int64) {
-	tags := map[string]string{}
-	if quota != 0 {
-		tags["quota"] = fmt.Sprintf("%d", quota)
-	}
-	logger.EmitFeishuCardError(ctx, logger.ErrorCardEvent{
-		EventType:     "group_billing_image_error",
-		Domain:        "group_billing",
-		Subtype:       strings.TrimSpace(subtype),
-		Severity:      "error",
-		Title:         "分组计费失败",
-		Summary:       strings.TrimSpace(message),
-		BizStatus:     "failed",
-		ErrorCode:     strings.TrimSpace(errorCode),
-		ErrorMessage:  strings.TrimSpace(message),
-		ImpactScope:   "single_user",
-		ImpactSummary: "图片请求已完成但后扣费失败，账务可能不一致",
-		UserID:        strings.TrimSpace(relayMeta.UserId),
-		GroupID:       strings.TrimSpace(relayMeta.Group),
-		ChannelID:     strings.TrimSpace(relayMeta.ChannelId),
-		ModelName:     strings.TrimSpace(modelName),
-		Tags:          tags,
-	})
 }
