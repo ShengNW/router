@@ -21,7 +21,7 @@ func ReturnPreConsumedQuota(ctx context.Context, preConsumedQuota int64, tokenId
 				err = model.PostConsumeTokenRemainQuota(tokenId, -preConsumedQuota)
 			}
 			if err != nil {
-				logger.Error(ctx, "error return pre-consumed quota: "+err.Error())
+				logger.Errorf(ctx, "billing rollback failed code=return_pre_consumed_quota_failed user_id=%s token_id=%s charge_user_balance=%t rollback_quota=%d err=%q", strings.TrimSpace(userId), strings.TrimSpace(tokenId), chargeUserBalance, preConsumedQuota, err.Error())
 			}
 			return
 		}
@@ -31,7 +31,7 @@ func ReturnPreConsumedQuota(ctx context.Context, preConsumedQuota int64, tokenId
 		// JWT 场景：只需要归还用户额度
 		err := model.IncreaseUserQuota(userId, preConsumedQuota)
 		if err != nil {
-			logger.Error(ctx, "error return pre-consumed user quota: "+err.Error())
+			logger.Errorf(ctx, "billing rollback failed code=return_pre_consumed_user_quota_failed user_id=%s charge_user_balance=%t rollback_quota=%d err=%q", strings.TrimSpace(userId), chargeUserBalance, preConsumedQuota, err.Error())
 			return
 		}
 		_ = model.CacheUpdateUserQuota(ctx, userId)
@@ -48,7 +48,7 @@ func PostConsumeQuota(ctx context.Context, tokenId string, quotaDelta int64, tot
 			err = model.PostConsumeTokenRemainQuota(tokenId, quotaDelta)
 		}
 		if err != nil {
-			logger.SysError("error consuming token remain quota: " + err.Error())
+			logger.Errorf(ctx, "billing post_consume failed code=post_consume_token_quota_failed user_id=%s group=%s channel_id=%s model=%s token_id=%s quota_delta=%d total_quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(userId), strings.TrimSpace(groupID), strings.TrimSpace(channelId), strings.TrimSpace(modelName), strings.TrimSpace(tokenId), quotaDelta, totalQuota, chargeUserBalance, err.Error())
 		}
 	} else if chargeUserBalance {
 		if quotaDelta > 0 {
@@ -57,20 +57,20 @@ func PostConsumeQuota(ctx context.Context, tokenId string, quotaDelta int64, tot
 			err = model.IncreaseUserQuota(userId, -quotaDelta)
 		}
 		if err != nil {
-			logger.SysError("error consuming user quota: " + err.Error())
+			logger.Errorf(ctx, "billing post_consume failed code=post_consume_user_quota_failed user_id=%s group=%s channel_id=%s model=%s quota_delta=%d total_quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(userId), strings.TrimSpace(groupID), strings.TrimSpace(channelId), strings.TrimSpace(modelName), quotaDelta, totalQuota, chargeUserBalance, err.Error())
 		}
 	}
 	if chargeUserBalance {
 		err = model.CacheUpdateUserQuota(ctx, userId)
 		if err != nil {
-			logger.SysError("error update user quota cache: " + err.Error())
+			logger.Errorf(ctx, "billing cache update failed code=update_user_quota_cache_failed user_id=%s group=%s channel_id=%s model=%s quota_delta=%d total_quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(userId), strings.TrimSpace(groupID), strings.TrimSpace(channelId), strings.TrimSpace(modelName), quotaDelta, totalQuota, chargeUserBalance, err.Error())
 		}
 		if totalQuota > 0 {
 			consumedFromLots, consumeErr := model.ConsumeUserBalanceLots(userId, totalQuota)
 			if consumeErr != nil {
-				logger.Error(ctx, "error consuming user balance lots: "+consumeErr.Error())
+				logger.Errorf(ctx, "billing lots consume failed code=consume_user_balance_lots_failed user_id=%s group=%s channel_id=%s model=%s total_quota=%d err=%q", strings.TrimSpace(userId), strings.TrimSpace(groupID), strings.TrimSpace(channelId), strings.TrimSpace(modelName), totalQuota, consumeErr.Error())
 			} else if consumedFromLots < totalQuota {
-				logger.Warnf(ctx, "user balance lot coverage partial user=%s consumed=%d requested=%d", strings.TrimSpace(userId), consumedFromLots, totalQuota)
+				logger.Warnf(ctx, "billing lots consume partial user_id=%s group=%s channel_id=%s model=%s consumed=%d requested=%d", strings.TrimSpace(userId), strings.TrimSpace(groupID), strings.TrimSpace(channelId), strings.TrimSpace(modelName), consumedFromLots, totalQuota)
 			}
 		}
 	}
@@ -79,7 +79,7 @@ func PostConsumeQuota(ctx context.Context, tokenId string, quotaDelta int64, tot
 	if !chargeUserBalance {
 		dailyConsumed, emergencyConsumed, settleErr := model.SettlePackageQuotaReservation(packageReservation, totalQuota)
 		if settleErr != nil {
-			logger.Error(ctx, "settle package quota reservation failed: "+settleErr.Error())
+			logger.Errorf(ctx, "billing settle failed code=settle_package_quota_reservation_failed user_id=%s group=%s channel_id=%s model=%s token_id=%s quota_delta=%d total_quota=%d charge_user_balance=%t err=%q", strings.TrimSpace(userId), strings.TrimSpace(groupID), strings.TrimSpace(channelId), strings.TrimSpace(modelName), strings.TrimSpace(tokenId), quotaDelta, totalQuota, chargeUserBalance, settleErr.Error())
 		} else {
 			userDailyQuota = int(dailyConsumed)
 			userEmergencyQuota = int(emergencyConsumed)

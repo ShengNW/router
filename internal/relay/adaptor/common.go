@@ -32,6 +32,16 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	if err != nil {
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
+	metaUserID := ""
+	metaGroupID := ""
+	metaChannelID := ""
+	metaModelName := ""
+	if meta != nil {
+		metaUserID = strings.TrimSpace(meta.UserId)
+		metaGroupID = strings.TrimSpace(meta.Group)
+		metaChannelID = strings.TrimSpace(meta.ChannelId)
+		metaModelName = strings.TrimSpace(meta.ActualModelName)
+	}
 	c.Set(ctxkey.UpstreamURL, fullRequestURL)
 	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
@@ -41,15 +51,15 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
-	if meta != nil && meta.ChannelId != "" {
+	if metaChannelID != "" {
 		headers, _ := json.Marshal(maskHeaders(req.Header))
 		logger.Debugf(
 			c.Request.Context(),
 			"[upstream_req] method=%s url=%s channel_id=%s model=%s headers=%s",
 			req.Method,
 			fullRequestURL,
-			strings.TrimSpace(meta.ChannelId),
-			strings.TrimSpace(meta.ActualModelName),
+			metaChannelID,
+			metaModelName,
 			string(headers),
 		)
 	}
@@ -58,6 +68,11 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 		logger.RelayErrorf(c.Request.Context(), relaylogging.NewFields("UPSTREAM_ERR").
 			String("method", req.Method).
 			String("url", fullRequestURL).
+			String("user_id", metaUserID).
+			String("group", metaGroupID).
+			String("channel_id", metaChannelID).
+			String("model", metaModelName).
+			String("endpoint", c.Request.URL.Path).
 			String("error", err.Error()).
 			Build())
 		return nil, fmt.Errorf("do request failed: %w", err)
@@ -66,6 +81,11 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	respFields := relaylogging.NewFields("UPSTREAM_RESP").
 		String("method", req.Method).
 		String("url", fullRequestURL).
+		String("user_id", metaUserID).
+		String("group", metaGroupID).
+		String("channel_id", metaChannelID).
+		String("model", metaModelName).
+		String("endpoint", c.Request.URL.Path).
 		Int("status", resp.StatusCode).
 		Build()
 	switch {

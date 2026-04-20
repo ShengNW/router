@@ -52,6 +52,7 @@ func formatPackageQuotaExceededMessage(requested int64, daily model.GroupDailyQu
 func reservePackageQuota(ctx context.Context, groupID string, userID string, quota int64) (model.PackageQuotaReservation, *relaymodel.ErrorWithStatusCode) {
 	reservation, allowed, err := model.ReservePackageQuota(groupID, userID, quota)
 	if err != nil {
+		logger.Errorf(ctx, "group quota reserve failed code=reserve_group_daily_quota_failed group=%s user=%s requested_quota=%d err=%q", strings.TrimSpace(groupID), strings.TrimSpace(userID), quota, err.Error())
 		return model.PackageQuotaReservation{}, openai.ErrorWrapper(err, "reserve_group_daily_quota_failed", http.StatusInternalServerError)
 	}
 	if !allowed {
@@ -90,7 +91,7 @@ func releasePackageQuotaReservation(ctx context.Context, reservation model.Packa
 		return
 	}
 	if err := model.ReleasePackageQuotaReservation(reservation); err != nil {
-		logger.Error(ctx, "release package quota reservation failed: "+err.Error())
+		logger.Errorf(ctx, "group quota release failed code=release_package_quota_reservation_failed group=%s user=%s daily_reserved=%d emergency_reserved=%d err=%q", strings.TrimSpace(reservation.GroupDaily.GroupID), strings.TrimSpace(reservation.GroupDaily.UserID), reservation.GroupDaily.ReservedQuota, reservation.PackageEmergency.ReservedQuota, err.Error())
 	}
 }
 
@@ -100,7 +101,7 @@ func settlePackageQuotaReservation(ctx context.Context, reservation model.Packag
 	}
 	dailyConsumed, emergencyConsumed, err := model.SettlePackageQuotaReservation(reservation, consumedQuota)
 	if err != nil {
-		logger.Error(ctx, "settle package quota reservation failed: "+err.Error())
+		logger.Errorf(ctx, "group quota settle failed code=settle_package_quota_reservation_failed group=%s user=%s consumed_quota=%d daily_reserved=%d emergency_reserved=%d err=%q", strings.TrimSpace(reservation.GroupDaily.GroupID), strings.TrimSpace(reservation.GroupDaily.UserID), consumedQuota, reservation.GroupDaily.ReservedQuota, reservation.PackageEmergency.ReservedQuota, err.Error())
 		return 0, 0
 	}
 	return dailyConsumed, emergencyConsumed
