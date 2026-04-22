@@ -1392,7 +1392,8 @@
         "back": "Back",
         "edit": "Edit",
         "gift_package": "Gift Package",
-        "gift_topup": "Grant Balance"
+        "gift_topup": "Grant Balance",
+        "balance_manage": "Balance Management"
       },
       "messages": {
         "gift_topup_success": "Balance granted successfully"

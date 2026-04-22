@@ -888,6 +888,10 @@ const UserDetail = () => {
     navigate(target);
   }, [activePackageSubscription?.package_id, activePackageSubscription?.package_name, hasActivePackage, navigate]);
 
+  const openTopupManagement = useCallback(() => {
+    navigate('/admin/topup');
+  }, [navigate]);
+
   const copyWalletAddress = useCallback(async () => {
     const value = (inputs.wallet_address || '').toString().trim();
     if (value === '') {
@@ -1427,6 +1431,14 @@ const UserDetail = () => {
                       onClick={openAssignTopupModal}
                     >
                       {t('user.detail.buttons.gift_topup')}
+                    </Button>
+                    <Button
+                      type='button'
+                      className='router-page-button'
+                      disabled={loading || actionLoading !== '' || editSection !== ''}
+                      onClick={openTopupManagement}
+                    >
+                      {t('user.detail.buttons.balance_manage')}
                     </Button>
                   </div>
                 </div>

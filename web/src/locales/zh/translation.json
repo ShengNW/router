@@ -1392,7 +1392,8 @@
         "back": "返回",
         "edit": "编辑",
         "gift_package": "赠送套餐",
-        "gift_topup": "赠送额度"
+        "gift_topup": "赠送额度",
+        "balance_manage": "额度管理"
       },
       "messages": {
         "gift_topup_success": "赠送额度成功"
