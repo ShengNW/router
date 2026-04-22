@@ -1451,7 +1451,10 @@ const UserDetail = () => {
                   </Form.Field>
                 </Form.Group>
 
-                <div className='router-toolbar router-block-gap-sm' style={{ marginTop: '0.5rem' }}>
+                <div
+                  className='router-toolbar router-block-gap-sm'
+                  style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}
+                >
                   <div className='router-toolbar-start'>
                     <Header as='h4' className='router-entity-detail-section-title' style={{ margin: 0 }}>
                       {t('user.detail.balance_lots.title')}
