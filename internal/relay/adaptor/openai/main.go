@@ -244,6 +244,18 @@ func logOpenAIStreamReadError(kind string, err error) {
 	}
 }
 
+func previewOpenAINonStreamBody(body []byte) string {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return ""
+	}
+	normalized := strings.Join(strings.Fields(trimmed), " ")
+	if len(normalized) > 480 {
+		return normalized[:480] + "..."
+	}
+	return normalized
+}
+
 func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName string) (*model.ErrorWithStatusCode, *model.Usage) {
 	var textResponse SlimTextResponse
 	responseBody, err := io.ReadAll(resp.Body)
@@ -256,6 +268,14 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 	}
 	err = json.Unmarshal(responseBody, &textResponse)
 	if err != nil {
+		logger.Errorf(
+			c.Request.Context(),
+			"[openai.nonstream] unmarshal_failed status=%d content_type=%q body_preview=%q err=%q",
+			resp.StatusCode,
+			strings.TrimSpace(resp.Header.Get("Content-Type")),
+			previewOpenAINonStreamBody(responseBody),
+			err.Error(),
+		)
 		return ErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
 	}
 	if textResponse.Error.Type != "" {
