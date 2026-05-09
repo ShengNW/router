@@ -125,6 +125,9 @@ func (a *Adaptor) DoRequest(c *gin.Context, meta *meta.Meta, requestBody io.Read
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Meta) (usage *model.Usage, err *model.ErrorWithStatusCode) {
+	if meta != nil && (meta.Mode == relaymode.Proxy || meta.Mode == relaymode.Realtime) {
+		return nil, relayRawResponse(c, resp)
+	}
 	upstreamMode := meta.Mode
 	if meta.UpstreamMode != 0 {
 		upstreamMode = meta.UpstreamMode

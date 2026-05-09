@@ -53,3 +53,37 @@ func TestGetRequestModel_VideoStatusQuery(t *testing.T) {
 		t.Fatalf("getRequestModel returned %q, want %q", modelName, "veo-3.0-generate-preview")
 	}
 }
+
+func TestGetRequestModel_RealtimeQuery(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	req := httptest.NewRequest("POST", "/v1/realtime/calls?model=gpt-realtime-2", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = req
+
+	modelName, err := getRequestModel(c)
+	if err != nil {
+		t.Fatalf("getRequestModel returned error: %v", err)
+	}
+	if modelName != "gpt-realtime-2" {
+		t.Fatalf("getRequestModel returned %q, want %q", modelName, "gpt-realtime-2")
+	}
+}
+
+func TestGetRequestModel_RealtimeNestedSessionModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	req := httptest.NewRequest("POST", "/v1/realtime/client_secrets", bytes.NewBufferString(`{"session":{"model":"gpt-realtime-1.5"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = req
+
+	modelName, err := getRequestModel(c)
+	if err != nil {
+		t.Fatalf("getRequestModel returned error: %v", err)
+	}
+	if modelName != "gpt-realtime-1.5" {
+		t.Fatalf("getRequestModel returned %q, want %q", modelName, "gpt-realtime-1.5")
+	}
+}

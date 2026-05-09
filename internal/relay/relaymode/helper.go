@@ -38,6 +38,16 @@ func GetByPath(path string) int {
 		relayMode = AudioTranscription
 	} else if strings.HasPrefix(path, "/v1/audio/translations") {
 		relayMode = AudioTranslation
+	} else if strings.HasPrefix(path, "/v1/realtime/client_secrets") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime/sessions") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime/transcription_sessions") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime/calls") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime") {
+		relayMode = Realtime
 	} else if strings.HasPrefix(path, "/v1/videos") {
 		relayMode = Videos
 	} else if strings.HasPrefix(path, "/v1/oneapi/proxy") {

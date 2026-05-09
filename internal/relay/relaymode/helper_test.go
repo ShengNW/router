@@ -60,3 +60,19 @@ func TestGetByPath_Audio(t *testing.T) {
 		}
 	}
 }
+
+func TestGetByPath_Realtime(t *testing.T) {
+	tests := []string{
+		"/v1/realtime",
+		"/v1/realtime/client_secrets",
+		"/v1/realtime/sessions",
+		"/v1/realtime/transcription_sessions",
+		"/v1/realtime/calls",
+		"/api/v1/public/realtime/client_secrets",
+	}
+	for _, path := range tests {
+		if got := GetByPath(path); got != Realtime {
+			t.Fatalf("GetByPath(%s)=%d, want %d", path, got, Realtime)
+		}
+	}
+}

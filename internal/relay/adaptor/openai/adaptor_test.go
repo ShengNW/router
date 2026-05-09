@@ -1,8 +1,10 @@
 package openai
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -76,5 +78,39 @@ func TestSetupRequestHeaderPreservesAudioAcceptForSpeech(t *testing.T) {
 	}
 	if got := req.Header.Get("Accept"); got != "audio/mpeg" {
 		t.Fatalf("Accept = %q, want %q", got, "audio/mpeg")
+	}
+}
+
+func TestDoResponseRelaysRawResponseForRealtime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/realtime/client_secrets", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"client_secret":"secret_123"}`)),
+	}
+	adaptor := &Adaptor{ChannelProtocol: relaychannel.OpenAI}
+	meta := &meta.Meta{
+		ChannelProtocol: relaychannel.OpenAI,
+		Mode:            relaymode.Realtime,
+	}
+
+	usage, err := adaptor.DoResponse(ctx, resp, meta)
+	if err != nil {
+		t.Fatalf("DoResponse returned error: %v", err)
+	}
+	if usage != nil {
+		t.Fatalf("usage = %#v, want nil", usage)
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if body := recorder.Body.String(); body != `{"client_secret":"secret_123"}` {
+		t.Fatalf("body = %q, want raw passthrough", body)
 	}
 }

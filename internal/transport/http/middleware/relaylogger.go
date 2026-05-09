@@ -87,6 +87,8 @@ func relayModeName(path string) string {
 		return "audio_transcription"
 	case relaymode.AudioTranslation:
 		return "audio_translation"
+	case relaymode.Realtime:
+		return "realtime"
 	case relaymode.Proxy:
 		return "proxy"
 	case relaymode.Responses:

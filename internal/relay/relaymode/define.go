@@ -17,4 +17,5 @@ const (
 	Responses
 	Videos
 	Messages
+	Realtime
 )

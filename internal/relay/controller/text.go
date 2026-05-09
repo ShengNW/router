@@ -381,6 +381,8 @@ func relayModeLabel(mode int) string {
 		return "audio_translation"
 	case relaymode.AudioTranscription:
 		return "audio_transcription"
+	case relaymode.Realtime:
+		return "realtime"
 	case relaymode.Videos:
 		return "videos"
 	default:

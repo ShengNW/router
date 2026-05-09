@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -64,6 +65,22 @@ func getRequestModel(c *gin.Context) (string, error) {
 			modelRequest.Model = modelValue
 		} else if modelValue := strings.TrimSpace(c.PostForm("model")); modelValue != "" {
 			modelRequest.Model = modelValue
+		}
+	}
+	if strings.HasPrefix(path, "/v1/realtime") && modelRequest.Model == "" {
+		if modelValue := strings.TrimSpace(c.Query("model")); modelValue != "" {
+			modelRequest.Model = modelValue
+		} else if rawBody, bodyErr := common.GetRequestBody(c); bodyErr == nil && len(rawBody) > 0 {
+			payload := map[string]any{}
+			if err := json.Unmarshal(rawBody, &payload); err == nil {
+				if modelValue := strings.TrimSpace(fmt.Sprint(payload["model"])); modelValue != "" && modelValue != "<nil>" {
+					modelRequest.Model = modelValue
+				} else if sessionValue, ok := payload["session"].(map[string]any); ok {
+					if modelValue := strings.TrimSpace(fmt.Sprint(sessionValue["model"])); modelValue != "" && modelValue != "<nil>" {
+						modelRequest.Model = modelValue
+					}
+				}
+			}
 		}
 	}
 	return modelRequest.Model, nil
