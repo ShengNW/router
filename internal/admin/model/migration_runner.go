@@ -599,6 +599,20 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			},
 		},
 		{
+			Version:     "202605091200_openai_realtime_2_provider_catalog",
+			Description: "sync default provider catalog to add openai gpt-realtime-2 and gpt-realtime-1.5 pricing rows",
+			Up: func(tx *gorm.DB) error {
+				return syncDefaultProviderCatalogWithDB(tx)
+			},
+		},
+		{
+			Version:     "202605091330_openai_realtime_endpoint_candidates",
+			Description: "sync default provider catalog to expose openai realtime models with /v1/realtime endpoint candidates",
+			Up: func(tx *gorm.DB) error {
+				return syncDefaultProviderCatalogWithDB(tx)
+			},
+		},
+		{
 			Version:     "202605041030_provider_model_supported_endpoints",
 			Description: "add provider model supported endpoints as channel endpoint candidates",
 			Up: func(tx *gorm.DB) error {

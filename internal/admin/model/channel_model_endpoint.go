@@ -35,6 +35,8 @@ func NormalizeRequestedChannelModelEndpoint(path string) string {
 		return ChannelModelEndpointMessages
 	case strings.HasPrefix(normalizedPath, ChannelModelEndpointResponses):
 		return ChannelModelEndpointResponses
+	case strings.HasPrefix(normalizedPath, ChannelModelEndpointRealtime):
+		return ChannelModelEndpointRealtime
 	case strings.HasPrefix(normalizedPath, ChannelModelEndpointBatches):
 		return ChannelModelEndpointBatches
 	case strings.HasPrefix(normalizedPath, ChannelModelEndpointImageEdit):

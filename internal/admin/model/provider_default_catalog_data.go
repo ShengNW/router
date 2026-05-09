@@ -87,6 +87,8 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 				},
 			},
 			{Model: "gpt-realtime", Type: ProviderModelTypeAudio, InputPrice: 0.004, OutputPrice: 0.016, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
+			{Model: "gpt-realtime-2", Type: ProviderModelTypeAudio, InputPrice: 0.004, OutputPrice: 0.024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
+			{Model: "gpt-realtime-1.5", Type: ProviderModelTypeAudio, InputPrice: 0.0006, OutputPrice: 0.0024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-realtime-mini", Type: ProviderModelTypeAudio, InputPrice: 0.0006, OutputPrice: 0.0024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-audio", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-audio-mini", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
@@ -366,6 +368,10 @@ func normalizeDefaultProviderSeedModelDetails(provider string, details []Provide
 
 func DefaultProviderModelSupportedEndpoints(provider string, modelType string, modelName string) []string {
 	normalizedProvider := strings.TrimSpace(strings.ToLower(provider))
+	normalizedModelName := strings.TrimSpace(strings.ToLower(modelName))
+	if normalizedProvider == "openai" && strings.HasPrefix(normalizedModelName, "gpt-realtime") {
+		return []string{ChannelModelEndpointRealtime}
+	}
 	switch normalizeModelType(modelType, modelName) {
 	case ProviderModelTypeImage:
 		return []string{ChannelModelEndpointImages}

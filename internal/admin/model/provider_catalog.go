@@ -266,7 +266,7 @@ func IsChannelModelEndpointAllowedForType(modelType string, endpoint string) boo
 			return false
 		}
 	case ProviderModelTypeAudio:
-		return normalizedEndpoint == ChannelModelEndpointAudio
+		return normalizedEndpoint == ChannelModelEndpointAudio || normalizedEndpoint == ChannelModelEndpointRealtime
 	case ProviderModelTypeVideo:
 		return normalizedEndpoint == ChannelModelEndpointVideos
 	default:

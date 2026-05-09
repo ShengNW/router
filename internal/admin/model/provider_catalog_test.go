@@ -189,6 +189,56 @@ func TestBuildDefaultProviderCatalogSeeds_OpenAIIncludesGPT55Pricing(t *testing.
 	t.Fatalf("expected openai provider to exist")
 }
 
+func TestBuildDefaultProviderCatalogSeeds_OpenAIIncludesRealtime15And2Pricing(t *testing.T) {
+	seeds := BuildDefaultProviderCatalogSeeds(1700000000)
+	expected := map[string]struct {
+		input  float64
+		output float64
+	}{
+		"gpt-realtime-2":   {input: 0.004, output: 0.024},
+		"gpt-realtime-1.5": {input: 0.0006, output: 0.0024},
+	}
+
+	for _, seed := range seeds {
+		if seed.Provider != "openai" {
+			continue
+		}
+		found := make(map[string]bool, len(expected))
+		for _, detail := range seed.ModelDetails {
+			want, ok := expected[detail.Model]
+			if !ok {
+				continue
+			}
+			if detail.Type != ProviderModelTypeAudio {
+				t.Fatalf("%s type=%q, want %q", detail.Model, detail.Type, ProviderModelTypeAudio)
+			}
+			if detail.InputPrice != want.input {
+				t.Fatalf("%s input_price=%v, want %v", detail.Model, detail.InputPrice, want.input)
+			}
+			if detail.OutputPrice != want.output {
+				t.Fatalf("%s output_price=%v, want %v", detail.Model, detail.OutputPrice, want.output)
+			}
+			if detail.PriceUnit != ProviderPriceUnitPer1KTokens {
+				t.Fatalf("%s price_unit=%q, want %q", detail.Model, detail.PriceUnit, ProviderPriceUnitPer1KTokens)
+			}
+			if detail.Currency != ProviderPriceCurrencyUSD {
+				t.Fatalf("%s currency=%q, want %q", detail.Model, detail.Currency, ProviderPriceCurrencyUSD)
+			}
+			if len(detail.SupportedEndpoints) != 1 || detail.SupportedEndpoints[0] != ChannelModelEndpointRealtime {
+				t.Fatalf("%s supported_endpoints=%#v, want [%s]", detail.Model, detail.SupportedEndpoints, ChannelModelEndpointRealtime)
+			}
+			found[detail.Model] = true
+		}
+		for modelName := range expected {
+			if !found[modelName] {
+				t.Fatalf("expected openai seed to include %s", modelName)
+			}
+		}
+		return
+	}
+	t.Fatalf("expected openai provider to exist")
+}
+
 func TestInferModelType_RecognizesGPTImageModels(t *testing.T) {
 	if got := InferModelType("gpt-image-1"); got != ProviderModelTypeImage {
 		t.Fatalf("InferModelType(gpt-image-1) = %q, want %q", got, ProviderModelTypeImage)

@@ -1011,6 +1011,7 @@ const (
 	ChannelModelEndpointChat      = "/v1/chat/completions"
 	ChannelModelEndpointMessages  = "/v1/messages"
 	ChannelModelEndpointResponses = "/v1/responses"
+	ChannelModelEndpointRealtime  = "/v1/realtime"
 	ChannelModelEndpointBatches   = "/v1/batches"
 	ChannelModelEndpointImages    = "/v1/images/generations"
 	ChannelModelEndpointImageEdit = "/v1/images/edits"
@@ -1026,6 +1027,8 @@ func channelModelEndpointSortRank(endpoint string) int {
 		return 20
 	case ChannelModelEndpointMessages:
 		return 30
+	case ChannelModelEndpointRealtime:
+		return 35
 	case ChannelModelEndpointImages:
 		return 40
 	case ChannelModelEndpointImageEdit:
@@ -1082,6 +1085,9 @@ func NormalizeChannelModelEndpoint(modelType string, endpoint string) string {
 			return ChannelModelEndpointImages
 		}
 	case ProviderModelTypeAudio:
+		if normalizedEndpoint == ChannelModelEndpointRealtime {
+			return ChannelModelEndpointRealtime
+		}
 		if normalizedEndpoint == ChannelModelEndpointAudio {
 			return ChannelModelEndpointAudio
 		}

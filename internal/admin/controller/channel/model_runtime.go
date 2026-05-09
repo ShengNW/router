@@ -565,7 +565,8 @@ func isChannelModelTestEndpointAllowed(modelType string, endpoint string) bool {
 			normalizedEndpoint == model.ChannelModelEndpointImageEdit ||
 			normalizedEndpoint == model.ChannelModelEndpointImages
 	case model.ProviderModelTypeAudio:
-		return normalizedEndpoint == model.ChannelModelEndpointAudio
+		return normalizedEndpoint == model.ChannelModelEndpointAudio ||
+			normalizedEndpoint == model.ChannelModelEndpointRealtime
 	case model.ProviderModelTypeVideo:
 		return normalizedEndpoint == model.ChannelModelEndpointVideos
 	default:
