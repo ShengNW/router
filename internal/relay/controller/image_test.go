@@ -277,8 +277,24 @@ func TestEstimateTraditionalImageOutputTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimateTraditionalImageOutputTokens() error = %v", err)
 	}
-	if got != 1056 {
-		t.Fatalf("estimateTraditionalImageOutputTokens() = %d, want 1056", got)
+	if got != 4160 {
+		t.Fatalf("estimateTraditionalImageOutputTokens() = %d, want 4160", got)
+	}
+}
+
+func TestResolveTraditionalImagePromptInputPrice(t *testing.T) {
+	pricing := adminmodel.ResolvedModelPricing{
+		Model:      "gpt-image-2",
+		InputPrice: 0.008,
+		PriceComponents: []adminmodel.ProviderModelPriceComponentDetail{
+			{
+				Component:  adminmodel.ProviderModelPriceComponentText,
+				InputPrice: 0.005,
+			},
+		},
+	}
+	if got := resolveTraditionalImagePromptInputPrice(pricing); got != 0.005 {
+		t.Fatalf("resolveTraditionalImagePromptInputPrice() = %v, want 0.005", got)
 	}
 }
 

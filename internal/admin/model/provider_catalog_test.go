@@ -85,8 +85,8 @@ func TestBuildDefaultProviderCatalogSeeds_OpenAIIncludesGPTImage2Pricing(t *test
 			if detail.Type != ProviderModelTypeImage {
 				t.Fatalf("gpt-image-2 type=%q, want %q", detail.Type, ProviderModelTypeImage)
 			}
-			if detail.InputPrice != 0.008 {
-				t.Fatalf("gpt-image-2 input_price=%v, want 0.008", detail.InputPrice)
+			if detail.InputPrice != 0.005 {
+				t.Fatalf("gpt-image-2 input_price=%v, want 0.005", detail.InputPrice)
 			}
 			if detail.OutputPrice != 0.03 {
 				t.Fatalf("gpt-image-2 output_price=%v, want 0.03", detail.OutputPrice)

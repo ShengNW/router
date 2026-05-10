@@ -70,12 +70,24 @@ func normalizeTraditionalImageBillingSize(raw string) string {
 func normalizeTraditionalImageBillingQuality(raw string) string {
 	switch strings.TrimSpace(strings.ToLower(raw)) {
 	case "", "auto":
-		return "medium"
+		return "high"
 	case "low", "medium", "high":
 		return strings.TrimSpace(strings.ToLower(raw))
 	default:
 		return ""
 	}
+}
+
+func resolveTraditionalImagePromptInputPrice(pricing adminmodel.ResolvedModelPricing) float64 {
+	for _, component := range pricing.PriceComponents {
+		if strings.TrimSpace(strings.ToLower(component.Component)) != adminmodel.ProviderModelPriceComponentText {
+			continue
+		}
+		if component.InputPrice > 0 {
+			return component.InputPrice
+		}
+	}
+	return pricing.InputPrice
 }
 
 func estimateTraditionalImageOutputTokens(modelName string, size string, quality string, imageCount int) (int, error) {
@@ -450,11 +462,13 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		if estimateErr != nil {
 			return openai.ErrorWrapper(estimateErr, "calculate_image_quota_failed", http.StatusInternalServerError)
 		}
+		pricingForBilling := pricing
+		pricingForBilling.InputPrice = resolveTraditionalImagePromptInputPrice(pricing)
 		var snapshotErr error
 		billingSnapshot, snapshotErr = billing.ComputeTraditionalImageTokenBasedBillingSnapshot(
 			tokenEstimate.PromptTokens,
 			tokenEstimate.ImageOutputTokens,
-			pricing,
+			pricingForBilling,
 			groupRatio,
 		)
 		if snapshotErr != nil {
@@ -463,7 +477,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		logger.Debugf(
 			ctx,
 			"[image_token_estimate] model=%s prompt_tokens=%d image_output_tokens=%d size=%s quality=%s count=%d",
-			strings.TrimSpace(pricing.Model),
+			strings.TrimSpace(pricingForBilling.Model),
 			tokenEstimate.PromptTokens,
 			tokenEstimate.ImageOutputTokens,
 			strings.TrimSpace(imageRequest.Size),
