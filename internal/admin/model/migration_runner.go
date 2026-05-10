@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -732,6 +733,40 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 					return err
 				}
 				return tx.AutoMigrate(&ChannelModelEndpointPolicy{})
+			},
+		},
+		{
+			Version:     "202605101700_channel_api_base_url_backfill",
+			Description: "backfill channel config.api_base_url from legacy channels.base_url",
+			Up: func(tx *gorm.DB) error {
+				rows := make([]Channel, 0)
+				if err := tx.Select("id", "base_url", "config").Find(&rows).Error; err != nil {
+					return err
+				}
+				for _, row := range rows {
+					legacyBaseURL := normalizeConfiguredBaseURL(row.GetBaseURL())
+					if legacyBaseURL == "" {
+						continue
+					}
+					cfg, err := row.LoadConfig()
+					if err != nil {
+						return err
+					}
+					if cfg.GetAPIBaseURL() != "" {
+						continue
+					}
+					cfg.APIBaseURL = legacyBaseURL
+					raw, err := json.Marshal(cfg)
+					if err != nil {
+						return err
+					}
+					if err := tx.Model(&Channel{}).
+						Where("id = ?", row.Id).
+						Update("config", strings.TrimSpace(string(raw))).Error; err != nil {
+						return err
+					}
+				}
+				return nil
 			},
 		},
 	}
