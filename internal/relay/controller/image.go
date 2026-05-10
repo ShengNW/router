@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +26,142 @@ import (
 	"github.com/yeying-community/router/internal/relay/imagerule"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
+	"github.com/yeying-community/router/internal/relay/relaymode"
 )
+
+type traditionalImageTokenEstimate struct {
+	PromptTokens      int
+	ImageOutputTokens int
+}
+
+const (
+	imageUsageSourceLocalEstimate             = "local_estimate"
+	imageEstimateSourceTraditionalImageTokens = "traditional_image_tokens_local"
+	imageEstimateSourceImageCountRatio        = "image_count_ratio"
+	imageSettlementModeEstimateOnly           = "estimate_only"
+	imageSettlementModeLocalEstimateFinal     = "local_estimate_final"
+)
+
+func validateImageBillingPricing(pricing adminmodel.ResolvedModelPricing) error {
+	switch billing.ResolveImageBillingMode(pricing) {
+	case billing.ImageBillingModePerImage, billing.ImageBillingModePerCall:
+		return nil
+	case billing.ImageBillingModeTokenBased:
+		if !supportsTraditionalImageTokenBilling(pricing) {
+			return fmt.Errorf("image billing strategy is not supported for model %s with price_unit %s on traditional image endpoints", strings.TrimSpace(pricing.Model), strings.TrimSpace(pricing.PriceUnit))
+		}
+		if _, err := resolveTraditionalImagePromptInputPrice(pricing); err != nil {
+			return err
+		}
+		if pricing.OutputPrice <= 0 {
+			return fmt.Errorf("traditional image token billing output price is not configured for model %s", strings.TrimSpace(pricing.Model))
+		}
+		return nil
+	default:
+		return fmt.Errorf("image billing strategy is not supported for model %s with price_unit %s on traditional image endpoints", strings.TrimSpace(pricing.Model), strings.TrimSpace(pricing.PriceUnit))
+	}
+}
+
+func supportsTraditionalImageTokenBilling(pricing adminmodel.ResolvedModelPricing) bool {
+	if billing.ResolveImageBillingMode(pricing) != billing.ImageBillingModeTokenBased {
+		return false
+	}
+	modelName := strings.TrimSpace(strings.ToLower(pricing.Model))
+	return strings.HasPrefix(modelName, "gpt-image-")
+}
+
+func normalizeTraditionalImageBillingSize(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", "auto":
+		return "1024x1024"
+	case "1024x1024", "1024x1536", "1536x1024":
+		return strings.TrimSpace(strings.ToLower(raw))
+	default:
+		return ""
+	}
+}
+
+func normalizeTraditionalImageBillingQuality(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", "auto":
+		return "high"
+	case "low", "medium", "high":
+		return strings.TrimSpace(strings.ToLower(raw))
+	default:
+		return ""
+	}
+}
+
+func resolveTraditionalImagePromptInputPrice(pricing adminmodel.ResolvedModelPricing) (float64, error) {
+	if pricing.HasChannelInputPriceOverride && pricing.InputPrice > 0 {
+		return pricing.InputPrice, nil
+	}
+	for _, component := range pricing.PriceComponents {
+		if strings.TrimSpace(strings.ToLower(component.Component)) != adminmodel.ProviderModelPriceComponentText {
+			continue
+		}
+		if component.InputPrice > 0 {
+			return component.InputPrice, nil
+		}
+	}
+	return 0, fmt.Errorf("traditional image token billing text input price is not configured for model %s", strings.TrimSpace(pricing.Model))
+}
+
+func estimateTraditionalImageOutputTokens(modelName string, size string, quality string, imageCount int) (int, error) {
+	if imageCount <= 0 {
+		return 0, nil
+	}
+	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(modelName)), "gpt-image-") {
+		return 0, fmt.Errorf("traditional image token estimate is not supported for model %s", strings.TrimSpace(modelName))
+	}
+	normalizedSize := normalizeTraditionalImageBillingSize(size)
+	if normalizedSize == "" {
+		return 0, fmt.Errorf("unsupported image size %q for traditional token billing", strings.TrimSpace(size))
+	}
+	normalizedQuality := normalizeTraditionalImageBillingQuality(quality)
+	if normalizedQuality == "" {
+		return 0, fmt.Errorf("unsupported image quality %q for traditional token billing", strings.TrimSpace(quality))
+	}
+	tokenTable := map[string]map[string]int{
+		"low": {
+			"1024x1024": 272,
+			"1024x1536": 408,
+			"1536x1024": 400,
+		},
+		"medium": {
+			"1024x1024": 1056,
+			"1024x1536": 1584,
+			"1536x1024": 1568,
+		},
+		"high": {
+			"1024x1024": 4160,
+			"1024x1536": 6240,
+			"1536x1024": 6208,
+		},
+	}
+	perImageTokens := tokenTable[normalizedQuality][normalizedSize]
+	if perImageTokens <= 0 {
+		return 0, fmt.Errorf("traditional image token estimate is not configured for size=%s quality=%s", normalizedSize, normalizedQuality)
+	}
+	return perImageTokens * imageCount, nil
+}
+
+func estimateTraditionalImageTokenUsage(imageRequest *relaymodel.ImageRequest, pricing adminmodel.ResolvedModelPricing, imageCount int) (traditionalImageTokenEstimate, error) {
+	if imageRequest == nil {
+		return traditionalImageTokenEstimate{}, errors.New("image request is nil")
+	}
+	if !supportsTraditionalImageTokenBilling(pricing) {
+		return traditionalImageTokenEstimate{}, fmt.Errorf("traditional image token billing is not supported for model %s", strings.TrimSpace(pricing.Model))
+	}
+	outputTokens, err := estimateTraditionalImageOutputTokens(pricing.Model, imageRequest.Size, imageRequest.Quality, imageCount)
+	if err != nil {
+		return traditionalImageTokenEstimate{}, err
+	}
+	return traditionalImageTokenEstimate{
+		PromptTokens:      openai.CountTokenText(strings.TrimSpace(imageRequest.Prompt), strings.TrimSpace(pricing.Model)),
+		ImageOutputTokens: outputTokens,
+	}, nil
+}
 
 func getImageRequest(c *gin.Context, _ int) (*relaymodel.ImageRequest, error) {
 	imageRequest := &relaymodel.ImageRequest{}
@@ -42,6 +179,126 @@ func getImageRequest(c *gin.Context, _ int) (*relaymodel.ImageRequest, error) {
 		imageRequest.Model = "dall-e-2"
 	}
 	return imageRequest, nil
+}
+
+func getImageEditRequest(c *gin.Context) (*relaymodel.ImageRequest, *multipart.Form, error) {
+	if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
+		return nil, nil, err
+	}
+	form := c.Request.MultipartForm
+	if form == nil {
+		return nil, nil, errors.New("multipart form is required")
+	}
+	imageRequest := &relaymodel.ImageRequest{
+		Model:          strings.TrimSpace(c.Request.FormValue("model")),
+		Prompt:         strings.TrimSpace(c.Request.FormValue("prompt")),
+		Size:           strings.TrimSpace(c.Request.FormValue("size")),
+		Quality:        strings.TrimSpace(c.Request.FormValue("quality")),
+		ResponseFormat: strings.TrimSpace(c.Request.FormValue("response_format")),
+		Style:          strings.TrimSpace(c.Request.FormValue("style")),
+		User:           strings.TrimSpace(c.Request.FormValue("user")),
+	}
+	if rawN := strings.TrimSpace(c.Request.FormValue("n")); rawN != "" {
+		n, err := strconv.Atoi(rawN)
+		if err != nil {
+			return nil, nil, err
+		}
+		imageRequest.N = n
+	}
+	if imageRequest.N == 0 {
+		imageRequest.N = 1
+	}
+	if len(form.File["image"]) == 0 {
+		return nil, nil, errors.New("image file is required")
+	}
+	return imageRequest, form, nil
+}
+
+func buildMultipartImageEditBody(form *multipart.Form, imageRequest *relaymodel.ImageRequest) (*bytes.Buffer, string, error) {
+	if form == nil {
+		return nil, "", errors.New("multipart form is required")
+	}
+	if imageRequest == nil {
+		return nil, "", errors.New("image request is nil")
+	}
+	bodyBuffer := &bytes.Buffer{}
+	writer := multipart.NewWriter(bodyBuffer)
+	knownFields := map[string]struct{}{
+		"model":           {},
+		"prompt":          {},
+		"n":               {},
+		"size":            {},
+		"quality":         {},
+		"response_format": {},
+		"style":           {},
+		"user":            {},
+	}
+	writeField := func(key string, value string) error {
+		if strings.TrimSpace(value) == "" {
+			return nil
+		}
+		return writer.WriteField(key, value)
+	}
+	if err := writeField("model", imageRequest.Model); err != nil {
+		return nil, "", err
+	}
+	if err := writeField("prompt", imageRequest.Prompt); err != nil {
+		return nil, "", err
+	}
+	if imageRequest.N > 0 {
+		if err := writer.WriteField("n", strconv.Itoa(imageRequest.N)); err != nil {
+			return nil, "", err
+		}
+	}
+	if err := writeField("size", imageRequest.Size); err != nil {
+		return nil, "", err
+	}
+	if err := writeField("quality", imageRequest.Quality); err != nil {
+		return nil, "", err
+	}
+	if err := writeField("response_format", imageRequest.ResponseFormat); err != nil {
+		return nil, "", err
+	}
+	if err := writeField("style", imageRequest.Style); err != nil {
+		return nil, "", err
+	}
+	if err := writeField("user", imageRequest.User); err != nil {
+		return nil, "", err
+	}
+	for key, values := range form.Value {
+		if _, known := knownFields[key]; known {
+			continue
+		}
+		for _, value := range values {
+			if err := writer.WriteField(key, value); err != nil {
+				return nil, "", err
+			}
+		}
+	}
+	for fieldName, files := range form.File {
+		for _, header := range files {
+			src, err := header.Open()
+			if err != nil {
+				return nil, "", err
+			}
+			part, err := writer.CreateFormFile(fieldName, header.Filename)
+			if err != nil {
+				_ = src.Close()
+				return nil, "", err
+			}
+			if _, err := io.Copy(part, src); err != nil {
+				_ = src.Close()
+				return nil, "", err
+			}
+			if err := src.Close(); err != nil {
+				return nil, "", err
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", err
+	}
+	return bodyBuffer, writer.FormDataContentType(), nil
 }
 
 func isValidImageSize(model string, size string) bool {
@@ -109,7 +366,16 @@ func getImageCostRatio(imageRequest *relaymodel.ImageRequest) (float64, error) {
 func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatusCode {
 	ctx := c.Request.Context()
 	meta := meta.GetByContext(c)
-	imageRequest, err := getImageRequest(c, meta.Mode)
+	var (
+		imageRequest *relaymodel.ImageRequest
+		form         *multipart.Form
+		err          error
+	)
+	if relayMode == relaymode.ImagesEdits {
+		imageRequest, form, err = getImageEditRequest(c)
+	} else {
+		imageRequest, err = getImageRequest(c, meta.Mode)
+	}
 	if err != nil {
 		logger.Errorf(ctx, "image relay get request failed user_id=%s group=%s channel_id=%s endpoint=%s err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), c.Request.URL.Path, err.Error())
 		return openai.ErrorWrapper(err, "invalid_image_request", http.StatusBadRequest)
@@ -155,9 +421,19 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	if pricing.MatchedComponent != "" {
 		imageCostRatio = 1
 	}
+	if billingErr := validateImageBillingPricing(pricing); billingErr != nil {
+		return openai.ErrorWrapper(billingErr, "unsupported_image_billing", http.StatusServiceUnavailable)
+	}
 
 	var requestBody io.Reader
-	if isModelMapped || meta.ChannelProtocol == relaychannel.Azure { // make Azure channel request body
+	if relayMode == relaymode.ImagesEdits {
+		requestBodyBuffer, contentType, buildErr := buildMultipartImageEditBody(form, imageRequest)
+		if buildErr != nil {
+			return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+		}
+		c.Request.Header.Set("Content-Type", contentType)
+		requestBody = bytes.NewBuffer(requestBodyBuffer.Bytes())
+	} else if isModelMapped || meta.ChannelProtocol == relaychannel.Azure { // make Azure channel request body
 		jsonStr, err := json.Marshal(imageRequest)
 		if err != nil {
 			return openai.ErrorWrapper(err, "marshal_image_request_failed", http.StatusInternalServerError)
@@ -174,34 +450,78 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	adaptor.Init(meta)
 
 	// these adaptors need to convert the request
-	switch meta.ChannelProtocol {
-	case relaychannel.Zhipu,
-		relaychannel.Ali,
-		relaychannel.Replicate,
-		relaychannel.Baidu:
-		finalRequest, err := adaptor.ConvertImageRequest(imageRequest)
-		if err != nil {
-			return openai.ErrorWrapper(err, "convert_image_request_failed", http.StatusInternalServerError)
+	if relayMode != relaymode.ImagesEdits {
+		switch meta.ChannelProtocol {
+		case relaychannel.Zhipu,
+			relaychannel.Ali,
+			relaychannel.Replicate,
+			relaychannel.Baidu:
+			finalRequest, err := adaptor.ConvertImageRequest(imageRequest)
+			if err != nil {
+				return openai.ErrorWrapper(err, "convert_image_request_failed", http.StatusInternalServerError)
+			}
+			jsonStr, err := json.Marshal(finalRequest)
+			if err != nil {
+				return openai.ErrorWrapper(err, "marshal_image_request_failed", http.StatusInternalServerError)
+			}
+			requestBody = bytes.NewBuffer(jsonStr)
 		}
-		jsonStr, err := json.Marshal(finalRequest)
-		if err != nil {
-			return openai.ErrorWrapper(err, "marshal_image_request_failed", http.StatusInternalServerError)
-		}
-		requestBody = bytes.NewBuffer(jsonStr)
 	}
 
 	imageCount := imageRequest.N
 	if meta.ChannelProtocol == relaychannel.Replicate {
 		imageCount = 1
 	}
-	quota, err := billing.ComputeImageQuota(imageCount, imageCostRatio, pricing, groupRatio)
-	if err != nil {
-		return openai.ErrorWrapper(err, "calculate_image_quota_failed", http.StatusInternalServerError)
+	billingSnapshot := billing.BillingSnapshot{}
+	switch billing.ResolveImageBillingMode(pricing) {
+	case billing.ImageBillingModeTokenBased:
+		tokenEstimate, estimateErr := estimateTraditionalImageTokenUsage(imageRequest, pricing, imageCount)
+		if estimateErr != nil {
+			return openai.ErrorWrapper(estimateErr, "calculate_image_quota_failed", http.StatusInternalServerError)
+		}
+		promptInputPrice, promptPriceErr := resolveTraditionalImagePromptInputPrice(pricing)
+		if promptPriceErr != nil {
+			return openai.ErrorWrapper(promptPriceErr, "calculate_image_quota_failed", http.StatusInternalServerError)
+		}
+		pricingForBilling := pricing
+		pricingForBilling.InputPrice = promptInputPrice
+		var snapshotErr error
+		billingSnapshot, snapshotErr = billing.ComputeTraditionalImageTokenBasedBillingSnapshot(
+			tokenEstimate.PromptTokens,
+			tokenEstimate.ImageOutputTokens,
+			pricingForBilling,
+			groupRatio,
+		)
+		if snapshotErr != nil {
+			return openai.ErrorWrapper(snapshotErr, "calculate_image_quota_failed", http.StatusInternalServerError)
+		}
+		billingSnapshot.PricingSource = strings.TrimSpace(pricing.Source)
+		billingSnapshot.UsageSource = imageUsageSourceLocalEstimate
+		billingSnapshot.EstimateSource = imageEstimateSourceTraditionalImageTokens
+		billingSnapshot.SettlementMode = imageSettlementModeLocalEstimateFinal
+		logger.Debugf(
+			ctx,
+			"[image_token_estimate] model=%s prompt_tokens=%d image_output_tokens=%d size=%s quality=%s count=%d",
+			strings.TrimSpace(pricingForBilling.Model),
+			tokenEstimate.PromptTokens,
+			tokenEstimate.ImageOutputTokens,
+			strings.TrimSpace(imageRequest.Size),
+			strings.TrimSpace(imageRequest.Quality),
+			imageCount,
+		)
+	default:
+		var snapshotErr error
+		billingSnapshot, snapshotErr = billing.ComputeImageBillingSnapshot(imageCount, imageCostRatio, pricing, groupRatio)
+		if snapshotErr != nil {
+			logger.Errorf(ctx, "image billing snapshot failed user_id=%s group=%s channel_id=%s model=%s image_count=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), imageCount, snapshotErr.Error())
+			return openai.ErrorWrapper(snapshotErr, "calculate_image_quota_failed", http.StatusInternalServerError)
+		}
+		billingSnapshot.PricingSource = strings.TrimSpace(pricing.Source)
+		billingSnapshot.UsageSource = ""
+		billingSnapshot.EstimateSource = imageEstimateSourceImageCountRatio
+		billingSnapshot.SettlementMode = imageSettlementModeEstimateOnly
 	}
-	billingSnapshot, snapshotErr := billing.ComputeImageBillingSnapshot(imageCount, imageCostRatio, pricing, groupRatio)
-	if snapshotErr != nil {
-		logger.Errorf(ctx, "image billing snapshot failed user_id=%s group=%s channel_id=%s model=%s image_count=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), imageCount, snapshotErr.Error())
-	}
+	quota := billingSnapshot.YYCAmount
 	billingPlan, quotaErr := reserveRelayQuota(ctx, meta.Group, meta.UserId, quota)
 	if quotaErr != nil {
 		return quotaErr
@@ -278,29 +598,27 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 				}
 			}
 		}
-		if quota != 0 {
-			tokenName := c.GetString(ctxkey.TokenName)
-			billingSnapshot.YYCAmount = quota
-			entry := &model.Log{
-				UserId:             meta.UserId,
-				GroupId:            meta.Group,
-				ChannelId:          meta.ChannelId,
-				PromptTokens:       0,
-				CompletionTokens:   0,
-				ModelName:          imageRequest.Model,
-				TokenName:          tokenName,
-				Quota:              int(quota),
-				BillingSource:      model.ResolveConsumeLogBillingSource(billingPlan.ChargeUserBalance()),
-				UserDailyQuota:     userDailyQuota,
-				UserEmergencyQuota: userEmergencyQuota,
-				Content:            billing.FormatPricingLog(pricing, groupRatio),
-			}
-			billingSnapshot.ApplyToLog(entry)
-			model.RecordConsumeLog(ctx, entry)
-			model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
-			channelId := c.GetString(ctxkey.ChannelId)
-			model.UpdateChannelUsedQuota(channelId, quota)
+		tokenName := c.GetString(ctxkey.TokenName)
+		billingSnapshot.YYCAmount = quota
+		entry := &model.Log{
+			UserId:             meta.UserId,
+			GroupId:            meta.Group,
+			ChannelId:          meta.ChannelId,
+			PromptTokens:       int(billingSnapshot.InputQuantity),
+			CompletionTokens:   int(billingSnapshot.OutputQuantity),
+			ModelName:          imageRequest.Model,
+			TokenName:          tokenName,
+			Quota:              int(quota),
+			BillingSource:      model.ResolveConsumeLogBillingSource(billingPlan.ChargeUserBalance()),
+			UserDailyQuota:     userDailyQuota,
+			UserEmergencyQuota: userEmergencyQuota,
+			Content:            billing.FormatPricingLog(pricing, groupRatio),
 		}
+		billingSnapshot.ApplyToLog(entry)
+		model.RecordConsumeLog(ctx, entry)
+		model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
+		channelId := c.GetString(ctxkey.ChannelId)
+		model.UpdateChannelUsedQuota(channelId, quota)
 	}(c.Request.Context())
 	groupQuotaSettled = true
 

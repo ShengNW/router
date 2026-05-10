@@ -17,7 +17,6 @@ import (
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay"
 	"github.com/yeying-community/router/internal/relay/adaptor"
-	"github.com/yeying-community/router/internal/relay/adaptor/anthropic"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	"github.com/yeying-community/router/internal/relay/apitype"
 	"github.com/yeying-community/router/internal/relay/billing"
@@ -140,6 +139,11 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		strings.TrimSpace(meta.OriginModelName),
 		strings.TrimSpace(c.Request.URL.Path),
 	)
+	responsesImageTools, responsesImageToolsErr := parseResponsesImageToolSpecs(rawRequestBody)
+	if responsesImageToolsErr != nil {
+		logger.Errorf(ctx, "parse responses image tools failed: %s", responsesImageToolsErr.Error())
+		return openai.ErrorWrapper(responsesImageToolsErr, "parse_responses_image_tools_failed", http.StatusBadRequest)
+	}
 	groupReservedQuota, err := billing.ComputeTextPreConsumedQuota(promptTokens, textRequest.MaxTokens, pricing, groupRatio)
 	if err != nil {
 		logger.Errorf(ctx, "ComputeTextPreConsumedQuota failed: %s", err.Error())
@@ -160,15 +164,6 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	if bizErr != nil {
 		logger.Warnf(ctx, "preConsumeQuota failed: %+v", *bizErr)
 		return bizErr
-	}
-
-	if meta.Mode == relaymode.Messages {
-		bridgedRequest, bridgeErr := anthropic.ParseMessagesRequestToGeneralOpenAIRequest(rawRequestBody)
-		if bridgeErr != nil {
-			return openai.ErrorWrapper(bridgeErr, "convert_request_failed", http.StatusBadRequest)
-		}
-		bridgedRequest.Model = textRequest.Model
-		textRequest = bridgedRequest
 	}
 
 	upstreamRequest, err := convertTextRequestForUpstream(textRequest, meta.Mode, upstreamMode)
@@ -209,7 +204,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		return respErr
 	}
 	// post-consume quota
-	go postConsumeQuota(ctx, usage, meta, upstreamRequest, pricing, preConsumedQuota, groupRatio, false, billingPlan.ChargeUserBalance(), packageReservation)
+	go postConsumeQuota(ctx, usage, meta, upstreamRequest, pricing, preConsumedQuota, groupRatio, estimateResult, responsesImageTools, false, billingPlan.ChargeUserBalance(), packageReservation)
 	groupQuotaSettled = true
 	return nil
 }
@@ -391,6 +386,8 @@ func relayModeLabel(mode int) string {
 		return "audio_translation"
 	case relaymode.AudioTranscription:
 		return "audio_transcription"
+	case relaymode.Realtime:
+		return "realtime"
 	case relaymode.Videos:
 		return "videos"
 	default:

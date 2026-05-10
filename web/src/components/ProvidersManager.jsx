@@ -29,7 +29,8 @@ const PROVIDER_ENDPOINT_SORT_ORDER = {
   '/v1/images/edits': 50,
   '/v1/batches': 60,
   '/v1/audio/speech': 70,
-  '/v1/videos': 80,
+  '/v1/realtime': 80,
+  '/v1/videos': 90,
 };
 
 const normalizeProvider = (provider) => {
@@ -197,6 +198,9 @@ const normalizeProviderEndpoint = (endpoint) => {
   if (normalized.startsWith('/v1/audio/')) {
     return '/v1/audio/speech';
   }
+  if (normalized.startsWith('/v1/realtime')) {
+    return '/v1/realtime';
+  }
   if (normalized.startsWith('/v1/videos')) {
     return '/v1/videos';
   }
@@ -214,16 +218,14 @@ const isProviderEndpointAllowedForType = (type, endpoint) => {
         '/v1/batches',
       ].includes(endpoint);
     case 'audio':
-      return endpoint === '/v1/audio/speech';
+      return endpoint === '/v1/audio/speech' || endpoint === '/v1/realtime';
     case 'video':
       return endpoint === '/v1/videos';
     case 'text':
     default:
-      return [
-        '/v1/chat/completions',
-        '/v1/responses',
-        '/v1/messages',
-      ].includes(endpoint);
+      return ['/v1/chat/completions', '/v1/responses', '/v1/messages'].includes(
+        endpoint,
+      );
   }
 };
 
@@ -582,6 +584,16 @@ const formatProviderPriceCellValue = (value) => {
   return Number.isFinite(normalized) && normalized > 0 ? normalized : '-';
 };
 
+const isComponentBasedPricing = (detail) =>
+  Array.isArray(detail?.price_components) && detail.price_components.length > 0;
+
+const summarizeModelPriceUnit = (detail, t) => {
+  if (isComponentBasedPricing(detail)) {
+    return '-';
+  }
+  return detail?.price_unit || '-';
+};
+
 const hasComplexInputPricing = (detail) =>
   Array.isArray(detail?.price_components) &&
   detail.price_components.some(
@@ -677,8 +689,7 @@ const ProvidersManager = () => {
   const setCreateValue = (key, value) => {
     setCreateRow((prev) => ({
       ...prev,
-      [key]:
-        typeof value === 'function' ? value(prev[key], prev) : value,
+      [key]: typeof value === 'function' ? value(prev[key], prev) : value,
     }));
   };
 
@@ -752,8 +763,7 @@ const ProvidersManager = () => {
   const setDetailModelsValue = (key, value) => {
     setDetailModelsDraft((prev) => ({
       ...prev,
-      [key]:
-        typeof value === 'function' ? value(prev[key], prev) : value,
+      [key]: typeof value === 'function' ? value(prev[key], prev) : value,
     }));
   };
 
@@ -773,8 +783,7 @@ const ProvidersManager = () => {
       if (index < 0 || index >= details.length) return details;
       const next = { ...details[index] };
       if (key === 'input_price' || key === 'output_price') {
-        next[key] =
-          value === null || value === undefined ? '' : `${value}`;
+        next[key] = value === null || value === undefined ? '' : `${value}`;
       } else if (key === 'currency') {
         next[key] = (value || '').toUpperCase();
       } else if (key === 'source') {
@@ -838,8 +847,7 @@ const ProvidersManager = () => {
       }
       const next = { ...components[componentIndex] };
       if (key === 'input_price' || key === 'output_price') {
-        next[key] =
-          value === null || value === undefined ? '' : `${value}`;
+        next[key] = value === null || value === undefined ? '' : `${value}`;
       } else if (key === 'sort_order') {
         next[key] = value === null || value === undefined ? '' : `${value}`;
       } else if (key === 'currency') {
@@ -1111,7 +1119,9 @@ const ProvidersManager = () => {
     }
     const nextDetails = [
       createEmptyModelDetail(''),
-      ...(Array.isArray(sourceRow.model_details) ? sourceRow.model_details : []),
+      ...(Array.isArray(sourceRow.model_details)
+        ? sourceRow.model_details
+        : []),
     ];
     setDetailEditingSection('models');
     setDetailModelsDraft({
@@ -1130,7 +1140,8 @@ const ProvidersManager = () => {
       ? detailModelsDraft.model_details
       : [];
     const currentDetail =
-      detailEditingModelIndex >= 0 && detailEditingModelIndex < currentDetails.length
+      detailEditingModelIndex >= 0 &&
+      detailEditingModelIndex < currentDetails.length
         ? cloneModelDetail(currentDetails[detailEditingModelIndex])
         : null;
     if (!currentDetail?.model) {
@@ -1156,7 +1167,9 @@ const ProvidersManager = () => {
       }
       if (
         typeof window !== 'undefined' &&
-        !window.confirm(t('channel.providers.model_detail_table.delete_confirm'))
+        !window.confirm(
+          t('channel.providers.model_detail_table.delete_confirm'),
+        )
       ) {
         return;
       }
@@ -1288,7 +1301,9 @@ const ProvidersManager = () => {
     if (section === 'models') {
       normalizedRow = {
         ...normalizedRow,
-        model_details: normalizeModelDetails(detailModelsDraft.model_details || []),
+        model_details: normalizeModelDetails(
+          detailModelsDraft.model_details || [],
+        ),
       };
     }
     const saved = await saveProvider(
@@ -2071,7 +2086,7 @@ const ProvidersManager = () => {
                             <Label
                               key={`${detail.model || 'model'}-${endpoint}`}
                               basic
-                              className='router-tag'
+                              className='router-tag router-provider-endpoint-tag'
                             >
                               {endpoint}
                             </Label>
@@ -2107,7 +2122,7 @@ const ProvidersManager = () => {
                       )}
                     </Table.Cell>
                     <Table.Cell className='router-cell-min-120'>
-                      {detail.price_unit || '-'}
+                      {summarizeModelPriceUnit(detail, t)}
                     </Table.Cell>
                     <Table.Cell>{detail.currency || 'USD'}</Table.Cell>
                     <Table.Cell>{detail.source || 'manual'}</Table.Cell>
@@ -2236,7 +2251,9 @@ const ProvidersManager = () => {
             </Form.Group>
             <Form.Dropdown
               className='router-section-dropdown'
-              label={t('channel.providers.model_detail_table.supported_endpoints')}
+              label={t(
+                'channel.providers.model_detail_table.supported_endpoints',
+              )}
               fluid
               multiple
               selection
@@ -2696,56 +2713,54 @@ const ProvidersManager = () => {
             </Table.Row>
           ) : (
             rows.map((row, index) => (
-                <Table.Row
-                  key={`${row.id}-${index}`}
-                  onClick={() => {
-                    openViewer(row);
-                  }}
-                  className={
-                    creating || saving
-                      ? undefined
-                      : 'router-row-clickable'
-                  }
-                >
-                  <Table.Cell>{row.id || '-'}</Table.Cell>
-                  <Table.Cell>{row.name || row.id || '-'}</Table.Cell>
-                  <Table.Cell textAlign='left'>
-                    {row.created_at ? timestamp2string(row.created_at) : '-'}
-                  </Table.Cell>
-                  <Table.Cell textAlign='left'>
-                    {row.updated_at ? timestamp2string(row.updated_at) : '-'}
-                  </Table.Cell>
-                  <Table.Cell textAlign='left' className='router-nowrap'>
-                    <Button
-                      type='button'
-                      className='router-inline-button'
-                      icon
-                      color='blue'
-                      disabled={creating || saving}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openViewer(row);
-                        startDetailSectionEdit('basic', row);
-                      }}
-                    >
-                      <Icon name='edit' />
-                    </Button>
-                    <Button
-                      type='button'
-                      className='router-inline-button'
-                      icon
-                      color='red'
-                      disabled={creating || saving}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDeleteModal(row);
-                      }}
-                    >
-                      <Icon name='trash' />
-                    </Button>
-                  </Table.Cell>
-                </Table.Row>
-              ))
+              <Table.Row
+                key={`${row.id}-${index}`}
+                onClick={() => {
+                  openViewer(row);
+                }}
+                className={
+                  creating || saving ? undefined : 'router-row-clickable'
+                }
+              >
+                <Table.Cell>{row.id || '-'}</Table.Cell>
+                <Table.Cell>{row.name || row.id || '-'}</Table.Cell>
+                <Table.Cell textAlign='left'>
+                  {row.created_at ? timestamp2string(row.created_at) : '-'}
+                </Table.Cell>
+                <Table.Cell textAlign='left'>
+                  {row.updated_at ? timestamp2string(row.updated_at) : '-'}
+                </Table.Cell>
+                <Table.Cell textAlign='left' className='router-nowrap'>
+                  <Button
+                    type='button'
+                    className='router-inline-button'
+                    icon
+                    color='blue'
+                    disabled={creating || saving}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openViewer(row);
+                      startDetailSectionEdit('basic', row);
+                    }}
+                  >
+                    <Icon name='edit' />
+                  </Button>
+                  <Button
+                    type='button'
+                    className='router-inline-button'
+                    icon
+                    color='red'
+                    disabled={creating || saving}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDeleteModal(row);
+                    }}
+                  >
+                    <Icon name='trash' />
+                  </Button>
+                </Table.Cell>
+              </Table.Row>
+            ))
           )}
         </Table.Body>
       </Table>
@@ -2773,10 +2788,7 @@ const ProvidersManager = () => {
       <div className='router-provider-detail-page'>
         <div className='router-provider-detail-breadcrumb'>
           <Breadcrumb size='small'>
-            <Breadcrumb.Section
-              link
-              onClick={closeViewer}
-            >
+            <Breadcrumb.Section link onClick={closeViewer}>
               {t('header.providers')}
             </Breadcrumb.Section>
             <Breadcrumb.Divider icon='right chevron' />
@@ -2862,7 +2874,9 @@ const ProvidersManager = () => {
                   <Form.Input
                     className='router-section-input'
                     label={t('channel.providers.dialog.base_url')}
-                    placeholder={t('channel.providers.dialog.base_url_placeholder')}
+                    placeholder={t(
+                      'channel.providers.dialog.base_url_placeholder',
+                    )}
                     value={detailBasicDraft.base_url}
                     onChange={(e, { value }) =>
                       setDetailBasicValue('base_url', value || '')
@@ -2908,7 +2922,9 @@ const ProvidersManager = () => {
                   className='router-section-input'
                   label={t('channel.providers.table.created_at')}
                   value={
-                    viewRow.created_at ? timestamp2string(viewRow.created_at) : '-'
+                    viewRow.created_at
+                      ? timestamp2string(viewRow.created_at)
+                      : '-'
                   }
                   readOnly
                 />
@@ -2916,7 +2932,9 @@ const ProvidersManager = () => {
                   className='router-section-input'
                   label={t('channel.providers.table.updated_at')}
                   value={
-                    viewRow.updated_at ? timestamp2string(viewRow.updated_at) : '-'
+                    viewRow.updated_at
+                      ? timestamp2string(viewRow.updated_at)
+                      : '-'
                   }
                   readOnly
                 />
@@ -3069,11 +3087,11 @@ const ProvidersManager = () => {
           <Button
             type='button'
             className='router-modal-button'
-          color='red'
-          loading={saving}
-          disabled={saving}
-          onClick={confirmDeleteRow}
-        >
+            color='red'
+            loading={saving}
+            disabled={saving}
+            onClick={confirmDeleteRow}
+          >
             {t('channel.providers.dialog.delete_confirm')}
           </Button>
         </Modal.Actions>
@@ -3120,12 +3138,22 @@ const ProvidersManager = () => {
           <Table.Body>
             <Table.Row>
               <Table.Cell>
-                {formatProviderPriceCellValue(pricingDetailModel?.input_price)}
+                {isComponentBasedPricing(pricingDetailModel)
+                  ? t('channel.providers.model_detail_table.component_based')
+                  : formatProviderPriceCellValue(
+                      pricingDetailModel?.input_price,
+                    )}
               </Table.Cell>
               <Table.Cell>
-                {formatProviderPriceCellValue(pricingDetailModel?.output_price)}
+                {isComponentBasedPricing(pricingDetailModel)
+                  ? t('channel.providers.model_detail_table.component_based')
+                  : formatProviderPriceCellValue(
+                      pricingDetailModel?.output_price,
+                    )}
               </Table.Cell>
-              <Table.Cell>{pricingDetailModel?.price_unit || '-'}</Table.Cell>
+              <Table.Cell>
+                {summarizeModelPriceUnit(pricingDetailModel, t)}
+              </Table.Cell>
               <Table.Cell>{pricingDetailModel?.currency || 'USD'}</Table.Cell>
               <Table.Cell>{pricingDetailModel?.source || 'manual'}</Table.Cell>
             </Table.Row>
@@ -3216,8 +3244,8 @@ const ProvidersManager = () => {
       {creating
         ? renderCreatePanel()
         : viewingProvider && viewRow
-            ? renderViewer()
-            : renderRows()}
+          ? renderViewer()
+          : renderRows()}
     </div>
   );
 };

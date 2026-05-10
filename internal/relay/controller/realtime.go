@@ -1,0 +1,181 @@
+package controller
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/yeying-community/router/common/logger"
+	"github.com/yeying-community/router/common/ctxkey"
+	"github.com/yeying-community/router/internal/relay"
+	"github.com/yeying-community/router/internal/relay/adaptor/openai"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
+	"github.com/yeying-community/router/internal/relay/meta"
+	relaymodel "github.com/yeying-community/router/internal/relay/model"
+)
+
+var realtimeUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func RelayRealtimeHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
+	if c == nil || c.Request == nil {
+		return openai.ErrorWrapper(fmt.Errorf("request context is nil"), "invalid_realtime_request", http.StatusBadRequest)
+	}
+	if !websocket.IsWebSocketUpgrade(c.Request) {
+		return RelayProxyHelper(c, 0)
+	}
+
+	meta := meta.GetByContext(c)
+	adaptor := relay.GetAdaptor(meta.APIType)
+	if adaptor == nil {
+		return openai.ErrorWrapper(fmt.Errorf("invalid api type: %d", meta.APIType), "invalid_api_type", http.StatusBadRequest)
+	}
+	adaptor.Init(meta)
+
+	fullRequestURL, err := adaptor.GetRequestURL(meta)
+	if err != nil {
+		return openai.ErrorWrapper(err, "get_request_url_failed", http.StatusInternalServerError)
+	}
+	upstreamURL, err := normalizeRealtimeWebSocketURL(fullRequestURL)
+	if err != nil {
+		return openai.ErrorWrapper(err, "invalid_realtime_upstream_url", http.StatusInternalServerError)
+	}
+	c.Set(ctxkey.UpstreamURL, upstreamURL)
+
+	clientHeader := cloneRealtimeRequestHeaders(c.Request.Header, meta)
+	dialer := websocket.Dialer{
+		Subprotocols: websocket.Subprotocols(c.Request),
+	}
+	upstreamConn, resp, err := dialer.DialContext(c.Request.Context(), upstreamURL, clientHeader)
+	if err != nil {
+		return wrapRealtimeDialError(err, resp)
+	}
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
+	clientConn, err := realtimeUpgrader.Upgrade(c.Writer, c.Request, realtimeUpgradeHeaders(upstreamConn))
+	if err != nil {
+		_ = upstreamConn.Close()
+		return openai.ErrorWrapper(err, "upgrade_client_websocket_failed", http.StatusBadRequest)
+	}
+
+	pumpRealtimeConnection(c, clientConn, upstreamConn)
+	return nil
+}
+
+func normalizeRealtimeWebSocketURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
+	}
+	switch parsed.Scheme {
+	case "https":
+		parsed.Scheme = "wss"
+	case "http":
+		parsed.Scheme = "ws"
+	case "wss", "ws":
+	default:
+		return "", fmt.Errorf("unsupported upstream scheme: %s", parsed.Scheme)
+	}
+	return parsed.String(), nil
+}
+
+func cloneRealtimeRequestHeaders(header http.Header, relayMeta *meta.Meta) http.Header {
+	cloned := make(http.Header, len(header))
+	for key, values := range header {
+		lower := strings.ToLower(strings.TrimSpace(key))
+		switch lower {
+		case "host", "connection", "upgrade", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "authorization", "api-key":
+			continue
+		}
+		for _, value := range values {
+			cloned.Add(key, value)
+		}
+	}
+	if relayMeta != nil {
+		switch relayMeta.ChannelProtocol {
+		case relaychannel.Azure:
+			cloned.Set("api-key", relayMeta.APIKey)
+		default:
+			if strings.TrimSpace(relayMeta.APIKey) != "" {
+				cloned.Set("Authorization", "Bearer "+relayMeta.APIKey)
+			}
+		}
+	}
+	return cloned
+}
+
+func realtimeUpgradeHeaders(upstreamConn *websocket.Conn) http.Header {
+	header := http.Header{}
+	if upstreamConn == nil {
+		return header
+	}
+	if subprotocol := strings.TrimSpace(upstreamConn.Subprotocol()); subprotocol != "" {
+		header.Set("Sec-WebSocket-Protocol", subprotocol)
+	}
+	return header
+}
+
+func pumpRealtimeConnection(c *gin.Context, clientConn *websocket.Conn, upstreamConn *websocket.Conn) {
+	var once sync.Once
+	closeBoth := func() {
+		once.Do(func() {
+			_ = upstreamConn.Close()
+			_ = clientConn.Close()
+		})
+	}
+	defer closeBoth()
+
+	errCh := make(chan error, 2)
+	go proxyRealtimeFrames(errCh, upstreamConn, clientConn, "upstream_to_client")
+	go proxyRealtimeFrames(errCh, clientConn, upstreamConn, "client_to_upstream")
+
+	err := <-errCh
+	if err != nil && c != nil {
+		logger.Warnf(c.Request.Context(), "[realtime_proxy] channel=%s model=%s err=%v", strings.TrimSpace(c.GetString(ctxkey.ChannelId)), strings.TrimSpace(c.GetString(ctxkey.RequestModel)), err)
+	}
+}
+
+func proxyRealtimeFrames(errCh chan<- error, dst *websocket.Conn, src *websocket.Conn, direction string) {
+	for {
+		messageType, reader, err := src.NextReader()
+		if err != nil {
+			errCh <- fmt.Errorf("%s read failed: %w", direction, err)
+			return
+		}
+		writer, err := dst.NextWriter(messageType)
+		if err != nil {
+			errCh <- fmt.Errorf("%s next writer failed: %w", direction, err)
+			return
+		}
+		if _, err := io.Copy(writer, reader); err != nil {
+			_ = writer.Close()
+			errCh <- fmt.Errorf("%s copy failed: %w", direction, err)
+			return
+		}
+		if err := writer.Close(); err != nil {
+			errCh <- fmt.Errorf("%s writer close failed: %w", direction, err)
+			return
+		}
+	}
+}
+
+func wrapRealtimeDialError(err error, resp *http.Response) *relaymodel.ErrorWithStatusCode {
+	if resp == nil {
+		return openai.ErrorWrapper(err, "dial_realtime_upstream_failed", http.StatusBadGateway)
+	}
+	statusCode := resp.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusBadGateway
+	}
+	return openai.ErrorWrapper(err, "dial_realtime_upstream_failed", statusCode)
+}

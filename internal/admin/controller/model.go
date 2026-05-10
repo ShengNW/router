@@ -123,6 +123,7 @@ var endpointSortOrder = map[string]int{
 	model.ChannelModelEndpointChat:      10,
 	model.ChannelModelEndpointResponses: 20,
 	model.ChannelModelEndpointMessages:  30,
+	model.ChannelModelEndpointRealtime:  35,
 	model.ChannelModelEndpointImages:    40,
 	model.ChannelModelEndpointImageEdit: 50,
 	model.ChannelModelEndpointBatches:   60,

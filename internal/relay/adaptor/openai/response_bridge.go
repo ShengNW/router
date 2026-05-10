@@ -39,6 +39,31 @@ type responsesBridgeEnvelope struct {
 	Usage      *responsesUsage       `json:"usage,omitempty"`
 }
 
+func countResponsesImageGenerationCalls(envelope responsesBridgeEnvelope) int {
+	count := 0
+	for _, item := range envelope.Output {
+		if strings.EqualFold(strings.TrimSpace(item.Type), "image_generation_call") {
+			count++
+		}
+	}
+	return count
+}
+
+func countResponsesImageGenerationCallsFromAny(raw any) int {
+	if raw == nil {
+		return 0
+	}
+	payload, err := json.Marshal(raw)
+	if err != nil {
+		return 0
+	}
+	envelope := responsesBridgeEnvelope{}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return 0
+	}
+	return countResponsesImageGenerationCalls(envelope)
+}
+
 func responseUsageToOpenAI(usage *responsesUsage) *model.Usage {
 	if usage == nil {
 		return nil
@@ -128,6 +153,9 @@ func relayResponsesAsChatResponse(c *gin.Context, resp *http.Response, modelName
 	if usage == nil || usage.TotalTokens == 0 {
 		usage = ResponseText2Usage(responseText, modelName, promptTokens)
 	}
+	if usage != nil {
+		usage.ImageGenerationCalls = countResponsesImageGenerationCalls(envelope)
+	}
 	createdAt := envelope.CreatedAt
 	if createdAt == 0 {
 		createdAt = time.Now().Unix()
@@ -203,7 +231,6 @@ func StreamResponsesAsChatHandler(c *gin.Context, resp *http.Response, modelName
 		} else if envelope.Response.Usage != nil {
 			usage = responseUsageToOpenAI(envelope.Response.Usage)
 		}
-
 		textPayload := responsesStreamTextPayload{}
 		_ = json.Unmarshal([]byte(data), &textPayload)
 		payload := map[string]any{}
@@ -247,6 +274,17 @@ func StreamResponsesAsChatHandler(c *gin.Context, resp *http.Response, modelName
 			}
 			if deltaText == "" {
 				deltaText = textPayload.OutputText
+			}
+		}
+		if usage != nil {
+			if imageCalls := countResponsesImageGenerationCallsFromAny(payload["response"]); imageCalls > usage.ImageGenerationCalls {
+				usage.ImageGenerationCalls = imageCalls
+			}
+			if item, ok := payload["item"]; ok {
+				itemMap, _ := item.(map[string]any)
+				if strings.EqualFold(strings.TrimSpace(fmt.Sprint(itemMap["type"])), "image_generation_call") && usage.ImageGenerationCalls == 0 {
+					usage.ImageGenerationCalls = 1
+				}
 			}
 		}
 		if deltaText != "" {

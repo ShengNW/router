@@ -10,17 +10,34 @@ import (
 )
 
 type BillingSnapshot struct {
-	PriceUnit      string  `json:"price_unit,omitempty"`
-	Currency       string  `json:"currency,omitempty"`
-	GroupRatio     float64 `json:"group_ratio,omitempty"`
-	YYCRate        float64 `json:"yyc_rate,omitempty"`
-	InputQuantity  float64 `json:"input_quantity,omitempty"`
-	OutputQuantity float64 `json:"output_quantity,omitempty"`
-	InputAmount    float64 `json:"input_amount,omitempty"`
-	OutputAmount   float64 `json:"output_amount,omitempty"`
-	Amount         float64 `json:"amount,omitempty"`
-	YYCAmount      int64   `json:"yyc_amount,omitempty"`
+	PriceUnit             string  `json:"price_unit,omitempty"`
+	Currency              string  `json:"currency,omitempty"`
+	PricingSource         string  `json:"pricing_source,omitempty"`
+	UsageSource           string  `json:"usage_source,omitempty"`
+	EstimateSource        string  `json:"estimate_source,omitempty"`
+	SettlementMode        string  `json:"settlement_mode,omitempty"`
+	GroupRatio            float64 `json:"group_ratio,omitempty"`
+	YYCRate               float64 `json:"yyc_rate,omitempty"`
+	InputQuantity         float64 `json:"input_quantity,omitempty"`
+	OutputQuantity        float64 `json:"output_quantity,omitempty"`
+	InputAmount           float64 `json:"input_amount,omitempty"`
+	OutputAmount          float64 `json:"output_amount,omitempty"`
+	Amount                float64 `json:"amount,omitempty"`
+	YYCAmount             int64   `json:"yyc_amount,omitempty"`
+	ImageToolCalls        int     `json:"image_tool_calls,omitempty"`
+	ImageToolOutputTokens int     `json:"image_tool_output_tokens,omitempty"`
+	ImageToolAmount       float64 `json:"image_tool_amount,omitempty"`
+	ImageToolYYCAmount    int64   `json:"image_tool_yyc_amount,omitempty"`
 }
+
+type ImageBillingMode string
+
+const (
+	ImageBillingModeUnsupported ImageBillingMode = "unsupported"
+	ImageBillingModePerImage    ImageBillingMode = "per_image"
+	ImageBillingModePerCall     ImageBillingMode = "per_call"
+	ImageBillingModeTokenBased  ImageBillingMode = "token_based"
+)
 
 func (snapshot BillingSnapshot) ApplyToLog(log *model.Log) {
 	if log == nil {
@@ -28,6 +45,10 @@ func (snapshot BillingSnapshot) ApplyToLog(log *model.Log) {
 	}
 	log.BillingPriceUnit = snapshot.PriceUnit
 	log.BillingCurrency = snapshot.Currency
+	log.BillingPricingSource = snapshot.PricingSource
+	log.BillingUsageSource = snapshot.UsageSource
+	log.BillingEstimateSource = snapshot.EstimateSource
+	log.BillingSettlementMode = snapshot.SettlementMode
 	log.BillingGroupRatio = snapshot.GroupRatio
 	log.BillingYYCRate = snapshot.YYCRate
 	log.BillingInputQuantity = snapshot.InputQuantity
@@ -36,6 +57,10 @@ func (snapshot BillingSnapshot) ApplyToLog(log *model.Log) {
 	log.BillingOutputAmount = snapshot.OutputAmount
 	log.BillingAmount = snapshot.Amount
 	log.BillingYYCAmount = snapshot.YYCAmount
+	log.BillingImageToolCalls = snapshot.ImageToolCalls
+	log.BillingImageToolOutputTokens = snapshot.ImageToolOutputTokens
+	log.BillingImageToolAmount = snapshot.ImageToolAmount
+	log.BillingImageToolYYCAmount = snapshot.ImageToolYYCAmount
 }
 
 func ComputeTextPreConsumedQuota(promptTokens int, maxCompletionTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (int64, error) {
@@ -91,6 +116,70 @@ func ComputeImageQuota(imageCount int, multiplier float64, pricing model.Resolve
 }
 
 func ComputeImageBillingSnapshot(imageCount int, multiplier float64, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+	switch ResolveImageBillingMode(pricing) {
+	case ImageBillingModePerImage:
+		return ComputeImagePerImageBillingSnapshot(imageCount, multiplier, pricing, groupRatio)
+	case ImageBillingModePerCall:
+		return ComputeImagePerCallBillingSnapshot(imageCount, pricing, groupRatio)
+	case ImageBillingModeTokenBased:
+		return BillingSnapshot{}, fmt.Errorf("image token-based billing requires explicit usage for model %s", strings.TrimSpace(pricing.Model))
+	default:
+		return BillingSnapshot{}, fmt.Errorf("unsupported image billing mode for model %s with price_unit %s", strings.TrimSpace(pricing.Model), strings.TrimSpace(pricing.PriceUnit))
+	}
+}
+
+func ComputeTraditionalImageTokenBasedBillingSnapshot(promptTokens int, imageOutputTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+	if ResolveImageBillingMode(pricing) != ImageBillingModeTokenBased {
+		return BillingSnapshot{}, fmt.Errorf("traditional image token-based billing requires token-based pricing for model %s", strings.TrimSpace(pricing.Model))
+	}
+	return buildBillingSnapshot(
+		float64(promptTokens),
+		float64(imageOutputTokens),
+		pricing.InputPrice,
+		pricing.OutputPrice,
+		pricing,
+		groupRatio,
+		promptTokens > 0 || imageOutputTokens > 0,
+	)
+}
+
+func ComputeResponseImageToolTokenBasedBillingSnapshot(imageOutputTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+	if ResolveImageBillingMode(pricing) != ImageBillingModeTokenBased {
+		return BillingSnapshot{}, fmt.Errorf("responses image tool token-based billing requires token-based pricing for model %s", strings.TrimSpace(pricing.Model))
+	}
+	return buildBillingSnapshot(
+		0,
+		float64(imageOutputTokens),
+		0,
+		pricing.OutputPrice,
+		pricing,
+		groupRatio,
+		imageOutputTokens > 0,
+	)
+}
+
+func ResolveImageBillingMode(pricing model.ResolvedModelPricing) ImageBillingMode {
+	switch normalizePriceUnit(pricing.PriceUnit) {
+	case model.ProviderPriceUnitPerImage:
+		return ImageBillingModePerImage
+	case model.ProviderPriceUnitPerRequest, model.ProviderPriceUnitPerTask:
+		return ImageBillingModePerCall
+	case "", model.ProviderPriceUnitPer1KTokens, model.ProviderPriceUnitPer1KChars:
+		return ImageBillingModeTokenBased
+	default:
+		return ImageBillingModeUnsupported
+	}
+}
+
+func ComputeImagePerImageQuota(imageCount int, multiplier float64, pricing model.ResolvedModelPricing, groupRatio float64) (int64, error) {
+	snapshot, err := ComputeImagePerImageBillingSnapshot(imageCount, multiplier, pricing, groupRatio)
+	if err != nil {
+		return 0, err
+	}
+	return snapshot.YYCAmount, nil
+}
+
+func ComputeImagePerImageBillingSnapshot(imageCount int, multiplier float64, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
 	if imageCount <= 0 {
 		return BillingSnapshot{
 			PriceUnit:  normalizePriceUnit(pricing.PriceUnit),
@@ -100,6 +189,25 @@ func ComputeImageBillingSnapshot(imageCount int, multiplier float64, pricing mod
 	}
 	quantity := float64(imageCount) * multiplier
 	return buildSingleSidedBillingSnapshot(quantity, primaryUnitPrice(pricing), pricing, groupRatio)
+}
+
+func ComputeImagePerCallQuota(imageCount int, pricing model.ResolvedModelPricing, groupRatio float64) (int64, error) {
+	snapshot, err := ComputeImagePerCallBillingSnapshot(imageCount, pricing, groupRatio)
+	if err != nil {
+		return 0, err
+	}
+	return snapshot.YYCAmount, nil
+}
+
+func ComputeImagePerCallBillingSnapshot(imageCount int, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+	if imageCount <= 0 {
+		return BillingSnapshot{
+			PriceUnit:  normalizePriceUnit(pricing.PriceUnit),
+			Currency:   normalizeCurrency(pricing.Currency),
+			GroupRatio: groupRatio,
+		}, nil
+	}
+	return buildSingleSidedBillingSnapshot(1, primaryUnitPrice(pricing), pricing, groupRatio)
 }
 
 func ComputeAudioSpeechQuota(charCount int, pricing model.ResolvedModelPricing, groupRatio float64) (int64, error) {

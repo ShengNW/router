@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 
 	"github.com/yeying-community/router/common/client"
@@ -67,12 +68,33 @@ type channelModelTestsRequest struct {
 	TargetModels  []string                     `json:"target_models"`
 	TargetConfigs []channelModelTestTargetItem `json:"target_configs"`
 	TestModel     string                       `json:"test_model,omitempty"`
+	AudioLanguage string                       `json:"audio_language,omitempty"`
 }
 
 type channelModelTestTargetItem struct {
 	Model    string `json:"model"`
 	Endpoint string `json:"endpoint,omitempty"`
 	IsStream *bool  `json:"is_stream,omitempty"`
+}
+
+func normalizeAudioTestLanguage(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "zh", "zh-cn", "zh_hans":
+		return "zh-CN"
+	case "en", "en-us", "en_us":
+		return "en-US"
+	default:
+		return "zh-CN"
+	}
+}
+
+func buildAudioModelTestInput(language string) string {
+	switch normalizeAudioTestLanguage(language) {
+	case "en-US":
+		return "This is Router's voice test."
+	default:
+		return "这是 Router 的语音测试。"
+	}
 }
 
 type channelModelListData struct {
@@ -94,6 +116,8 @@ type channelModelTestExecution struct {
 	LatencyMs          int64
 	IsStream           bool
 	Message            string
+	BaseURL            string
+	RequestURL         string
 	InputPayload       string
 	OutputPayload      string
 	ResponseStatusCode int
@@ -326,18 +350,6 @@ func fetchChannelModelsDetailed(protocol, key, baseURL, providerFilter string) (
 	return modelRows, trace, nil
 }
 
-func resolveChannelBaseURL(protocol string, baseURL string) string {
-	trimmedBaseURL := strings.TrimSpace(baseURL)
-	if trimmedBaseURL != "" {
-		return trimmedBaseURL
-	}
-	normalized := relaychannel.NormalizeProtocolName(protocol)
-	if normalized == "" {
-		return ""
-	}
-	return relaychannel.BaseURLByProtocol(normalized)
-}
-
 func loadChannelRuntimeState(protocol string, key string, baseURL string, channelID string, configRaw json.RawMessage, selectedModels []string, modelConfigs []model.ChannelModel, testModel string) (*model.Channel, string, error) {
 	normalizedProtocol := relaychannel.NormalizeProtocolName(protocol)
 	trimmedKey := strings.TrimSpace(key)
@@ -366,7 +378,7 @@ func loadChannelRuntimeState(protocol string, key string, baseURL string, channe
 			normalizedProtocol = savedChannel.GetProtocol()
 		}
 		if trimmedBaseURL == "" {
-			trimmedBaseURL = strings.TrimSpace(savedChannel.GetBaseURL())
+			trimmedBaseURL = strings.TrimSpace(savedChannel.ResolveAPIBaseURL(""))
 		}
 		if len(normalizedModelConfigs) == 0 && len(normalizedModels) == 0 {
 			normalizedModels = savedChannel.SelectedModelIDs()
@@ -385,7 +397,7 @@ func loadChannelRuntimeState(protocol string, key string, baseURL string, channe
 	if trimmedBaseURL != "" {
 		runtimeChannel.BaseURL = &trimmedBaseURL
 	} else {
-		resolvedBaseURL := resolveChannelBaseURL(runtimeChannel.GetProtocol(), runtimeChannel.GetBaseURL())
+		resolvedBaseURL := runtimeChannel.ResolveAPIBaseURL("")
 		if resolvedBaseURL != "" {
 			runtimeChannel.BaseURL = &resolvedBaseURL
 		}
@@ -525,11 +537,11 @@ func buildChannelModelTestResult(row model.ChannelModel, execution channelModelT
 }
 
 func runSingleChannelModelTest(channel *model.Channel, row model.ChannelModel) (model.ChannelTest, channelModelTestExecution) {
-	return runSingleChannelModelTestWithContextAndStream(context.Background(), channel, row, nil)
+	return runSingleChannelModelTestWithContextAndStream(context.Background(), channel, row, nil, "")
 }
 
 func runSingleChannelModelTestWithContext(ctx context.Context, channel *model.Channel, row model.ChannelModel) (model.ChannelTest, channelModelTestExecution) {
-	return runSingleChannelModelTestWithContextAndStream(ctx, channel, row, nil)
+	return runSingleChannelModelTestWithContextAndStream(ctx, channel, row, nil, "")
 }
 
 func isChannelModelTestEndpointAllowed(modelType string, endpoint string) bool {
@@ -544,7 +556,8 @@ func isChannelModelTestEndpointAllowed(modelType string, endpoint string) bool {
 			normalizedEndpoint == model.ChannelModelEndpointImageEdit ||
 			normalizedEndpoint == model.ChannelModelEndpointImages
 	case model.ProviderModelTypeAudio:
-		return normalizedEndpoint == model.ChannelModelEndpointAudio
+		return normalizedEndpoint == model.ChannelModelEndpointAudio ||
+			normalizedEndpoint == model.ChannelModelEndpointRealtime
 	case model.ProviderModelTypeVideo:
 		return normalizedEndpoint == model.ChannelModelEndpointVideos
 	default:
@@ -569,9 +582,26 @@ func resolveChannelModelTestEndpoint(modelType string, endpoint string) (string,
 	return normalized, nil
 }
 
-func runSingleChannelModelTestWithContextAndStream(ctx context.Context, channel *model.Channel, row model.ChannelModel, requestedStream *bool) (model.ChannelTest, channelModelTestExecution) {
+func resolveChannelModelTestEndpointForRow(row model.ChannelModel) (string, error) {
 	modelType := resolveSelectionModelType(row)
-	endpoint, endpointErr := resolveChannelModelTestEndpoint(modelType, row.Endpoint)
+	endpoint, err := resolveChannelModelTestEndpoint(modelType, row.Endpoint)
+	if err != nil {
+		return "", err
+	}
+	if len(row.Endpoints) == 0 {
+		return endpoint, nil
+	}
+	for _, candidate := range row.Endpoints {
+		if model.NormalizeRequestedChannelModelEndpoint(candidate) == endpoint {
+			return endpoint, nil
+		}
+	}
+	return "", fmt.Errorf("模型 %s 未声明支持测试端点 %s", strings.TrimSpace(row.Model), endpoint)
+}
+
+func runSingleChannelModelTestWithContextAndStream(ctx context.Context, channel *model.Channel, row model.ChannelModel, requestedStream *bool, requestedAudioLanguage string) (model.ChannelTest, channelModelTestExecution) {
+	modelType := resolveSelectionModelType(row)
+	endpoint, endpointErr := resolveChannelModelTestEndpointForRow(row)
 	if endpointErr != nil {
 		execution := channelModelTestExecution{
 			Err: endpointErr,
@@ -583,7 +613,7 @@ func runSingleChannelModelTestWithContextAndStream(ctx context.Context, channel 
 			Model:         row.Model,
 			UpstreamModel: row.UpstreamModel,
 			Type:          modelType,
-			Endpoint:      strings.TrimSpace(row.Endpoint),
+			Endpoint:      model.NormalizeRequestedChannelModelEndpoint(strings.TrimSpace(row.Endpoint)),
 		}, execution), execution
 	}
 
@@ -611,12 +641,18 @@ func runSingleChannelModelTestWithContextAndStream(ctx context.Context, channel 
 			Endpoint:      endpoint,
 		}, execution), execution
 	case model.ProviderModelTypeAudio:
-		execution := executeChannelAudioModelTest(ctx, channel, row.Model)
+		var execution channelModelTestExecution
+		switch endpoint {
+		case model.ChannelModelEndpointRealtime:
+			execution = executeChannelRealtimeModelTest(ctx, channel, row.Model)
+		default:
+			execution = executeChannelAudioModelTest(ctx, channel, row.Model, requestedAudioLanguage)
+		}
 		return buildChannelModelTestResult(model.ChannelModel{
 			Model:         row.Model,
 			UpstreamModel: row.UpstreamModel,
 			Type:          modelType,
-			Endpoint:      model.ChannelModelEndpointAudio,
+			Endpoint:      endpoint,
 		}, execution), execution
 	case model.ProviderModelTypeVideo:
 		execution := executeChannelVideoModelTest(ctx, channel, row.Model)
@@ -857,7 +893,10 @@ func executeChannelTextModelTest(ctx context.Context, channel *model.Channel, pa
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
 		return execution
 	}
-	requestURL := resolveChannelEndpointURL(resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL()), path)
+	baseURL := channel.ResolveAPIBaseURLForModel(path, request.Model)
+	requestURL := resolveChannelEndpointURL(baseURL, path)
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
 	requestHeader := http.Header{}
 	requestHeader.Set("Content-Type", "application/json")
 	requestHeader.Set("User-Agent", "router-channel-model-tester/1.0")
@@ -967,7 +1006,10 @@ func executeChannelTextModelTestRawBody(ctx context.Context, channel *model.Chan
 	if stream {
 		c.Request.Header.Set("Accept", "text/event-stream")
 	}
-	requestURL := resolveChannelEndpointURL(resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL()), path)
+	baseURL := channel.ResolveAPIBaseURLForModel(path, requestedModel, actualModel)
+	requestURL := resolveChannelEndpointURL(baseURL, path)
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
 	requestHeader := http.Header{}
 	requestHeader.Set("Content-Type", "application/json")
 	requestHeader.Set("User-Agent", "router-channel-model-tester/1.0")
@@ -1167,13 +1209,17 @@ func executeChannelImageResponsesModelTest(ctx context.Context, channel *model.C
 	adaptor.Init(relayMeta)
 	relayMeta.OriginModelName = strings.TrimSpace(modelName)
 	relayMeta.ActualModelName = request["model"].(string)
+	actualModelName := relayMeta.ActualModelName
 	requestBody, err := json.Marshal(request)
 	if err != nil {
 		execution.Err = err
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
 		return execution
 	}
-	requestURL := resolveChannelEndpointURL(resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL()), model.ChannelModelEndpointResponses)
+	baseURL := channel.ResolveAPIBaseURLForModel(model.ChannelModelEndpointResponses, modelName, actualModelName)
+	requestURL := resolveChannelEndpointURL(baseURL, model.ChannelModelEndpointResponses)
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
 	requestHeader := http.Header{}
 	requestHeader.Set("Content-Type", "application/json")
 	execution.InputPayload = buildHTTPRequestPayloadForLog(http.MethodPost, requestURL, requestHeader, requestBody)
@@ -1254,7 +1300,10 @@ func executeChannelImageModelTest(ctx context.Context, channel *model.Channel, m
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
 		return execution
 	}
-	requestURL := resolveChannelEndpointURL(resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL()), "/v1/images/generations")
+	baseURL := channel.ResolveAPIBaseURLForModel("/v1/images/generations", modelName, actualModelName)
+	requestURL := resolveChannelEndpointURL(baseURL, "/v1/images/generations")
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
 	requestHeader := http.Header{}
 	requestHeader.Set("Content-Type", "application/json")
 	execution.InputPayload = buildHTTPRequestPayloadForLog(http.MethodPost, requestURL, requestHeader, requestBody)
@@ -1337,7 +1386,10 @@ func executeChannelImageEditModelTest(ctx context.Context, channel *model.Channe
 		return execution
 	}
 
-	requestURL := resolveChannelEndpointURL(resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL()), model.ChannelModelEndpointImageEdit)
+	baseURL := channel.ResolveAPIBaseURLForModel(model.ChannelModelEndpointImageEdit, modelName, actualModelName)
+	requestURL := resolveChannelEndpointURL(baseURL, model.ChannelModelEndpointImageEdit)
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1384,8 +1436,9 @@ func executeChannelImageEditModelTest(ctx context.Context, channel *model.Channe
 	return execution
 }
 
-func executeChannelAudioModelTest(ctx context.Context, channel *model.Channel, modelName string) channelModelTestExecution {
+func executeChannelAudioModelTest(ctx context.Context, channel *model.Channel, modelName string, language string) channelModelTestExecution {
 	execution := channelModelTestExecution{}
+	execution.IsStream = false
 	actualModelName := resolveChannelUpstreamModelName(channel, modelName)
 	if actualModelName == "" {
 		execution.Err = fmt.Errorf("未找到可用于音频模型测试的模型")
@@ -1413,18 +1466,20 @@ func executeChannelAudioModelTest(ctx context.Context, channel *model.Channel, m
 	adaptor.Init(relayMeta)
 	relayMeta.OriginModelName = strings.TrimSpace(modelName)
 	relayMeta.ActualModelName = actualModelName
-	requestBody, err := json.Marshal(openaiadaptor.TextToSpeechRequest{
-		Model:          actualModelName,
-		Input:          "Model test from Router.",
-		Voice:          "alloy",
-		ResponseFormat: "mp3",
+	requestBody, err := json.Marshal(map[string]any{
+		"model": actualModelName,
+		"input": buildAudioModelTestInput(language),
+		"voice": "alloy",
 	})
 	if err != nil {
 		execution.Err = err
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
 		return execution
 	}
-	requestURL := resolveChannelEndpointURL(resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL()), "/v1/audio/speech")
+	baseURL := channel.ResolveAPIBaseURLForModel("/v1/audio/speech", modelName, actualModelName)
+	requestURL := resolveChannelEndpointURL(baseURL, "/v1/audio/speech")
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
 	requestHeader := http.Header{}
 	requestHeader.Set("Content-Type", "application/json")
 	requestHeader.Set("Accept", "audio/mpeg")
@@ -1468,6 +1523,263 @@ func executeChannelAudioModelTest(ctx context.Context, channel *model.Channel, m
 	return execution
 }
 
+func normalizeChannelTestRealtimeWebSocketURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
+	}
+	switch parsed.Scheme {
+	case "https":
+		parsed.Scheme = "wss"
+	case "http":
+		parsed.Scheme = "ws"
+	case "wss", "ws":
+	default:
+		return "", fmt.Errorf("unsupported upstream scheme: %s", parsed.Scheme)
+	}
+	return parsed.String(), nil
+}
+
+type realtimeServerEventError struct {
+	Type    string `json:"type"`
+	EventID string `json:"event_id,omitempty"`
+	Error   struct {
+		Type    string `json:"type,omitempty"`
+		Code    any    `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	} `json:"error,omitempty"`
+	Response *struct {
+		Status string `json:"status,omitempty"`
+	} `json:"response,omitempty"`
+}
+
+func wrapRealtimeHandshakeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("WebSocket 握手失败: %w", err)
+}
+
+func wrapRealtimeSessionError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("WebSocket 握手成功，但会话失败: %w", err)
+}
+
+func buildRealtimeSessionSuccessMessage(subprotocol string, responseText string) string {
+	base := "WebSocket 会话成功"
+	if strings.TrimSpace(subprotocol) != "" {
+		base = fmt.Sprintf("%s（subprotocol=%s）", base, strings.TrimSpace(subprotocol))
+	}
+	trimmedResponseText := strings.TrimSpace(responseText)
+	if trimmedResponseText == "" {
+		return base + "，未返回文本"
+	}
+	return fmt.Sprintf("%s，返回文本：%s", base, trimmedResponseText)
+}
+
+func writeRealtimeTestEvent(conn *websocket.Conn, payload map[string]any) error {
+	if conn == nil {
+		return fmt.Errorf("realtime connection is nil")
+	}
+	return conn.WriteJSON(payload)
+}
+
+func waitRealtimeTestCompletion(conn *websocket.Conn) (string, error) {
+	if conn == nil {
+		return "", fmt.Errorf("realtime connection is nil")
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	_ = conn.SetReadDeadline(deadline)
+	textParts := make([]string, 0, 4)
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			return strings.TrimSpace(strings.Join(textParts, "")), err
+		}
+		event := map[string]any{}
+		if err := json.Unmarshal(message, &event); err != nil {
+			continue
+		}
+		eventType := strings.TrimSpace(fmt.Sprintf("%v", event["type"]))
+		switch eventType {
+		case "response.output_text.delta":
+			if delta := strings.TrimSpace(fmt.Sprintf("%v", event["delta"])); delta != "" && delta != "<nil>" {
+				textParts = append(textParts, delta)
+			}
+		case "response.text.delta":
+			if delta := strings.TrimSpace(fmt.Sprintf("%v", event["delta"])); delta != "" && delta != "<nil>" {
+				textParts = append(textParts, delta)
+			}
+		case "response.done":
+			rawResponse, ok := event["response"].(map[string]any)
+			if ok {
+				status := strings.TrimSpace(fmt.Sprintf("%v", rawResponse["status"]))
+				if status != "" && status != "completed" {
+					return strings.TrimSpace(strings.Join(textParts, "")), fmt.Errorf("realtime response finished with status %s", status)
+				}
+			}
+			return strings.TrimSpace(strings.Join(textParts, "")), nil
+		case "error":
+			realtimeErr := realtimeServerEventError{}
+			if err := json.Unmarshal(message, &realtimeErr); err == nil {
+				msg := strings.TrimSpace(realtimeErr.Error.Message)
+				if msg == "" {
+					msg = strings.TrimSpace(string(message))
+				}
+				return strings.TrimSpace(strings.Join(textParts, "")), fmt.Errorf("realtime server error: %s", msg)
+			}
+			return strings.TrimSpace(strings.Join(textParts, "")), fmt.Errorf("realtime server error: %s", strings.TrimSpace(string(message)))
+		}
+	}
+}
+
+func executeChannelRealtimeModelTest(ctx context.Context, channel *model.Channel, modelName string) channelModelTestExecution {
+	execution := channelModelTestExecution{}
+	actualModelName := resolveChannelUpstreamModelName(channel, modelName)
+	if actualModelName == "" {
+		execution.Err = fmt.Errorf("未找到可用于实时模型测试的模型")
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": execution.Err.Error()})
+		return execution
+	}
+	_, relayMeta, err := newChannelRelayRuntimeContext(model.ChannelModelEndpointRealtime, channel, ctx)
+	if err != nil {
+		execution.Err = err
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		return execution
+	}
+	adaptor := relay.GetAdaptor(relayMeta.APIType)
+	if adaptor == nil {
+		execution.Err = fmt.Errorf("invalid api type: %d", relayMeta.APIType)
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": execution.Err.Error()})
+		return execution
+	}
+	adaptor.Init(relayMeta)
+	relayMeta.OriginModelName = strings.TrimSpace(modelName)
+	relayMeta.ActualModelName = actualModelName
+
+	baseURL := channel.ResolveAPIBaseURLForModel(model.ChannelModelEndpointRealtime, modelName, actualModelName)
+	requestURL := resolveChannelEndpointURL(baseURL, model.ChannelModelEndpointRealtime)
+	execution.BaseURL = baseURL
+	execution.RequestURL = requestURL
+	if requestURL == "" {
+		execution.Err = fmt.Errorf("未找到 realtime 测试地址")
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": execution.Err.Error()})
+		return execution
+	}
+	parsedURL, err := url.Parse(requestURL)
+	if err != nil {
+		execution.Err = err
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		return execution
+	}
+	query := parsedURL.Query()
+	query.Set("model", actualModelName)
+	parsedURL.RawQuery = query.Encode()
+
+	upstreamURL, err := normalizeChannelTestRealtimeWebSocketURL(parsedURL.String())
+	if err != nil {
+		execution.Err = err
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		return execution
+	}
+
+	requestHeader := http.Header{}
+	requestHeader.Set("OpenAI-Beta", "realtime=v1")
+	switch relayMeta.ChannelProtocol {
+	case relaychannel.Azure:
+		requestHeader.Set("api-key", strings.TrimSpace(channel.Key))
+	default:
+		requestHeader.Set("Authorization", "Bearer "+strings.TrimSpace(channel.Key))
+	}
+	execution.InputPayload = buildHTTPRequestPayloadForLog(http.MethodGet, parsedURL.String(), requestHeader, nil)
+
+	dialer := websocket.Dialer{
+		Subprotocols: []string{"realtime"},
+	}
+	startedAt := time.Now()
+	conn, resp, err := dialer.DialContext(ctx, upstreamURL, requestHeader)
+	execution.LatencyMs = time.Since(startedAt).Milliseconds()
+	if resp != nil {
+		execution.ResponseStatusCode = resp.StatusCode
+		execution.ResponseHeader = resp.Header.Clone()
+	}
+	if err != nil {
+		if resp != nil {
+			body, _ := io.ReadAll(resp.Body)
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			execution.ResponseBody = append([]byte(nil), body...)
+			execution.OutputPayload = buildHTTPResponsePayloadForLog(resp.StatusCode, resp.Header, body)
+			execution.Err = wrapRealtimeHandshakeError(parseChannelUpstreamError(resp.StatusCode, body))
+			return execution
+		}
+		execution.Err = wrapRealtimeHandshakeError(err)
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		return execution
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	subprotocol := strings.TrimSpace(conn.Subprotocol())
+	if err := writeRealtimeTestEvent(conn, map[string]any{
+		"type": "session.update",
+		"session": map[string]any{
+			"type":         "realtime",
+			"instructions": "Reply with exactly OK.",
+		},
+	}); err != nil {
+		execution.Err = err
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		_ = conn.Close()
+		return execution
+	}
+	if err := writeRealtimeTestEvent(conn, map[string]any{
+		"type": "conversation.item.create",
+		"item": map[string]any{
+			"type": "message",
+			"role": "user",
+			"content": []map[string]any{
+				{
+					"type": "input_text",
+					"text": "Reply with exactly OK.",
+				},
+			},
+		},
+	}); err != nil {
+		execution.Err = err
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		_ = conn.Close()
+		return execution
+	}
+	if err := writeRealtimeTestEvent(conn, map[string]any{
+		"type": "response.create",
+		"response": map[string]any{
+			"modalities":   []string{"text"},
+			"instructions": "Reply with exactly OK.",
+		},
+	}); err != nil {
+		execution.Err = err
+		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		_ = conn.Close()
+		return execution
+	}
+	responseText, waitErr := waitRealtimeTestCompletion(conn)
+	_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "channel test complete"), time.Now().Add(2*time.Second))
+	_ = conn.Close()
+	if waitErr != nil {
+		execution.Err = wrapRealtimeSessionError(waitErr)
+		execution.OutputPayload = buildHTTPResponsePayloadForLog(http.StatusSwitchingProtocols, execution.ResponseHeader, []byte(execution.Err.Error()))
+		return execution
+	}
+	outputMessage := buildRealtimeSessionSuccessMessage(subprotocol, responseText)
+	execution.OutputPayload = buildHTTPResponsePayloadForLog(http.StatusSwitchingProtocols, execution.ResponseHeader, []byte(outputMessage))
+	execution.Message = outputMessage
+	return execution
+}
+
 func executeChannelVideoModelTest(ctx context.Context, channel *model.Channel, modelName string) channelModelTestExecution {
 	execution := channelModelTestExecution{}
 	actualModelName := resolveChannelUpstreamModelName(channel, modelName)
@@ -1481,7 +1793,8 @@ func executeChannelVideoModelTest(ctx context.Context, channel *model.Channel, m
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": execution.Err.Error()})
 		return execution
 	}
-	baseURL := resolveChannelBaseURL(channel.GetProtocol(), channel.GetBaseURL())
+	baseURL := channel.ResolveAPIBaseURLForModel("/v1/videos", modelName, actualModelName)
+	execution.BaseURL = baseURL
 	if strings.TrimSpace(baseURL) == "" {
 		execution.Err = fmt.Errorf("未找到可用于视频模型测试的 Base URL")
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": execution.Err.Error()})
@@ -1507,6 +1820,7 @@ func executeChannelVideoModelTest(ctx context.Context, channel *model.Channel, m
 	}
 
 	requestURL := resolveChannelEndpointURL(baseURL, "/v1/videos")
+	execution.RequestURL = requestURL
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1803,6 +2117,7 @@ func TestChannelModels(c *gin.Context) {
 		req.TargetModels,
 		req.TargetConfigs,
 		c.GetString(helper.TraceIDKey),
+		req.AudioLanguage,
 	)
 	if err != nil {
 		logChannelAdminWarn(c, "test_models", stringField("channel_id", channelID), stringField("reason", err.Error()))

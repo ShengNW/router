@@ -7,6 +7,7 @@ const (
 	Embeddings
 	Moderations
 	ImagesGenerations
+	ImagesEdits
 	Edits
 	AudioSpeech
 	AudioTranscription
@@ -16,4 +17,5 @@ const (
 	Responses
 	Videos
 	Messages
+	Realtime
 )

@@ -114,6 +114,33 @@ func TestRelayResponsesAsChatResponse_ExtractsMessageTextTypeFromOutput(t *testi
 	}
 }
 
+func TestRelayResponsesAsChatResponse_CapturesImageGenerationCalls(t *testing.T) {
+	ctx, _ := newBridgeTestContext()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+		Body: io.NopCloser(strings.NewReader(`{
+			"id":"resp_img_1",
+			"object":"response",
+			"model":"gpt-5",
+			"created_at":1756315696,
+			"output":[
+				{"type":"image_generation_call"},
+				{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}
+			],
+			"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}
+		}`)),
+	}
+
+	usage, relayErr := relayResponsesAsChatResponse(ctx, resp, "gpt-5", 10)
+	if relayErr != nil {
+		t.Fatalf("relayResponsesAsChatResponse returned error: %+v", relayErr)
+	}
+	if usage == nil || usage.ImageGenerationCalls != 1 {
+		t.Fatalf("unexpected image generation calls: %#v", usage)
+	}
+}
+
 func TestRelayMessagesResponse(t *testing.T) {
 	ctx, recorder := newBridgeTestContext()
 	resp := &http.Response{
@@ -203,12 +230,38 @@ func TestRelayResponsesResponseSkipsUpstreamCORSHeaders(t *testing.T) {
 	if usage == nil || usage.TotalTokens != 15 {
 		t.Fatalf("unexpected usage: %#v", usage)
 	}
+	if usage.ImageGenerationCalls != 0 {
+		t.Fatalf("unexpected image generation calls: %#v", usage)
+	}
 	allowOriginValues := recorder.Header().Values("Access-Control-Allow-Origin")
 	if len(allowOriginValues) != 1 || allowOriginValues[0] != "http://localhost:3020" {
 		t.Fatalf("expected CORS allow-origin header to remain middleware value, got %#v", allowOriginValues)
 	}
 	if recorder.Header().Get("X-Upstream") != "ok" {
 		t.Fatalf("expected non-CORS upstream headers to remain copied, got %q", recorder.Header().Get("X-Upstream"))
+	}
+}
+
+func TestRelayResponsesResponse_CapturesImageGenerationCalls(t *testing.T) {
+	ctx, _ := newBridgeTestContext()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+		Body: io.NopCloser(strings.NewReader(`{
+			"id":"resp_img_2",
+			"object":"response",
+			"model":"gpt-5",
+			"output":[{"type":"image_generation_call"}],
+			"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}
+		}`)),
+	}
+
+	usage, relayErr := relayResponsesResponse(ctx, resp)
+	if relayErr != nil {
+		t.Fatalf("relayResponsesResponse returned error: %+v", relayErr)
+	}
+	if usage == nil || usage.ImageGenerationCalls != 1 {
+		t.Fatalf("unexpected image generation calls: %#v", usage)
 	}
 }
 

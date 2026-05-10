@@ -16,6 +16,7 @@ const ChannelDetailOverviewTab = ({
   saveDetailBasicInfo,
   setDetailBasicEditing,
   basicConnectionFields,
+  addressRoutingFields,
   protocolSelectionHintContent,
   protocolSpecificFields,
   timestamp2string,
@@ -106,6 +107,7 @@ const ChannelDetailOverviewTab = ({
         </Form.Group>
         {protocolSelectionHintContent}
         {basicConnectionFields}
+        {addressRoutingFields}
         {protocolSpecificFields}
         <Form.Group widths='equal'>
           <Form.Input

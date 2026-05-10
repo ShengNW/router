@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -599,6 +600,34 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			},
 		},
 		{
+			Version:     "202605091200_openai_realtime_2_provider_catalog",
+			Description: "sync default provider catalog to add openai gpt-realtime-2 and gpt-realtime-1.5 pricing rows",
+			Up: func(tx *gorm.DB) error {
+				return syncDefaultProviderCatalogWithDB(tx)
+			},
+		},
+		{
+			Version:     "202605091330_openai_realtime_endpoint_candidates",
+			Description: "sync default provider catalog to expose openai realtime models with /v1/realtime endpoint candidates",
+			Up: func(tx *gorm.DB) error {
+				return syncDefaultProviderCatalogWithDB(tx)
+			},
+		},
+		{
+			Version:     "202605101230_log_billing_observability",
+			Description: "add billing observability fields to consume logs",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&Log{})
+			},
+		},
+		{
+			Version:     "202605101650_channel_model_price_components",
+			Description: "add channel-level model price component overrides",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&ChannelModelPriceComponent{})
+			},
+		},
+		{
 			Version:     "202605041030_provider_model_supported_endpoints",
 			Description: "add provider model supported endpoints as channel endpoint candidates",
 			Up: func(tx *gorm.DB) error {
@@ -713,6 +742,109 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return tx.AutoMigrate(&ChannelModelEndpointPolicy{})
 			},
 		},
+		{
+			Version:     "202605101700_channel_api_base_url_backfill",
+			Description: "backfill channel config.api_base_url from legacy channels.base_url",
+			Up: func(tx *gorm.DB) error {
+				rows := make([]Channel, 0)
+				if err := tx.Select("id", "base_url", "config").Find(&rows).Error; err != nil {
+					return err
+				}
+				for _, row := range rows {
+					legacyBaseURL := normalizeConfiguredBaseURL(row.GetBaseURL())
+					if legacyBaseURL == "" {
+						continue
+					}
+					cfg, err := row.LoadConfig()
+					if err != nil {
+						return err
+					}
+					if cfg.GetAPIBaseURL() != "" {
+						continue
+					}
+					cfg.APIBaseURL = legacyBaseURL
+					raw, err := json.Marshal(cfg)
+					if err != nil {
+						return err
+					}
+					if err := tx.Model(&Channel{}).
+						Where("id = ?", row.Id).
+						Update("config", strings.TrimSpace(string(raw))).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Version:     "202605101900_channel_endpoint_base_url_table",
+			Description: "move channel endpoint base urls from channel config into channel_model_endpoints.base_url",
+			Up: func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&ChannelModelEndpoint{}); err != nil {
+					return err
+				}
+				type legacyChannelConfig struct {
+					Region            string            `json:"region,omitempty"`
+					SK                string            `json:"sk,omitempty"`
+					AK                string            `json:"ak,omitempty"`
+					UserID            string            `json:"user_id,omitempty"`
+					APIVersion        string            `json:"api_version,omitempty"`
+					LibraryID         string            `json:"library_id,omitempty"`
+					Plugin            string            `json:"plugin,omitempty"`
+					APIBaseURL        string            `json:"api_base_url,omitempty"`
+					AccountBaseURL    string            `json:"account_base_url,omitempty"`
+					EndpointBaseURLs  map[string]string `json:"endpoint_base_urls,omitempty"`
+					VertexAIProjectID string            `json:"vertex_ai_project_id,omitempty"`
+					VertexAIADC       string            `json:"vertex_ai_adc,omitempty"`
+				}
+				channels := make([]Channel, 0)
+				if err := tx.Select("id", "config").Find(&channels).Error; err != nil {
+					return err
+				}
+				for _, channel := range channels {
+					if strings.TrimSpace(channel.Config) == "" {
+						continue
+					}
+					cfg := legacyChannelConfig{}
+					if err := json.Unmarshal([]byte(channel.Config), &cfg); err != nil {
+						return err
+					}
+					if len(cfg.EndpointBaseURLs) == 0 {
+						continue
+					}
+					rows, err := listChannelModelEndpointRowsByChannelIDWithDB(tx, channel.Id)
+					if err != nil {
+						return err
+					}
+					updated := false
+					for i := range rows {
+						if baseURL, ok := cfg.EndpointBaseURLs[NormalizeRequestedChannelModelEndpoint(rows[i].Endpoint)]; ok {
+							normalizedBaseURL := normalizeConfiguredBaseURL(baseURL)
+							if normalizedBaseURL != "" && normalizeConfiguredBaseURL(rows[i].BaseURL) != normalizedBaseURL {
+								rows[i].BaseURL = normalizedBaseURL
+								updated = true
+							}
+						}
+					}
+					if updated {
+						if err := replaceChannelModelEndpointRowsWithDB(tx, channel.Id, rows); err != nil {
+							return err
+						}
+					}
+					cfg.EndpointBaseURLs = nil
+					raw, err := json.Marshal(cfg)
+					if err != nil {
+						return err
+					}
+					if err := tx.Model(&Channel{}).
+						Where("id = ?", channel.Id).
+						Update("config", strings.TrimSpace(string(raw))).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }
@@ -790,6 +922,13 @@ func runLogVersionedMigrations(db *gorm.DB) error {
 		{
 			Version:     "202604031500_log_billing_source",
 			Description: "add billing source field to consume logs",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&Log{})
+			},
+		},
+		{
+			Version:     "202605101230_log_billing_observability",
+			Description: "add billing observability fields to consume logs",
 			Up: func(tx *gorm.DB) error {
 				return tx.AutoMigrate(&Log{})
 			},

@@ -84,6 +84,9 @@ const normalizeModelIDs = (models) => {
 const normalizeBaseURL = (baseURL) =>
   (baseURL || '').trim().replace(/\/+$/, '');
 
+const resolveEffectiveAPIBaseURL = (inputs, config) =>
+  normalizeBaseURL(config?.api_base_url || inputs?.base_url || '');
+
 const CHANNEL_IDENTIFIER_PATTERN = /^[a-z0-9-]+$/;
 const CHANNEL_IDENTIFIER_MAX_LENGTH = 64;
 const CHANNEL_DETAIL_MODEL_COLUMN_WIDTHS = [
@@ -97,12 +100,13 @@ const CHANNEL_DETAIL_MODEL_COLUMN_WIDTHS = [
   '8%',
 ];
 const CHANNEL_ENDPOINT_COLUMN_WIDTHS = [
-  '20%',
   '18%',
+  '16%',
+  '22%',
   '8%',
   '12%',
-  '28%',
   '14%',
+  '10%',
 ];
 const CHANNEL_MODEL_TEST_GROUP_COLUMN_WIDTHS = [
   '4%',
@@ -114,7 +118,13 @@ const CHANNEL_MODEL_TEST_GROUP_COLUMN_WIDTHS = [
   '10%',
 ];
 
+const supportsModelTestStream = (row) =>
+  normalizeChannelModelType(row?.type) === 'text';
+
 const resolveModelTestStreamEnabled = (row) => {
+  if (!supportsModelTestStream(row)) {
+    return false;
+  }
   if (
     Object.prototype.hasOwnProperty.call(row || {}, 'is_stream') ||
     Object.prototype.hasOwnProperty.call(row || {}, 'isStream')
@@ -237,6 +247,16 @@ const normalizeChannelModelEndpoint = (type, value, protocol) => {
         return defaultChannelModelEndpoint(normalizedType, protocol);
     }
   }
+  if (normalizedType === 'audio') {
+    switch (normalized) {
+      case '/v1/realtime':
+        return '/v1/realtime';
+      case '/v1/audio/speech':
+        return '/v1/audio/speech';
+      default:
+        return defaultChannelModelEndpoint(normalizedType, protocol);
+    }
+  }
   return defaultChannelModelEndpoint(normalizedType, protocol);
 };
 
@@ -294,6 +314,11 @@ const TEXT_MODEL_ENDPOINT_OPTIONS = [
   { key: 'messages', value: '/v1/messages', text: '/v1/messages' },
 ];
 
+const AUDIO_MODEL_ENDPOINT_OPTIONS = [
+  { key: 'audio_speech', value: '/v1/audio/speech', text: '/v1/audio/speech' },
+  { key: 'realtime', value: '/v1/realtime', text: '/v1/realtime' },
+];
+
 const IMAGE_MODEL_ENDPOINT_OPTIONS = [
   { key: 'responses', value: '/v1/responses', text: '/v1/responses' },
   {
@@ -313,13 +338,17 @@ const CHANNEL_ENDPOINT_SORT_ORDER = {
   '/v1/images/edits': 50,
   '/v1/batches': 60,
   '/v1/audio/speech': 70,
-  '/v1/videos': 80,
+  '/v1/realtime': 80,
+  '/v1/videos': 90,
 };
 
 const endpointOptionsForModelType = (type) => {
   const normalizedType = normalizeChannelModelType(type);
   if (normalizedType === 'image') {
     return IMAGE_MODEL_ENDPOINT_OPTIONS;
+  }
+  if (normalizedType === 'audio') {
+    return AUDIO_MODEL_ENDPOINT_OPTIONS;
   }
   if (normalizedType === 'text') {
     return TEXT_MODEL_ENDPOINT_OPTIONS;
@@ -372,6 +401,7 @@ const normalizeChannelEndpointRows = (items) => {
       channel_id: (item.channel_id || '').toString().trim(),
       model,
       endpoint,
+      base_url: normalizeBaseURL(item.base_url),
       enabled: item.enabled === true,
       updated_at: Number(item.updated_at || 0),
     });
@@ -605,6 +635,34 @@ const normalizeComplexPriceComponents = (components) => {
     }
     return (a.condition || '').localeCompare(b.condition || '');
   });
+};
+
+const mergePriceComponentOverrides = (baseComponents, overrideComponents) => {
+  const merged = normalizeComplexPriceComponents(baseComponents);
+  const indexByKey = new Map(
+    merged.map((component, index) => [
+      `${component.component || ''}\u0000${component.condition || ''}`,
+      index,
+    ]),
+  );
+  normalizeComplexPriceComponents(overrideComponents).forEach((component) => {
+    const key = `${component.component || ''}\u0000${component.condition || ''}`;
+    const nextComponent = {
+      ...component,
+      source: component.source || 'channel_override',
+    };
+    if (indexByKey.has(key)) {
+      merged[indexByKey.get(key)] = nextComponent;
+      return;
+    }
+    indexByKey.set(key, merged.length);
+    merged.push(nextComponent);
+  });
+  return normalizeComplexPriceComponents(merged).filter(
+    (component) =>
+      Number(component.input_price || 0) > 0 ||
+      Number(component.output_price || 0) > 0,
+  );
 };
 
 const buildProviderCatalogIndex = (items) => {
@@ -902,6 +960,7 @@ const normalizeChannelModelConfigRow = (row, protocol) => {
     output_price: normalizePriceOverrideValue(row.output_price),
     price_unit: normalizePriceUnitValue(row.price_unit),
     currency: normalizeCurrencyValue(row.currency),
+    price_components: normalizeComplexPriceComponents(row.price_components),
   };
 };
 
@@ -1337,6 +1396,8 @@ const CHANNEL_DEFAULT_CONFIG = {
   sk: '',
   ak: '',
   user_id: '',
+  api_base_url: '',
+  account_base_url: '',
   vertex_ai_project_id: '',
   vertex_ai_adc: '',
 };
@@ -1480,6 +1541,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   const [modelTestingTargets, setModelTestingTargets] = useState([]);
   const [channelTasks, setChannelTasks] = useState([]);
   const [modelTestError, setModelTestError] = useState('');
+  const [audioTestLanguage, setAudioTestLanguage] = useState('zh-CN');
   const openChannelTaskView = useCallback(
     (extraParams = {}) => {
       const targetChannelId = (channelId || '')
@@ -1591,6 +1653,10 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     () => buildEffectiveKey().trim(),
     [buildEffectiveKey],
   );
+  const effectiveAPIBaseURL = useMemo(
+    () => resolveEffectiveAPIBaseURL(inputs, config),
+    [config, inputs],
+  );
   const previewChannelID = useMemo(
     () => ((hasChannelID ? channelId : '') || '').trim(),
     [channelId, hasChannelID],
@@ -1600,10 +1666,10 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       buildChannelConnectionSignature({
         protocol: inputs.protocol,
         key: effectivePreviewKey,
-        baseURL: inputs.base_url,
+        baseURL: effectiveAPIBaseURL,
         channelID: previewChannelID,
       }),
-    [effectivePreviewKey, inputs.base_url, inputs.protocol, previewChannelID],
+    [effectiveAPIBaseURL, effectivePreviewKey, inputs.protocol, previewChannelID],
   );
   const requiresConnectionVerification = false;
   const showStepOne = isDetailMode ? activeDetailTab === 'overview' : true;
@@ -1844,9 +1910,21 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
             return;
           }
           seen.add(uniqueKey);
+          const priceComponents = mergePriceComponentOverrides(
+            detail.price_components,
+            row?.price_components,
+          );
+          if (priceComponents.length === 0) {
+            return;
+          }
           details.push({
             provider: providerId,
             ...detail,
+            price_components: priceComponents,
+            source:
+              (row?.price_components || []).length > 0
+                ? 'channel_override'
+                : detail.source,
           });
         });
       });
@@ -2161,101 +2239,6 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     setConfig((inputs) => ({ ...inputs, [name]: value }));
   };
 
-  const baseURLField = useMemo(() => {
-    if (inputs.protocol === 'azure') {
-      return (
-        <Form.Field>
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.edit.base_url')}
-            name='base_url'
-            placeholder='请输入 AZURE_OPENAI_ENDPOINT，例如：https://docs-test-001.openai.azure.com'
-            onChange={handleInputChange}
-            value={inputs.base_url}
-            autoComplete='new-password'
-            {...inputReadonlyProps}
-          />
-        </Form.Field>
-      );
-    }
-    if (inputs.protocol === 'custom') {
-      return (
-        <Form.Field>
-          <Form.Input
-            className='router-section-input'
-            required
-            label={t('channel.edit.proxy_url')}
-            name='base_url'
-            placeholder={t('channel.edit.proxy_url_placeholder')}
-            onChange={handleInputChange}
-            value={inputs.base_url}
-            autoComplete='new-password'
-            {...inputReadonlyProps}
-          />
-        </Form.Field>
-      );
-    }
-    if (inputs.protocol === 'openai') {
-      return (
-        <Form.Field>
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.edit.base_url')}
-            name='base_url'
-            placeholder={t('channel.edit.base_url_placeholder')}
-            onChange={handleInputChange}
-            value={inputs.base_url}
-            autoComplete='new-password'
-            {...inputReadonlyProps}
-          />
-        </Form.Field>
-      );
-    }
-    if (inputs.protocol === 'fastgpt') {
-      return (
-        <Form.Field>
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.edit.base_url')}
-            name='base_url'
-            placeholder={
-              '请输入私有部署地址，格式为：https://fastgpt.run' +
-              '/api' +
-              '/openapi'
-            }
-            onChange={handleInputChange}
-            value={inputs.base_url}
-            autoComplete='new-password'
-            {...inputReadonlyProps}
-          />
-        </Form.Field>
-      );
-    }
-    if (inputs.protocol !== 'awsclaude') {
-      return (
-        <Form.Field>
-          <Form.Input
-            className='router-section-input'
-            label={t('channel.edit.proxy_url')}
-            name='base_url'
-            placeholder={t('channel.edit.proxy_url_placeholder')}
-            onChange={handleInputChange}
-            value={inputs.base_url}
-            autoComplete='new-password'
-            {...inputReadonlyProps}
-          />
-        </Form.Field>
-      );
-    }
-    return null;
-  }, [
-    handleInputChange,
-    inputReadonlyProps,
-    inputs.base_url,
-    inputs.protocol,
-    t,
-  ]);
-
   const keyField = useMemo(() => {
     if (inputs.protocol === 'awsclaude' || inputs.protocol === 'vertexai') {
       return null;
@@ -2314,7 +2297,11 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       }
       localInputs.model_configs = derivedModelState.modelConfigs;
       localInputs.models = derivedModelState.selectedModels.join(',');
-      const submitConfig = { ...baseConfig };
+      const submitConfig = {
+        ...baseConfig,
+        api_base_url: normalizeBaseURL(baseConfig.api_base_url),
+        account_base_url: normalizeBaseURL(baseConfig.account_base_url),
+      };
       localInputs.config = JSON.stringify(submitConfig);
       return localInputs;
     },
@@ -2551,7 +2538,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       const nextSignature = buildChannelModelTestSignature({
         protocol: inputs.protocol,
         key: effectivePreviewKey,
-        baseURL: inputs.base_url,
+        baseURL: effectiveAPIBaseURL,
         channelID: normalizedChannelId,
         models: nextInputs.models,
         modelConfigs: nextInputs.model_configs,
@@ -2576,9 +2563,9 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       setChannelEndpointPoliciesError('');
     },
     [
+      effectiveAPIBaseURL,
       effectivePreviewKey,
       inputs,
-      inputs.base_url,
       inputs.protocol,
       loadChannelEndpointPoliciesFromServer,
       loadChannelEndpointsFromServer,
@@ -2626,7 +2613,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
           const loadedModelTestSignature = buildChannelModelTestSignature({
             protocol: normalizedProtocol,
             key: '',
-            baseURL: data.base_url || '',
+            baseURL: resolveEffectiveAPIBaseURL(data, parsedConfig),
             channelID: data.id || targetId,
             models: modelState.selectedModels,
             modelConfigs: modelState.modelConfigs,
@@ -2684,10 +2671,12 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
             setModelTestTargetModels([]);
             setChannelTasks(normalizeAsyncTasks(activeTasks));
           }
-          setConfig((prev) => ({
-            ...prev,
+          setConfig({
+            ...CHANNEL_DEFAULT_CONFIG,
             ...parsedConfig,
-          }));
+            api_base_url: normalizeBaseURL(parsedConfig.api_base_url),
+            account_base_url: normalizeBaseURL(parsedConfig.account_base_url),
+          });
           if (hasChannelID) {
             setChannelKeySet(!!data.key_set);
           } else {
@@ -2761,12 +2750,11 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
         if (targetChannelId === '') {
           return false;
         }
-        const normalizedBaseURL = normalizeBaseURL(inputs.base_url);
         const key = buildEffectiveKey().trim();
         const requestSignature = buildChannelConnectionSignature({
           protocol: inputs.protocol,
           key,
-          baseURL: normalizedBaseURL,
+          baseURL: effectiveAPIBaseURL,
           channelID: targetChannelId,
         });
         const res = await API.post(
@@ -2820,7 +2808,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     [
       buildEffectiveKey,
       channelId,
-      inputs.base_url,
+      effectiveAPIBaseURL,
       inputs,
       inputs.protocol,
       isDetailMode,
@@ -3046,11 +3034,16 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       }
       const targetConfigs = visibleModelConfigs
         .filter((row) => normalizedTargets.includes(row.model))
-        .map((row) => ({
-          model: row.model,
-          endpoint: getEffectiveModelEndpoint(row),
-          is_stream: !!row.is_stream,
-        }));
+        .map((row) => {
+          const targetConfig = {
+            model: row.model,
+            endpoint: getEffectiveModelEndpoint(row),
+          };
+          if (supportsModelTestStream(row)) {
+            targetConfig.is_stream = !!row.is_stream;
+          }
+          return targetConfig;
+        });
       setModelTesting(true);
       setModelTestingScope(scope === 'single' ? 'single' : 'batch');
       setModelTestingTargets(normalizedTargets);
@@ -3061,6 +3054,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
             test_model: inputs.test_model || '',
             target_models: normalizedTargets,
             target_configs: targetConfigs,
+            audio_language: audioTestLanguage,
           },
         );
         const { success, message, data, meta } = res.data || {};
@@ -3104,6 +3098,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       isDetailMode,
       t,
       visibleModelConfigs,
+      audioTestLanguage,
     ],
   );
 
@@ -3244,9 +3239,12 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       if (targetSet.size === 0) {
         return;
       }
-      const nextConfigs = visibleModelConfigs.map((row) =>
-        targetSet.has(row.model) ? { ...row, is_stream: !!isStream } : row,
-      );
+      const nextConfigs = visibleModelConfigs.map((row) => {
+        if (!targetSet.has(row.model) || !supportsModelTestStream(row)) {
+          return row;
+        }
+        return { ...row, is_stream: !!isStream };
+      });
       if (isDetailMode) {
         await persistDetailModelConfigs(nextConfigs);
         return;
@@ -3264,7 +3262,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   );
 
   const updateChannelEndpointCapability = useCallback(
-    async (row, enabled, options = {}) => {
+    async (row, nextValues = {}, options = {}) => {
       const { skipConfirm = false } = options;
       if (!isDetailMode || endpointCapabilityReadonly) {
         return;
@@ -3277,6 +3275,11 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       if (targetChannelId === '' || modelName === '' || endpoint === '') {
         return;
       }
+      const enabled =
+        typeof nextValues.enabled === 'boolean'
+          ? nextValues.enabled
+          : row?.enabled === true;
+      const baseURL = normalizeBaseURL(nextValues.base_url ?? row?.base_url);
       const endpointKey = buildChannelEndpointKey(modelName, endpoint);
       const latestResult = modelTestResultsByKey.get(endpointKey) || null;
       const hasSuccessfulTest =
@@ -3293,6 +3296,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
           {
             model: modelName,
             endpoint,
+            base_url: baseURL,
             enabled: !!enabled,
           },
         );
@@ -3347,9 +3351,13 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     }
     setEndpointEnableConfirmLoading(true);
     try {
-      await updateChannelEndpointCapability(pendingEndpointEnableRow, true, {
-        skipConfirm: true,
-      });
+      await updateChannelEndpointCapability(
+        pendingEndpointEnableRow,
+        { enabled: true },
+        {
+          skipConfirm: true,
+        },
+      );
       setEndpointEnableConfirmOpen(false);
       setPendingEndpointEnableRow(null);
     } finally {
@@ -3582,6 +3590,18 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
                 [field]: normalizePriceOverrideValue(value),
               };
             }
+            if (field === 'price_unit') {
+              return {
+                ...row,
+                price_unit: normalizePriceUnitValue(value),
+              };
+            }
+            if (field === 'price_components') {
+              return {
+                ...row,
+                price_components: normalizeComplexPriceComponents(value),
+              };
+            }
             if (field === 'provider') {
               return {
                 ...row,
@@ -3734,6 +3754,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       return;
     }
     setChannelKeySet(false);
+    setConfig(CHANNEL_DEFAULT_CONFIG);
     setLoading(false);
   }, [
     channelId,
@@ -4002,18 +4023,45 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   };
 
   const renderConnectionFields = () => {
-    if (baseURLField && keyField) {
-      return (
-        <Form.Group widths='equal'>
-          {baseURLField}
-          {keyField}
-        </Form.Group>
-      );
-    }
+    return keyField || null;
+  };
+
+  const renderAddressRoutingFields = () => {
     return (
       <>
-        {baseURLField}
-        {keyField}
+        <Form.Group widths='equal'>
+          <Form.Input
+            className='router-section-input'
+            label={t('channel.edit.api_base_url')}
+            name='api_base_url'
+            placeholder={t('channel.edit.api_base_url_placeholder')}
+            onChange={handleConfigChange}
+            value={config.api_base_url || ''}
+            autoComplete='new-password'
+            {...inputReadonlyProps}
+          />
+          <Form.Input
+            className='router-section-input'
+            label={t('channel.edit.account_base_url')}
+            name='account_base_url'
+            placeholder={t('channel.edit.account_base_url_placeholder')}
+            onChange={handleConfigChange}
+            value={config.account_base_url || ''}
+            autoComplete='new-password'
+            {...inputReadonlyProps}
+          />
+        </Form.Group>
+        <div
+          style={{
+            marginTop: '-6px',
+            marginBottom: '0',
+            color: 'var(--router-text-muted, rgba(0,0,0,0.45))',
+            fontSize: '12px',
+            lineHeight: 1.5,
+          }}
+        >
+          {t('channel.edit.address_routing_hint')}
+        </div>
       </>
     );
   };
@@ -4270,6 +4318,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
           </div>
         )}
         {renderConnectionFields()}
+        {renderAddressRoutingFields()}
         {renderProtocolSpecificFields()}
       </>
     ) : null;
@@ -4292,7 +4341,6 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
         canSelectChannelModel={canSelectChannelModel}
         toggleModelSelection={toggleModelSelection}
         getComplexPricingDetailsForModel={getComplexPricingDetailsForModel}
-        openComplexPricingModal={openComplexPricingModal}
         saveDetailModelsConfig={saveDetailModelsConfig}
       />
       <ChannelComplexPricingModal
@@ -4460,6 +4508,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
                 saveDetailBasicInfo={saveDetailBasicInfo}
                 setDetailBasicEditing={setDetailBasicEditing}
                 basicConnectionFields={renderConnectionFields()}
+                addressRoutingFields={renderAddressRoutingFields()}
                 protocolSelectionHintContent={
                   !detailBasicReadonly ? (
                     <div
@@ -4589,6 +4638,8 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
                   resolvePreferredProviderForModel
                 }
                 normalizeChannelModelType={normalizeChannelModelType}
+                audioTestLanguage={audioTestLanguage}
+                setAudioTestLanguage={setAudioTestLanguage}
               />
             )}
           </Form>

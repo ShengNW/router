@@ -78,7 +78,11 @@ func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Request, meta *meta.Meta) error {
 	adaptor.SetupCommonRequestHeader(c, req, meta)
-	if meta.IsStream {
+	if meta != nil && meta.Mode == relaymode.AudioSpeech {
+		if strings.TrimSpace(req.Header.Get("Accept")) == "" {
+			req.Header.Set("Accept", "audio/mpeg")
+		}
+	} else if meta != nil && meta.IsStream {
 		req.Header.Set("Accept", "text/event-stream")
 	} else {
 		req.Header.Set("Accept", "application/json")
@@ -121,6 +125,9 @@ func (a *Adaptor) DoRequest(c *gin.Context, meta *meta.Meta, requestBody io.Read
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Meta) (usage *model.Usage, err *model.ErrorWithStatusCode) {
+	if meta != nil && (meta.Mode == relaymode.Proxy || meta.Mode == relaymode.Realtime) {
+		return nil, relayRawResponse(c, resp)
+	}
 	upstreamMode := meta.Mode
 	if meta.UpstreamMode != 0 {
 		upstreamMode = meta.UpstreamMode
@@ -171,7 +178,7 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Met
 		}
 	} else {
 		switch meta.Mode {
-		case relaymode.ImagesGenerations:
+		case relaymode.ImagesGenerations, relaymode.ImagesEdits:
 			err, _ = ImageHandler(c, resp)
 		default:
 			err, usage = Handler(c, resp, meta.PromptTokens, meta.ActualModelName)
@@ -395,6 +402,8 @@ func relayResponsesResponse(c *gin.Context, resp *http.Response) (*model.Usage, 
 		return nil, ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError)
 	}
 	var envelope responsesEnvelope
+	var bridgeEnvelope responsesBridgeEnvelope
+	_ = json.Unmarshal(responseBody, &bridgeEnvelope)
 	_ = json.Unmarshal(responseBody, &envelope)
 	copyUpstreamResponseHeaders(c, resp.Header, false)
 	c.Writer.WriteHeader(resp.StatusCode)
@@ -405,9 +414,10 @@ func relayResponsesResponse(c *gin.Context, resp *http.Response) (*model.Usage, 
 		return nil, nil
 	}
 	return &model.Usage{
-		PromptTokens:     envelope.Usage.InputTokens,
-		CompletionTokens: envelope.Usage.OutputTokens,
-		TotalTokens:      envelope.Usage.TotalTokens,
+		PromptTokens:         envelope.Usage.InputTokens,
+		CompletionTokens:     envelope.Usage.OutputTokens,
+		TotalTokens:          envelope.Usage.TotalTokens,
+		ImageGenerationCalls: countResponsesImageGenerationCalls(bridgeEnvelope),
 	}, nil
 }
 

@@ -77,6 +77,8 @@ func relayModeName(path string) string {
 		return "moderations"
 	case relaymode.ImagesGenerations:
 		return "images_generations"
+	case relaymode.ImagesEdits:
+		return "images_edits"
 	case relaymode.Edits:
 		return "edits"
 	case relaymode.AudioSpeech:
@@ -85,6 +87,8 @@ func relayModeName(path string) string {
 		return "audio_transcription"
 	case relaymode.AudioTranslation:
 		return "audio_translation"
+	case relaymode.Realtime:
+		return "realtime"
 	case relaymode.Proxy:
 		return "proxy"
 	case relaymode.Responses:

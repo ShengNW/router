@@ -20,6 +20,16 @@ func TestDefaultProviderModelSupportedEndpointsByProvider(t *testing.T) {
 		t.Fatalf("openai default endpoints = %#v, want responses+chat", openai)
 	}
 
+	openAIRealtime := DefaultProviderModelSupportedEndpoints("openai", ProviderModelTypeAudio, "gpt-realtime-2")
+	if len(openAIRealtime) != 1 || openAIRealtime[0] != ChannelModelEndpointRealtime {
+		t.Fatalf("openai realtime default endpoints = %#v, want realtime", openAIRealtime)
+	}
+
+	regularAudio := DefaultProviderModelSupportedEndpoints("openai", ProviderModelTypeAudio, "tts-1")
+	if len(regularAudio) != 1 || regularAudio[0] != ChannelModelEndpointAudio {
+		t.Fatalf("openai regular audio default endpoints = %#v, want audio/speech", regularAudio)
+	}
+
 	anthropic := DefaultProviderModelSupportedEndpoints("anthropic", ProviderModelTypeText, "claude-opus-4-6")
 	if len(anthropic) != 1 || anthropic[0] != ChannelModelEndpointMessages {
 		t.Fatalf("anthropic default endpoints = %#v, want messages", anthropic)
@@ -221,6 +231,15 @@ func TestNormalizeRequestedChannelModelEndpointMessagesMapsToMessages(t *testing
 	}
 	if got := NormalizeRequestedChannelModelEndpoint("/api/v1/public/messages"); got != ChannelModelEndpointMessages {
 		t.Fatalf("NormalizeRequestedChannelModelEndpoint(/api/v1/public/messages)=%q, want %q", got, ChannelModelEndpointMessages)
+	}
+}
+
+func TestNormalizeRequestedChannelModelEndpointRealtimeMapsToRealtime(t *testing.T) {
+	if got := NormalizeRequestedChannelModelEndpoint("/v1/realtime"); got != ChannelModelEndpointRealtime {
+		t.Fatalf("NormalizeRequestedChannelModelEndpoint(/v1/realtime)=%q, want %q", got, ChannelModelEndpointRealtime)
+	}
+	if got := NormalizeRequestedChannelModelEndpoint("/api/v1/public/realtime"); got != ChannelModelEndpointRealtime {
+		t.Fatalf("NormalizeRequestedChannelModelEndpoint(/api/v1/public/realtime)=%q, want %q", got, ChannelModelEndpointRealtime)
 	}
 }
 

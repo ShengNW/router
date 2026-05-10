@@ -22,6 +22,7 @@ import (
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 	"github.com/yeying-community/router/internal/relay/relaymode"
+	"github.com/yeying-community/router/internal/tokenestimate"
 )
 
 func getAndValidateTextRequest(c *gin.Context, relayMode int) (*relaymodel.GeneralOpenAIRequest, []byte, error) {
@@ -127,7 +128,7 @@ func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIR
 	return preConsumedQuota, nil
 }
 
-func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, pricing model.ResolvedModelPricing, preConsumedQuota int64, groupRatio float64, systemPromptReset bool, chargeUserBalance bool, packageReservation model.PackageQuotaReservation) {
+func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, pricing model.ResolvedModelPricing, preConsumedQuota int64, groupRatio float64, estimateResult tokenestimate.EstimateResult, responsesImageTools []responsesImageToolSpec, systemPromptReset bool, chargeUserBalance bool, packageReservation model.PackageQuotaReservation) {
 	if usage == nil {
 		logger.Error(ctx, "usage is nil, which is unexpected")
 		releasePackageQuotaReservation(ctx, packageReservation)
@@ -140,9 +141,18 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 	if snapshotErr != nil {
 		logger.Error(ctx, "calculate text billing snapshot failed: "+snapshotErr.Error())
 	}
+	annotateTextBillingSnapshot(&billingSnapshot, pricing.Source, resolveTextEstimateSourceLabel(estimateResult), meta.UpstreamRequestPath, textRequest)
+	imageFeeNote := ""
+	imageFeeDetail, imageFeeNote, imageFeeErr := maybeApplyResponsesImageToolBilling(&billingSnapshot, usage, meta.ChannelProtocol, meta.ChannelModelConfigs, groupRatio, responsesImageTools)
+	if imageFeeErr != nil {
+		logger.Error(ctx, "calculate responses image tool billing failed: "+imageFeeErr.Error())
+	}
 	if err != nil {
 		logger.Error(ctx, "calculate text quota failed: "+err.Error())
 		quota = preConsumedQuota
+	}
+	if imageFeeDetail.Applied {
+		quota = billingSnapshot.YYCAmount
 	}
 	totalTokens := promptTokens + completionTokens
 	if totalTokens == 0 {
@@ -204,7 +214,7 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 		BillingSource:      model.ResolveConsumeLogBillingSource(chargeUserBalance),
 		UserDailyQuota:     userDailyQuota,
 		UserEmergencyQuota: userEmergencyQuota,
-		Content:            billing.FormatPricingLog(pricing, groupRatio),
+		Content:            buildTextBillingLogContent(pricing, groupRatio, imageFeeNote),
 		IsStream:           meta.IsStream,
 		ElapsedTime:        helper.CalcElapsedTime(meta.StartTime),
 	}

@@ -39,6 +39,8 @@ const ChannelDetailTestsTab = ({
   updateAllModelTestStreams,
   resolvePreferredProviderForModel,
   normalizeChannelModelType,
+  audioTestLanguage,
+  setAudioTestLanguage,
 }) => {
   const [providerFilter, setProviderFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -80,6 +82,21 @@ const ChannelDetailTestsTab = ({
       text: t(`channel.model_types.${value}`),
     }));
   }, [rowsWithMeta, t]);
+  const audioLanguageOptions = useMemo(
+    () => [
+      {
+        key: 'zh-CN',
+        value: 'zh-CN',
+        text: t('channel.edit.model_tester.audio_language_options.zh-CN'),
+      },
+      {
+        key: 'en-US',
+        value: 'en-US',
+        text: t('channel.edit.model_tester.audio_language_options.en-US'),
+      },
+    ],
+    [t],
+  );
 
   const providerStorageKey = useMemo(
     () =>
@@ -184,12 +201,20 @@ const ChannelDetailTestsTab = ({
   }, [filteredRows, getEffectiveModelEndpoint]);
 
   const disabledBase = detailTestingReadonly || detailModelMutating;
+  const streamCapableRows = useMemo(
+    () => filteredRows.filter((row) => row?.type === 'text'),
+    [filteredRows],
+  );
+  const streamCapableModelIDs = useMemo(
+    () => streamCapableRows.map((row) => row.model),
+    [streamCapableRows],
+  );
   const batchStreamValue = useMemo(() => {
-    if (filteredRows.length === 0) {
+    if (streamCapableRows.length === 0) {
       return true;
     }
-    return filteredRows.every((row) => row?.is_stream !== false);
-  }, [filteredRows]);
+    return streamCapableRows.every((row) => row?.is_stream !== false);
+  }, [streamCapableRows]);
 
   const resultSummaryByKey = useMemo(() => {
     const summaryMap = new Map();
@@ -344,14 +369,33 @@ const ChannelDetailTestsTab = ({
                   <div className='router-log-filter-editor-title'>
                     {t('channel.edit.model_tester.settings_title')}
                   </div>
-                  <Form.Field style={{ marginBottom: 0 }}>
-                    <Checkbox
-                      toggle
-                      label={t('channel.edit.model_tester.settings_stream')}
-                      checked={batchStreamValue}
-                      disabled={disabledBase || filteredRows.length === 0}
-                      onChange={(e, { checked }) =>
-                        updateAllModelTestStreams(!!checked, filteredModelIDs)
+                  {streamCapableRows.length > 0 ? (
+                    <Form.Field style={{ marginBottom: 0 }}>
+                      <Checkbox
+                        toggle
+                        label={t('channel.edit.model_tester.settings_stream')}
+                        checked={batchStreamValue}
+                        disabled={disabledBase}
+                        onChange={(e, { checked }) =>
+                          updateAllModelTestStreams(
+                            !!checked,
+                            streamCapableModelIDs,
+                          )
+                        }
+                      />
+                    </Form.Field>
+                  ) : null}
+                  <Form.Field style={{ marginBottom: 0, marginTop: 12 }}>
+                    <label>
+                      {t('channel.edit.model_tester.settings_audio_language')}
+                    </label>
+                    <Dropdown
+                      selection
+                      className='router-section-dropdown router-dropdown-min-170'
+                      options={audioLanguageOptions}
+                      value={audioTestLanguage || 'zh-CN'}
+                      onChange={(e, { value }) =>
+                        setAudioTestLanguage((value || 'zh-CN').toString())
                       }
                     />
                   </Form.Field>
@@ -522,7 +566,7 @@ const ChannelDetailTestsTab = ({
                       <span className='router-cell-truncate'>{row.model || '-'}</span>
                     </Table.Cell>
                     <Table.Cell className='router-table-dropdown-cell'>
-                      {row.type === 'text' || row.type === 'image' ? (
+                      {row.type === 'text' || row.type === 'image' || row.type === 'audio' ? (
                         <Dropdown
                           selection
                           className='router-mini-dropdown router-table-dropdown-fluid'

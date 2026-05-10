@@ -178,7 +178,7 @@ func fetchChannelBillingResponseBody(method, url string, channel *model.Channel,
 }
 
 func updateChannelCloseAIBalance(channel *model.Channel) (float64, error) {
-	url := fmt.Sprintf("%s/dashboard/billing/credit_grants", channel.GetBaseURL())
+	url := fmt.Sprintf("%s/dashboard/billing/credit_grants", channel.ResolveAccountBaseURL())
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 
 	if err != nil {
@@ -333,21 +333,60 @@ func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
 	return balance, nil
 }
 
+func resolveChannelBalanceRequestURLs(channel *model.Channel) []string {
+	if channel == nil {
+		return nil
+	}
+	switch channel.GetChannelProtocol() {
+	case relaychannel.CloseAI:
+		return []string{
+			fmt.Sprintf("%s/dashboard/billing/credit_grants", channel.ResolveAccountBaseURL()),
+		}
+	case relaychannel.OpenAISB:
+		return []string{
+			"https://api.openai-sb.com/sb-api/user/status?api_key=***",
+		}
+	case relaychannel.AIProxy:
+		return []string{"https://aiproxy.io/api/report/getUserOverview"}
+	case relaychannel.API2GPT:
+		return []string{"https://api.api2gpt.com/dashboard/billing/credit_grants"}
+	case relaychannel.AIGC2D:
+		return []string{"https://api.aigc2d.com/dashboard/billing/credit_grants"}
+	case relaychannel.SiliconFlow:
+		return []string{"https://api.siliconflow.cn/v1/user/info"}
+	case relaychannel.DeepSeek:
+		return []string{"https://api.deepseek.com/user/balance"}
+	case relaychannel.OpenRouter:
+		return []string{"https://openrouter.ai/api/v1/credits"}
+	}
+	baseURL := channel.ResolveAccountBaseURL()
+	if baseURL == "" {
+		return nil
+	}
+	now := time.Now()
+	startDate := fmt.Sprintf("%s-01", now.Format("2006-01"))
+	endDate := now.Format("2006-01-02")
+	return []string{
+		fmt.Sprintf("%s/v1/dashboard/billing/subscription", baseURL),
+		fmt.Sprintf("%s/v1/dashboard/billing/usage?start_date=%s&end_date=%s", baseURL, startDate, endDate),
+	}
+}
+
 func updateChannelBalance(channel *model.Channel) (float64, error) {
 	channelProtocol := channel.GetChannelProtocol()
 	baseURL := relaychannel.BaseURLByProtocol(channel.GetProtocol())
-	if channel.GetBaseURL() == "" {
+	if channel.ResolveAPIBaseURL("") == "" {
 		channel.BaseURL = &baseURL
 	}
 	switch channelProtocol {
 	case relaychannel.OpenAI:
-		if channel.GetBaseURL() != "" {
-			baseURL = channel.GetBaseURL()
+		if channel.ResolveAccountBaseURL() != "" {
+			baseURL = channel.ResolveAccountBaseURL()
 		}
 	case relaychannel.Azure:
 		return 0, errors.New("尚未实现")
 	case relaychannel.Custom:
-		baseURL = channel.GetBaseURL()
+		baseURL = channel.ResolveAccountBaseURL()
 	case relaychannel.CloseAI:
 		return updateChannelCloseAIBalance(channel)
 	case relaychannel.OpenAISB:

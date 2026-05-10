@@ -487,6 +487,9 @@ func shouldCheckModel(c *gin.Context) bool {
 	if strings.HasPrefix(path, "/v1/audio") {
 		return true
 	}
+	if strings.HasPrefix(path, "/v1/realtime") {
+		return true
+	}
 	if strings.HasPrefix(path, "/v1/videos") {
 		return true
 	}

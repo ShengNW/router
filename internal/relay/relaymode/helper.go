@@ -28,6 +28,8 @@ func GetByPath(path string) int {
 		relayMode = Moderations
 	} else if strings.HasPrefix(path, "/v1/images/generations") {
 		relayMode = ImagesGenerations
+	} else if strings.HasPrefix(path, "/v1/images/edits") {
+		relayMode = ImagesEdits
 	} else if strings.HasPrefix(path, "/v1/edits") {
 		relayMode = Edits
 	} else if strings.HasPrefix(path, "/v1/audio/speech") {
@@ -36,6 +38,16 @@ func GetByPath(path string) int {
 		relayMode = AudioTranscription
 	} else if strings.HasPrefix(path, "/v1/audio/translations") {
 		relayMode = AudioTranslation
+	} else if strings.HasPrefix(path, "/v1/realtime/client_secrets") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime/sessions") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime/transcription_sessions") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime/calls") {
+		relayMode = Realtime
+	} else if strings.HasPrefix(path, "/v1/realtime") {
+		relayMode = Realtime
 	} else if strings.HasPrefix(path, "/v1/videos") {
 		relayMode = Videos
 	} else if strings.HasPrefix(path, "/v1/oneapi/proxy") {

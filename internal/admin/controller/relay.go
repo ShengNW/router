@@ -30,12 +30,16 @@ func relayHelper(c *gin.Context, relayMode int) *model.ErrorWithStatusCode {
 	switch relayMode {
 	case relaymode.ImagesGenerations:
 		err = controller.RelayImageHelper(c, relayMode)
+	case relaymode.ImagesEdits:
+		err = controller.RelayImageHelper(c, relayMode)
 	case relaymode.AudioSpeech:
 		fallthrough
 	case relaymode.AudioTranslation:
 		fallthrough
 	case relaymode.AudioTranscription:
 		err = controller.RelayAudioHelper(c, relayMode)
+	case relaymode.Realtime:
+		err = controller.RelayRealtimeHelper(c)
 	case relaymode.Videos:
 		err = controller.RelayVideoHelper(c, relayMode)
 	case relaymode.Proxy:
@@ -483,7 +487,6 @@ func logChannelModelRequestEndpointDisableResult(ctx context.Context, channelId 
 // @Security BearerAuth
 // @Produce json
 // @Success 501 {object} docs.OpenAIErrorResponse
-// @Router /api/v1/public/images/edits [post]
 // @Router /api/v1/public/images/variations [post]
 // @Router /api/v1/public/files [get]
 // @Router /api/v1/public/files [post]

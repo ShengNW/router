@@ -11,18 +11,21 @@ import (
 )
 
 type ResolvedModelPricing struct {
-	Model              string                              `json:"model"`
-	Provider           string                              `json:"provider,omitempty"`
-	Type               string                              `json:"type"`
-	InputPrice         float64                             `json:"input_price"`
-	OutputPrice        float64                             `json:"output_price"`
-	PriceUnit          string                              `json:"price_unit"`
-	Currency           string                              `json:"currency"`
-	Source             string                              `json:"source"`
-	PriceComponents    []ProviderModelPriceComponentDetail `json:"price_components,omitempty"`
-	MatchedComponent   string                              `json:"matched_component,omitempty"`
-	MatchedCondition   string                              `json:"matched_condition,omitempty"`
-	HasChannelOverride bool                                `json:"has_channel_override"`
+	Model                         string                              `json:"model"`
+	Provider                      string                              `json:"provider,omitempty"`
+	Type                          string                              `json:"type"`
+	InputPrice                    float64                             `json:"input_price"`
+	OutputPrice                   float64                             `json:"output_price"`
+	PriceUnit                     string                              `json:"price_unit"`
+	Currency                      string                              `json:"currency"`
+	Source                        string                              `json:"source"`
+	PriceComponents               []ProviderModelPriceComponentDetail `json:"price_components,omitempty"`
+	MatchedComponent              string                              `json:"matched_component,omitempty"`
+	MatchedCondition              string                              `json:"matched_condition,omitempty"`
+	HasChannelOverride            bool                                `json:"has_channel_override"`
+	HasChannelInputPriceOverride  bool                                `json:"has_channel_input_price_override,omitempty"`
+	HasChannelOutputPriceOverride bool                                `json:"has_channel_output_price_override,omitempty"`
+	HasChannelComponentOverride   bool                                `json:"has_channel_component_override,omitempty"`
 }
 
 func (pricing ResolvedModelPricing) IsConfigured() bool {
@@ -51,61 +54,58 @@ func SyncModelPricingCatalogWithDB(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-
-	rows := make([]ProviderModel, 0)
-	if err := db.Order("provider asc, model asc").Find(&rows).Error; err != nil {
+	detailsMap, err := LoadProviderModelDetailsMap(db)
+	if err != nil {
 		return err
 	}
+	next := buildModelPricingIndexFromProviderDetailsMap(detailsMap)
 
+	modelPricingIndexLock.Lock()
+	modelPricingIndex = next
+	modelPricingIndexLock.Unlock()
+	return nil
+}
+
+func buildModelPricingIndexFromProviderDetailsMap(detailsMap map[string][]ProviderModelDetail) providerModelPricingIndex {
+	estimatedSize := 0
+	for _, details := range detailsMap {
+		estimatedSize += len(details)
+	}
 	next := providerModelPricingIndex{
-		byProviderAndModel: make(map[string]providerModelPricingEntry, len(rows)),
+		byProviderAndModel: make(map[string]providerModelPricingEntry, estimatedSize),
 		byModel:            make(map[string][]providerModelPricingEntry),
 	}
-	for _, row := range rows {
-		provider := commonutils.NormalizeProvider(row.Provider)
+	for providerKey, details := range detailsMap {
+		provider := commonutils.NormalizeProvider(providerKey)
 		if provider == "" {
-			provider = strings.TrimSpace(strings.ToLower(row.Provider))
+			provider = strings.TrimSpace(strings.ToLower(providerKey))
 		}
 		if provider == "" {
 			continue
 		}
-		modelName := canonicalizeModelNameForProvider(provider, row.Model)
-		modelName = normalizePricingLookupModelName(modelName)
-		if modelName == "" {
-			continue
+		for _, detail := range NormalizeProviderModelDetails(details) {
+			modelName := normalizePricingLookupModelName(canonicalizeModelNameForProvider(provider, detail.Model))
+			if modelName == "" {
+				continue
+			}
+			normalizedDetail := detail
+			normalizedDetail.Model = modelName
+			normalizedDetail.Type = normalizeModelType(detail.Type, modelName)
+			entry := providerModelPricingEntry{
+				Provider: provider,
+				Detail:   normalizedDetail,
+			}
+			next.byProviderAndModel[buildProviderModelPricingKey(provider, modelName)] = entry
+			next.byModel[modelName] = append(next.byModel[modelName], entry)
 		}
-
-		detail := ProviderModelDetail{
-			Model:       modelName,
-			Type:        normalizeModelType(row.Type, modelName),
-			InputPrice:  row.InputPrice,
-			OutputPrice: row.OutputPrice,
-			PriceUnit:   strings.TrimSpace(strings.ToLower(row.PriceUnit)),
-			Currency:    strings.TrimSpace(strings.ToUpper(row.Currency)),
-			Source:      strings.TrimSpace(strings.ToLower(row.Source)),
-			UpdatedAt:   row.UpdatedAt,
-		}
-		detail = NormalizeProviderModelDetails([]ProviderModelDetail{detail})[0]
-		entry := providerModelPricingEntry{
-			Provider: provider,
-			Detail:   detail,
-		}
-
-		next.byProviderAndModel[buildProviderModelPricingKey(provider, modelName)] = entry
-		next.byModel[modelName] = append(next.byModel[modelName], entry)
 	}
-
 	for modelName, entries := range next.byModel {
 		sort.SliceStable(entries, func(i, j int) bool {
 			return entries[i].Provider < entries[j].Provider
 		})
 		next.byModel[modelName] = entries
 	}
-
-	modelPricingIndexLock.Lock()
-	modelPricingIndex = next
-	modelPricingIndexLock.Unlock()
-	return nil
+	return next
 }
 
 func ResolveChannelModelPricing(channelProtocol int, channelModels []ChannelModel, modelName string) (ResolvedModelPricing, error) {
@@ -124,10 +124,17 @@ func ResolveChannelModelPricing(channelProtocol int, channelModels []ChannelMode
 		if override.InputPrice != nil && *override.InputPrice > 0 {
 			pricing.InputPrice = *override.InputPrice
 			hasOverride = true
+			pricing.HasChannelInputPriceOverride = true
 		}
 		if override.OutputPrice != nil && *override.OutputPrice > 0 {
 			pricing.OutputPrice = *override.OutputPrice
 			hasOverride = true
+			pricing.HasChannelOutputPriceOverride = true
+		}
+		if len(override.PriceComponents) > 0 {
+			pricing.PriceComponents = mergeChannelModelPriceComponentOverrides(pricing.PriceComponents, override.PriceComponents)
+			hasOverride = true
+			pricing.HasChannelComponentOverride = true
 		}
 		if hasOverride {
 			if override.PriceUnit != "" {
@@ -268,19 +275,27 @@ func ResolveImageRequestPricing(pricing ResolvedModelPricing, size string, quali
 	if !ok {
 		return pricing
 	}
-	pricing.InputPrice = component.InputPrice
-	if component.OutputPrice > 0 {
+	if !pricing.HasChannelInputPriceOverride {
+		pricing.InputPrice = component.InputPrice
+	}
+	if pricing.HasChannelOutputPriceOverride {
+		// Keep the channel-specific output price above provider component defaults.
+	} else if component.OutputPrice > 0 {
 		pricing.OutputPrice = component.OutputPrice
 	} else {
 		pricing.OutputPrice = 0
 	}
-	if component.PriceUnit != "" {
+	if component.PriceUnit != "" && !pricing.HasChannelOverride {
 		pricing.PriceUnit = component.PriceUnit
 	}
-	if component.Currency != "" {
+	if component.Currency != "" && !pricing.HasChannelOverride {
 		pricing.Currency = component.Currency
 	}
-	pricing.Source = "provider_component"
+	if pricing.HasChannelOverride || strings.TrimSpace(strings.ToLower(component.Source)) == "channel_override" {
+		pricing.Source = "channel_override"
+	} else {
+		pricing.Source = "provider_component"
+	}
 	pricing.MatchedComponent = component.Component
 	pricing.MatchedCondition = component.Condition
 	return pricing
@@ -388,6 +403,30 @@ func selectProviderPriceComponent(components []ProviderModelPriceComponentDetail
 		}
 	}
 	return ProviderModelPriceComponentDetail{}, false
+}
+
+func mergeChannelModelPriceComponentOverrides(providerComponents []ProviderModelPriceComponentDetail, channelComponents []ProviderModelPriceComponentDetail) []ProviderModelPriceComponentDetail {
+	merged := NormalizeProviderModelPriceComponents(providerComponents)
+	indexByKey := make(map[string]int, len(merged))
+	for idx, component := range merged {
+		indexByKey[component.Component+"\x00"+component.Condition] = idx
+	}
+	for _, component := range NormalizeProviderModelPriceComponents(channelComponents) {
+		if component.Component == "" {
+			continue
+		}
+		if component.Source == "" || component.Source == "manual" || component.Source == "default" {
+			component.Source = "channel_override"
+		}
+		key := component.Component + "\x00" + component.Condition
+		if idx, ok := indexByKey[key]; ok {
+			merged[idx] = component
+			continue
+		}
+		indexByKey[key] = len(merged)
+		merged = append(merged, component)
+	}
+	return NormalizeProviderModelPriceComponents(merged)
 }
 
 func providerPriceComponentMatches(condition string, attrs map[string]string) bool {

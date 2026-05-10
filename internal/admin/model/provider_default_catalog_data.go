@@ -39,7 +39,7 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 			{
 				Model:              "gpt-image-2",
 				Type:               ProviderModelTypeImage,
-				SupportedEndpoints: []string{ChannelModelEndpointResponses, ChannelModelEndpointImages, ChannelModelEndpointImageEdit},
+				SupportedEndpoints: []string{ChannelModelEndpointResponses},
 				InputPrice:         0.008,
 				OutputPrice:        0.03,
 				PriceUnit:          ProviderPriceUnitPer1KTokens,
@@ -51,12 +51,13 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 				},
 			},
 			{
-				Model:      "gpt-image-1",
-				Type:       ProviderModelTypeImage,
-				InputPrice: 0.011,
-				PriceUnit:  ProviderPriceUnitPerImage,
-				Currency:   ProviderPriceCurrencyUSD,
-				Source:     "default",
+				Model:              "gpt-image-1",
+				Type:               ProviderModelTypeImage,
+				SupportedEndpoints: []string{ChannelModelEndpointResponses, ChannelModelEndpointImages, ChannelModelEndpointImageEdit},
+				InputPrice:         0.011,
+				PriceUnit:          ProviderPriceUnitPerImage,
+				Currency:           ProviderPriceCurrencyUSD,
+				Source:             "default",
 				PriceComponents: []ProviderModelPriceComponentDetail{
 					{Component: ProviderModelPriceComponentImageGeneration, Condition: "quality=low;size=1024x1024", InputPrice: 0.011, PriceUnit: ProviderPriceUnitPerImage, Currency: ProviderPriceCurrencyUSD, Source: "default", SourceURL: "https://platform.openai.com/docs/pricing", SortOrder: 10},
 					{Component: ProviderModelPriceComponentImageGeneration, Condition: "quality=low;size=1024x1536", InputPrice: 0.016, PriceUnit: ProviderPriceUnitPerImage, Currency: ProviderPriceCurrencyUSD, Source: "default", SourceURL: "https://platform.openai.com/docs/pricing", SortOrder: 20},
@@ -86,6 +87,8 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 				},
 			},
 			{Model: "gpt-realtime", Type: ProviderModelTypeAudio, InputPrice: 0.004, OutputPrice: 0.016, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
+			{Model: "gpt-realtime-2", Type: ProviderModelTypeAudio, InputPrice: 0.004, OutputPrice: 0.024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
+			{Model: "gpt-realtime-1.5", Type: ProviderModelTypeAudio, InputPrice: 0.0006, OutputPrice: 0.0024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-realtime-mini", Type: ProviderModelTypeAudio, InputPrice: 0.0006, OutputPrice: 0.0024, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-audio", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "gpt-audio-mini", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
@@ -104,7 +107,7 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 		ModelDetails: []ProviderModelDetail{
 			{Model: "ernie-4.5-turbo-128k", Type: ProviderModelTypeText, InputPrice: 0.0008, OutputPrice: 0.0032, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "ernie-x1.1-preview", Type: ProviderModelTypeText, InputPrice: 0.001, OutputPrice: 0.004, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
-			{Model: "ernie-4.5-vl-32k-preview", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
+			{Model: "ernie-4.5-vl-32k-preview", Type: ProviderModelTypeImage, SupportedEndpoints: []string{ChannelModelEndpointResponses}, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 		},
 	},
 	{
@@ -213,8 +216,8 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 			{Model: "qwen-max-latest", Type: ProviderModelTypeText, InputPrice: 0.011743, OutputPrice: 0.046971, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "qwen-plus-latest", Type: ProviderModelTypeText, InputPrice: 0.002936, OutputPrice: 0.008807, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "qwen-turbo-latest", Type: ProviderModelTypeText, InputPrice: 0.000367, OutputPrice: 0.001468, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
-			{Model: "qwen-vl-max-latest", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
-			{Model: "qvq-max-latest", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
+			{Model: "qwen-vl-max-latest", Type: ProviderModelTypeImage, SupportedEndpoints: []string{ChannelModelEndpointResponses}, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
+			{Model: "qvq-max-latest", Type: ProviderModelTypeImage, SupportedEndpoints: []string{ChannelModelEndpointResponses}, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "qwen-tts-latest", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KChars, Currency: "CNY", Source: "default"},
 			{Model: "qwen-omni-turbo-latest", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 		},
@@ -228,7 +231,7 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 		ModelDetails: []ProviderModelDetail{
 			{Model: "step-3.5-flash", Type: ProviderModelTypeText, InputPrice: 0.0007, OutputPrice: 0.0021, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "step-2-mini", Type: ProviderModelTypeText, InputPrice: 0.001, OutputPrice: 0.002, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
-			{Model: "step-1o-turbo-vision", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
+			{Model: "step-1o-turbo-vision", Type: ProviderModelTypeImage, SupportedEndpoints: []string{ChannelModelEndpointResponses}, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "step-1o-audio", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "step-1x-medium", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPerImage, Currency: "CNY", Source: "default"},
 		},
@@ -241,7 +244,7 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 		SortOrder:   155,
 		ModelDetails: []ProviderModelDetail{
 			{Model: "glm-4.5-air", Type: ProviderModelTypeText, InputPrice: 0.0008, OutputPrice: 0.002, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
-			{Model: "glm-4v-plus-0111", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
+			{Model: "glm-4v-plus-0111", Type: ProviderModelTypeImage, SupportedEndpoints: []string{ChannelModelEndpointResponses}, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "glm-4-voice", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: "CNY", Source: "default"},
 			{Model: "cogview-4-250304", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPerImage, Currency: "CNY", Source: "default"},
 			{Model: "cogvideox-flash", Type: ProviderModelTypeVideo, PriceUnit: ProviderPriceUnitPerSecond, Currency: "CNY", Source: "default"},
@@ -256,7 +259,7 @@ var defaultProviderCatalogTemplates = normalizeDefaultProviderCatalogTemplates([
 		ModelDetails: []ProviderModelDetail{
 			{Model: "mistral-large-latest", Type: ProviderModelTypeText, InputPrice: 0.002, OutputPrice: 0.006, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "mistral-medium-latest", Type: ProviderModelTypeText, InputPrice: 0.0004, OutputPrice: 0.002, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
-			{Model: "pixtral-large-latest", Type: ProviderModelTypeImage, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
+			{Model: "pixtral-large-latest", Type: ProviderModelTypeImage, SupportedEndpoints: []string{ChannelModelEndpointResponses}, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 			{Model: "voxtral-mini-latest", Type: ProviderModelTypeAudio, PriceUnit: ProviderPriceUnitPer1KTokens, Currency: ProviderPriceCurrencyUSD, Source: "default"},
 		},
 	},
@@ -365,6 +368,10 @@ func normalizeDefaultProviderSeedModelDetails(provider string, details []Provide
 
 func DefaultProviderModelSupportedEndpoints(provider string, modelType string, modelName string) []string {
 	normalizedProvider := strings.TrimSpace(strings.ToLower(provider))
+	normalizedModelName := strings.TrimSpace(strings.ToLower(modelName))
+	if normalizedProvider == "openai" && strings.HasPrefix(normalizedModelName, "gpt-realtime") {
+		return []string{ChannelModelEndpointRealtime}
+	}
 	switch normalizeModelType(modelType, modelName) {
 	case ProviderModelTypeImage:
 		return []string{ChannelModelEndpointImages}

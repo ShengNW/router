@@ -266,7 +266,7 @@ func IsChannelModelEndpointAllowedForType(modelType string, endpoint string) boo
 			return false
 		}
 	case ProviderModelTypeAudio:
-		return normalizedEndpoint == ChannelModelEndpointAudio
+		return normalizedEndpoint == ChannelModelEndpointAudio || normalizedEndpoint == ChannelModelEndpointRealtime
 	case ProviderModelTypeVideo:
 		return normalizedEndpoint == ChannelModelEndpointVideos
 	default:
@@ -393,6 +393,8 @@ func isKnownImageModel(modelName string) bool {
 	switch strings.TrimSpace(strings.ToLower(modelName)) {
 	case "dall-e-2",
 		"dall-e-3",
+		"gpt-image-1",
+		"gpt-image-2",
 		"ali-stable-diffusion-xl",
 		"ali-stable-diffusion-v1.5",
 		"wanx-v1",

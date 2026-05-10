@@ -461,6 +461,7 @@
         "input_price": "Input Price",
         "output_price": "Output Price",
         "price_unit": "Price Unit",
+        "component_based": "Component-based",
         "currency": "Currency",
         "source": "Source",
         "price_components": "Complex Pricing",
@@ -581,6 +582,8 @@
         "table": {
           "model": "Model",
           "endpoint": "Endpoint",
+          "base_url": "Access Address",
+          "base_url_placeholder": "Leave empty to use API Base URL",
           "enabled": "Enabled",
           "latest_test": "Latest Test",
           "test_status": "Test Status",
@@ -638,6 +641,11 @@
       "proxy_url_placeholder": "This is optional and used for API calls via a proxy. Please enter the proxy URL, formatted as: https://domain.com",
       "base_url": "Address",
       "base_url_placeholder": "The address required by the OpenAPI SDK",
+      "api_base_url": "API Base URL",
+      "api_base_url_placeholder": "Leave empty to use the protocol default address; existing legacy channel addresses remain compatible",
+      "account_base_url": "Account Base URL",
+      "account_base_url_placeholder": "Used for balance, billing, recharge, and other account-side pages; falls back to API routing or legacy compatible settings when empty",
+      "address_routing_hint": "Request forwarding uses API Base URL by default. If a channel endpoint has its own address configured, that endpoint address takes precedence. Account-side requests use Account Base URL.",
       "key": "Secret Key",
       "key_placeholder": "Please enter key",
       "buttons": {
@@ -756,6 +764,7 @@
         "settings_button": "Settings",
         "settings_title": "Test Settings",
         "settings_stream": "Stream Test",
+        "settings_audio_language": "Speech Test Language",
         "single": "Test",
         "task_created": "{{count}} test tasks submitted, {{reused}} active tasks reused.",
         "group_count": "{{count}} models",
@@ -777,6 +786,10 @@
         "download_failed": "Failed to download the test artifact",
         "download_unavailable": "No downloadable artifact is available for this test result",
         "history": "History",
+        "audio_language_options": {
+          "zh-CN": "Chinese",
+          "en-US": "English"
+        },
         "stale": "Connection info, model selection, or endpoint changed. Please run model tests again.",
         "untested": "The current endpoint has not been tested yet.",
         "latest_result_from_endpoint": "Current endpoint is untested. Showing latest test result from endpoint: {{endpoint}}.",
@@ -1337,6 +1350,10 @@
         "user_emergency_quota": "Package Emergency Amount",
         "billing_price_unit": "Price Unit",
         "billing_currency": "Billing Currency",
+        "billing_pricing_source": "Pricing Source",
+        "billing_usage_source": "Usage Source",
+        "billing_estimate_source": "Estimate Source",
+        "billing_settlement_mode": "Settlement Mode",
         "billing_group_ratio": "Business Ratio",
         "billing_yyc_rate": "Conversion Rate",
         "billing_input_quantity": "Input Quantity",
@@ -1345,6 +1362,10 @@
         "billing_output_amount": "Output Amount",
         "billing_amount": "Billing Amount",
         "billing_yyc_amount": "Converted Amount",
+        "billing_image_tool_calls": "Image Tool Calls",
+        "billing_image_tool_output_tokens": "Image Tool Output Tokens",
+        "billing_image_tool_amount": "Image Tool Amount",
+        "billing_image_tool_yyc_amount": "Image Tool Converted Amount",
         "elapsed_time": "Elapsed Time",
         "is_stream": "Stream Output",
         "system_prompt_reset": "System Prompt Reset"
@@ -1723,43 +1744,43 @@
         "label": "Period"
       },
       "updated_at": "Updated: {{time}}",
-    "buttons": {
-      "refresh": "Refresh"
-    },
-    "usage_rank": {
-      "title": "Usage Ranking",
-      "description": "Aggregate user consumption in the current period, including requests, tokens, and spend share.",
-      "summary": {
-        "title": "Current Top-Rank Summary",
-        "top_user": "Top User",
-        "top_share": "Top Share",
-        "user_count": "Users in Rank",
-        "total_tokens": "Rank Tokens"
+      "buttons": {
+        "refresh": "Refresh"
       },
-      "totals": {
-        "title": "Matched Totals",
-        "user_count": "Matched Users",
-        "request_count": "Matched Requests",
-        "total_tokens": "Matched Tokens",
-        "total_spend": "Matched Spend (USD)"
+      "usage_rank": {
+        "title": "Usage Ranking",
+        "description": "Aggregate user consumption in the current period, including requests, tokens, and spend share.",
+        "summary": {
+          "title": "Current Top-Rank Summary",
+          "top_user": "Top User",
+          "top_share": "Top Share",
+          "user_count": "Users in Rank",
+          "total_tokens": "Rank Tokens"
+        },
+        "totals": {
+          "title": "Matched Totals",
+          "user_count": "Matched Users",
+          "request_count": "Matched Requests",
+          "total_tokens": "Matched Tokens",
+          "total_spend": "Matched Spend (USD)"
+        },
+        "search": {
+          "placeholder": "Search username or user ID",
+          "submit": "Search",
+          "reset": "Clear"
+        },
+        "columns": {
+          "rank": "Rank",
+          "user": "User",
+          "requests": "Requests",
+          "tokens": "Tokens",
+          "spend": "Spend (USD)",
+          "share": "Share",
+          "last_used_at": "Last Used"
+        }
       },
-      "search": {
-        "placeholder": "Search username or user ID",
-        "submit": "Search",
-        "reset": "Clear"
-      },
-      "columns": {
-        "rank": "Rank",
-        "user": "User",
-        "requests": "Requests",
-        "tokens": "Tokens",
-        "spend": "Spend (USD)",
-        "share": "Share",
-        "last_used_at": "Last Used"
-      }
-    },
-    "metrics": {
-      "consume": "Spend (USD)",
+      "metrics": {
+        "consume": "Spend (USD)",
         "topup": "Top-up (USD)",
         "net": "Net Inflow (USD)",
         "request_count": "Requests",
@@ -1850,13 +1871,13 @@
           "unknown": "Unknown"
         }
       },
-    "empty": {
-      "trend": "No trend data",
-      "channels": "No channel data",
-      "tasks": "No task data",
-      "usage_rank": "No user usage data in the current period"
+      "empty": {
+        "trend": "No trend data",
+        "channels": "No channel data",
+        "tasks": "No task data",
+        "usage_rank": "No user usage data in the current period"
+      }
     }
-  }
   },
   "setting": {
     "title": "System Settings",

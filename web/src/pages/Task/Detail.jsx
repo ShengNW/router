@@ -199,6 +199,22 @@ const TaskDetail = () => {
     }
     return raw.trim();
   }, [location.state]);
+  const taskListNavState = useMemo(() => {
+    if (
+      originPath === '' &&
+      originLabel === '' &&
+      contextType === '' &&
+      contextLabel === ''
+    ) {
+      return undefined;
+    }
+    return {
+      from: originPath,
+      fromLabel: originLabel,
+      contextType,
+      contextLabel,
+    };
+  }, [contextLabel, contextType, originLabel, originPath]);
   const [loading, setLoading] = useState(true);
   const [task, setTask] = useState(null);
 
@@ -244,6 +260,14 @@ const TaskDetail = () => {
       { key: 'message', label: 'message' },
       { key: 'endpoint', label: 'endpoint' },
       { key: 'model', label: 'model' },
+      { key: 'base_url', label: 'base_url' },
+      { key: 'request_url', label: 'request_url' },
+      { key: 'api_base_url', label: 'api_base_url' },
+      { key: 'account_base_url', label: 'account_base_url' },
+      { key: 'models_url', label: 'models_url' },
+      { key: 'balance_urls', label: 'balance_urls' },
+      { key: 'count', label: 'count' },
+      { key: 'balance', label: 'balance' },
       { key: 'round', label: 'round' },
     ],
     [],
@@ -259,8 +283,10 @@ const TaskDetail = () => {
   );
 
   const backToList = useCallback(() => {
-    navigate(returnPath || buildTaskListPath());
-  }, [buildTaskListPath, navigate, returnPath]);
+    navigate(returnPath || buildTaskListPath(), {
+      state: taskListNavState,
+    });
+  }, [buildTaskListPath, navigate, returnPath, taskListNavState]);
   const goToChannelList = useCallback(() => {
     navigate('/admin/channel');
   }, [navigate]);
