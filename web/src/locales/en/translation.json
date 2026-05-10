@@ -461,6 +461,8 @@
         "input_price": "Input Price",
         "output_price": "Output Price",
         "price_unit": "Price Unit",
+        "component_based": "Component-based",
+        "component_summary": "{{components}} · {{count}} rules",
         "currency": "Currency",
         "source": "Source",
         "price_components": "Complex Pricing",
@@ -1342,6 +1344,10 @@
         "user_emergency_quota": "Package Emergency Amount",
         "billing_price_unit": "Price Unit",
         "billing_currency": "Billing Currency",
+        "billing_pricing_source": "Pricing Source",
+        "billing_usage_source": "Usage Source",
+        "billing_estimate_source": "Estimate Source",
+        "billing_settlement_mode": "Settlement Mode",
         "billing_group_ratio": "Business Ratio",
         "billing_yyc_rate": "Conversion Rate",
         "billing_input_quantity": "Input Quantity",
@@ -1350,6 +1356,10 @@
         "billing_output_amount": "Output Amount",
         "billing_amount": "Billing Amount",
         "billing_yyc_amount": "Converted Amount",
+        "billing_image_tool_calls": "Image Tool Calls",
+        "billing_image_tool_output_tokens": "Image Tool Output Tokens",
+        "billing_image_tool_amount": "Image Tool Amount",
+        "billing_image_tool_yyc_amount": "Image Tool Converted Amount",
         "elapsed_time": "Elapsed Time",
         "is_stream": "Stream Output",
         "system_prompt_reset": "System Prompt Reset"
@@ -1728,43 +1738,43 @@
         "label": "Period"
       },
       "updated_at": "Updated: {{time}}",
-    "buttons": {
-      "refresh": "Refresh"
-    },
-    "usage_rank": {
-      "title": "Usage Ranking",
-      "description": "Aggregate user consumption in the current period, including requests, tokens, and spend share.",
-      "summary": {
-        "title": "Current Top-Rank Summary",
-        "top_user": "Top User",
-        "top_share": "Top Share",
-        "user_count": "Users in Rank",
-        "total_tokens": "Rank Tokens"
+      "buttons": {
+        "refresh": "Refresh"
       },
-      "totals": {
-        "title": "Matched Totals",
-        "user_count": "Matched Users",
-        "request_count": "Matched Requests",
-        "total_tokens": "Matched Tokens",
-        "total_spend": "Matched Spend (USD)"
+      "usage_rank": {
+        "title": "Usage Ranking",
+        "description": "Aggregate user consumption in the current period, including requests, tokens, and spend share.",
+        "summary": {
+          "title": "Current Top-Rank Summary",
+          "top_user": "Top User",
+          "top_share": "Top Share",
+          "user_count": "Users in Rank",
+          "total_tokens": "Rank Tokens"
+        },
+        "totals": {
+          "title": "Matched Totals",
+          "user_count": "Matched Users",
+          "request_count": "Matched Requests",
+          "total_tokens": "Matched Tokens",
+          "total_spend": "Matched Spend (USD)"
+        },
+        "search": {
+          "placeholder": "Search username or user ID",
+          "submit": "Search",
+          "reset": "Clear"
+        },
+        "columns": {
+          "rank": "Rank",
+          "user": "User",
+          "requests": "Requests",
+          "tokens": "Tokens",
+          "spend": "Spend (USD)",
+          "share": "Share",
+          "last_used_at": "Last Used"
+        }
       },
-      "search": {
-        "placeholder": "Search username or user ID",
-        "submit": "Search",
-        "reset": "Clear"
-      },
-      "columns": {
-        "rank": "Rank",
-        "user": "User",
-        "requests": "Requests",
-        "tokens": "Tokens",
-        "spend": "Spend (USD)",
-        "share": "Share",
-        "last_used_at": "Last Used"
-      }
-    },
-    "metrics": {
-      "consume": "Spend (USD)",
+      "metrics": {
+        "consume": "Spend (USD)",
         "topup": "Top-up (USD)",
         "net": "Net Inflow (USD)",
         "request_count": "Requests",
@@ -1855,13 +1865,13 @@
           "unknown": "Unknown"
         }
       },
-    "empty": {
-      "trend": "No trend data",
-      "channels": "No channel data",
-      "tasks": "No task data",
-      "usage_rank": "No user usage data in the current period"
+      "empty": {
+        "trend": "No trend data",
+        "channels": "No channel data",
+        "tasks": "No task data",
+        "usage_rank": "No user usage data in the current period"
+      }
     }
-  }
   },
   "setting": {
     "title": "System Settings",

@@ -51,61 +51,58 @@ func SyncModelPricingCatalogWithDB(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-
-	rows := make([]ProviderModel, 0)
-	if err := db.Order("provider asc, model asc").Find(&rows).Error; err != nil {
+	detailsMap, err := LoadProviderModelDetailsMap(db)
+	if err != nil {
 		return err
 	}
+	next := buildModelPricingIndexFromProviderDetailsMap(detailsMap)
 
+	modelPricingIndexLock.Lock()
+	modelPricingIndex = next
+	modelPricingIndexLock.Unlock()
+	return nil
+}
+
+func buildModelPricingIndexFromProviderDetailsMap(detailsMap map[string][]ProviderModelDetail) providerModelPricingIndex {
+	estimatedSize := 0
+	for _, details := range detailsMap {
+		estimatedSize += len(details)
+	}
 	next := providerModelPricingIndex{
-		byProviderAndModel: make(map[string]providerModelPricingEntry, len(rows)),
+		byProviderAndModel: make(map[string]providerModelPricingEntry, estimatedSize),
 		byModel:            make(map[string][]providerModelPricingEntry),
 	}
-	for _, row := range rows {
-		provider := commonutils.NormalizeProvider(row.Provider)
+	for providerKey, details := range detailsMap {
+		provider := commonutils.NormalizeProvider(providerKey)
 		if provider == "" {
-			provider = strings.TrimSpace(strings.ToLower(row.Provider))
+			provider = strings.TrimSpace(strings.ToLower(providerKey))
 		}
 		if provider == "" {
 			continue
 		}
-		modelName := canonicalizeModelNameForProvider(provider, row.Model)
-		modelName = normalizePricingLookupModelName(modelName)
-		if modelName == "" {
-			continue
+		for _, detail := range NormalizeProviderModelDetails(details) {
+			modelName := normalizePricingLookupModelName(canonicalizeModelNameForProvider(provider, detail.Model))
+			if modelName == "" {
+				continue
+			}
+			normalizedDetail := detail
+			normalizedDetail.Model = modelName
+			normalizedDetail.Type = normalizeModelType(detail.Type, modelName)
+			entry := providerModelPricingEntry{
+				Provider: provider,
+				Detail:   normalizedDetail,
+			}
+			next.byProviderAndModel[buildProviderModelPricingKey(provider, modelName)] = entry
+			next.byModel[modelName] = append(next.byModel[modelName], entry)
 		}
-
-		detail := ProviderModelDetail{
-			Model:       modelName,
-			Type:        normalizeModelType(row.Type, modelName),
-			InputPrice:  row.InputPrice,
-			OutputPrice: row.OutputPrice,
-			PriceUnit:   strings.TrimSpace(strings.ToLower(row.PriceUnit)),
-			Currency:    strings.TrimSpace(strings.ToUpper(row.Currency)),
-			Source:      strings.TrimSpace(strings.ToLower(row.Source)),
-			UpdatedAt:   row.UpdatedAt,
-		}
-		detail = NormalizeProviderModelDetails([]ProviderModelDetail{detail})[0]
-		entry := providerModelPricingEntry{
-			Provider: provider,
-			Detail:   detail,
-		}
-
-		next.byProviderAndModel[buildProviderModelPricingKey(provider, modelName)] = entry
-		next.byModel[modelName] = append(next.byModel[modelName], entry)
 	}
-
 	for modelName, entries := range next.byModel {
 		sort.SliceStable(entries, func(i, j int) bool {
 			return entries[i].Provider < entries[j].Provider
 		})
 		next.byModel[modelName] = entries
 	}
-
-	modelPricingIndexLock.Lock()
-	modelPricingIndex = next
-	modelPricingIndexLock.Unlock()
-	return nil
+	return next
 }
 
 func ResolveChannelModelPricing(channelProtocol int, channelModels []ChannelModel, modelName string) (ResolvedModelPricing, error) {

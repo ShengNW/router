@@ -34,6 +34,14 @@ type traditionalImageTokenEstimate struct {
 	ImageOutputTokens int
 }
 
+const (
+	imageUsageSourceLocalEstimate             = "local_estimate"
+	imageEstimateSourceTraditionalImageTokens = "traditional_image_tokens_local"
+	imageEstimateSourceImageCountRatio        = "image_count_ratio"
+	imageSettlementModeEstimateOnly           = "estimate_only"
+	imageSettlementModeLocalEstimateFinal     = "local_estimate_final"
+)
+
 func validateImageBillingPricing(pricing adminmodel.ResolvedModelPricing) error {
 	switch billing.ResolveImageBillingMode(pricing) {
 	case billing.ImageBillingModePerImage, billing.ImageBillingModePerCall:
@@ -484,6 +492,10 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		if snapshotErr != nil {
 			return openai.ErrorWrapper(snapshotErr, "calculate_image_quota_failed", http.StatusInternalServerError)
 		}
+		billingSnapshot.PricingSource = strings.TrimSpace(pricing.Source)
+		billingSnapshot.UsageSource = imageUsageSourceLocalEstimate
+		billingSnapshot.EstimateSource = imageEstimateSourceTraditionalImageTokens
+		billingSnapshot.SettlementMode = imageSettlementModeLocalEstimateFinal
 		logger.Debugf(
 			ctx,
 			"[image_token_estimate] model=%s prompt_tokens=%d image_output_tokens=%d size=%s quality=%s count=%d",
@@ -501,6 +513,10 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 			logger.Errorf(ctx, "image billing snapshot failed user_id=%s group=%s channel_id=%s model=%s image_count=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), imageCount, snapshotErr.Error())
 			return openai.ErrorWrapper(snapshotErr, "calculate_image_quota_failed", http.StatusInternalServerError)
 		}
+		billingSnapshot.PricingSource = strings.TrimSpace(pricing.Source)
+		billingSnapshot.UsageSource = ""
+		billingSnapshot.EstimateSource = imageEstimateSourceImageCountRatio
+		billingSnapshot.SettlementMode = imageSettlementModeEstimateOnly
 	}
 	quota := billingSnapshot.YYCAmount
 	billingPlan, quotaErr := reserveRelayQuota(ctx, meta.Group, meta.UserId, quota)
@@ -579,29 +595,27 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 				}
 			}
 		}
-		if quota != 0 {
-			tokenName := c.GetString(ctxkey.TokenName)
-			billingSnapshot.YYCAmount = quota
-			entry := &model.Log{
-				UserId:             meta.UserId,
-				GroupId:            meta.Group,
-				ChannelId:          meta.ChannelId,
-				PromptTokens:       int(billingSnapshot.InputQuantity),
-				CompletionTokens:   int(billingSnapshot.OutputQuantity),
-				ModelName:          imageRequest.Model,
-				TokenName:          tokenName,
-				Quota:              int(quota),
-				BillingSource:      model.ResolveConsumeLogBillingSource(billingPlan.ChargeUserBalance()),
-				UserDailyQuota:     userDailyQuota,
-				UserEmergencyQuota: userEmergencyQuota,
-				Content:            billing.FormatPricingLog(pricing, groupRatio),
-			}
-			billingSnapshot.ApplyToLog(entry)
-			model.RecordConsumeLog(ctx, entry)
-			model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
-			channelId := c.GetString(ctxkey.ChannelId)
-			model.UpdateChannelUsedQuota(channelId, quota)
+		tokenName := c.GetString(ctxkey.TokenName)
+		billingSnapshot.YYCAmount = quota
+		entry := &model.Log{
+			UserId:             meta.UserId,
+			GroupId:            meta.Group,
+			ChannelId:          meta.ChannelId,
+			PromptTokens:       int(billingSnapshot.InputQuantity),
+			CompletionTokens:   int(billingSnapshot.OutputQuantity),
+			ModelName:          imageRequest.Model,
+			TokenName:          tokenName,
+			Quota:              int(quota),
+			BillingSource:      model.ResolveConsumeLogBillingSource(billingPlan.ChargeUserBalance()),
+			UserDailyQuota:     userDailyQuota,
+			UserEmergencyQuota: userEmergencyQuota,
+			Content:            billing.FormatPricingLog(pricing, groupRatio),
 		}
+		billingSnapshot.ApplyToLog(entry)
+		model.RecordConsumeLog(ctx, entry)
+		model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
+		channelId := c.GetString(ctxkey.ChannelId)
+		model.UpdateChannelUsedQuota(channelId, quota)
 	}(c.Request.Context())
 	groupQuotaSettled = true
 

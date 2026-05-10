@@ -10,16 +10,24 @@ import (
 )
 
 type BillingSnapshot struct {
-	PriceUnit      string  `json:"price_unit,omitempty"`
-	Currency       string  `json:"currency,omitempty"`
-	GroupRatio     float64 `json:"group_ratio,omitempty"`
-	YYCRate        float64 `json:"yyc_rate,omitempty"`
-	InputQuantity  float64 `json:"input_quantity,omitempty"`
-	OutputQuantity float64 `json:"output_quantity,omitempty"`
-	InputAmount    float64 `json:"input_amount,omitempty"`
-	OutputAmount   float64 `json:"output_amount,omitempty"`
-	Amount         float64 `json:"amount,omitempty"`
-	YYCAmount      int64   `json:"yyc_amount,omitempty"`
+	PriceUnit             string  `json:"price_unit,omitempty"`
+	Currency              string  `json:"currency,omitempty"`
+	PricingSource         string  `json:"pricing_source,omitempty"`
+	UsageSource           string  `json:"usage_source,omitempty"`
+	EstimateSource        string  `json:"estimate_source,omitempty"`
+	SettlementMode        string  `json:"settlement_mode,omitempty"`
+	GroupRatio            float64 `json:"group_ratio,omitempty"`
+	YYCRate               float64 `json:"yyc_rate,omitempty"`
+	InputQuantity         float64 `json:"input_quantity,omitempty"`
+	OutputQuantity        float64 `json:"output_quantity,omitempty"`
+	InputAmount           float64 `json:"input_amount,omitempty"`
+	OutputAmount          float64 `json:"output_amount,omitempty"`
+	Amount                float64 `json:"amount,omitempty"`
+	YYCAmount             int64   `json:"yyc_amount,omitempty"`
+	ImageToolCalls        int     `json:"image_tool_calls,omitempty"`
+	ImageToolOutputTokens int     `json:"image_tool_output_tokens,omitempty"`
+	ImageToolAmount       float64 `json:"image_tool_amount,omitempty"`
+	ImageToolYYCAmount    int64   `json:"image_tool_yyc_amount,omitempty"`
 }
 
 type ImageBillingMode string
@@ -37,6 +45,10 @@ func (snapshot BillingSnapshot) ApplyToLog(log *model.Log) {
 	}
 	log.BillingPriceUnit = snapshot.PriceUnit
 	log.BillingCurrency = snapshot.Currency
+	log.BillingPricingSource = snapshot.PricingSource
+	log.BillingUsageSource = snapshot.UsageSource
+	log.BillingEstimateSource = snapshot.EstimateSource
+	log.BillingSettlementMode = snapshot.SettlementMode
 	log.BillingGroupRatio = snapshot.GroupRatio
 	log.BillingYYCRate = snapshot.YYCRate
 	log.BillingInputQuantity = snapshot.InputQuantity
@@ -45,6 +57,10 @@ func (snapshot BillingSnapshot) ApplyToLog(log *model.Log) {
 	log.BillingOutputAmount = snapshot.OutputAmount
 	log.BillingAmount = snapshot.Amount
 	log.BillingYYCAmount = snapshot.YYCAmount
+	log.BillingImageToolCalls = snapshot.ImageToolCalls
+	log.BillingImageToolOutputTokens = snapshot.ImageToolOutputTokens
+	log.BillingImageToolAmount = snapshot.ImageToolAmount
+	log.BillingImageToolYYCAmount = snapshot.ImageToolYYCAmount
 }
 
 func ComputeTextPreConsumedQuota(promptTokens int, maxCompletionTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (int64, error) {
@@ -124,6 +140,21 @@ func ComputeTraditionalImageTokenBasedBillingSnapshot(promptTokens int, imageOut
 		pricing,
 		groupRatio,
 		promptTokens > 0 || imageOutputTokens > 0,
+	)
+}
+
+func ComputeResponseImageToolTokenBasedBillingSnapshot(imageOutputTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+	if ResolveImageBillingMode(pricing) != ImageBillingModeTokenBased {
+		return BillingSnapshot{}, fmt.Errorf("responses image tool token-based billing requires token-based pricing for model %s", strings.TrimSpace(pricing.Model))
+	}
+	return buildBillingSnapshot(
+		0,
+		float64(imageOutputTokens),
+		0,
+		pricing.OutputPrice,
+		pricing,
+		groupRatio,
+		imageOutputTokens > 0,
 	)
 }
 

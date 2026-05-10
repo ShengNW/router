@@ -139,3 +139,30 @@ func TestComputeTraditionalImageTokenBasedBillingSnapshot(t *testing.T) {
 		t.Fatalf("YYCAmount = %d, want > 0", snapshot.YYCAmount)
 	}
 }
+
+func TestComputeResponseImageToolTokenBasedBillingSnapshot(t *testing.T) {
+	pricing := adminmodel.ResolvedModelPricing{
+		Model:       "gpt-image-2",
+		PriceUnit:   adminmodel.ProviderPriceUnitPer1KTokens,
+		InputPrice:  0.008,
+		OutputPrice: 0.03,
+		Currency:    adminmodel.ProviderPriceCurrencyUSD,
+	}
+
+	snapshot, err := ComputeResponseImageToolTokenBasedBillingSnapshot(4160, pricing, 1)
+	if err != nil {
+		t.Fatalf("ComputeResponseImageToolTokenBasedBillingSnapshot() error = %v", err)
+	}
+	if snapshot.InputQuantity != 0 {
+		t.Fatalf("InputQuantity = %v, want 0", snapshot.InputQuantity)
+	}
+	if snapshot.OutputQuantity != 4160 {
+		t.Fatalf("OutputQuantity = %v, want 4160", snapshot.OutputQuantity)
+	}
+	if snapshot.InputAmount != 0 {
+		t.Fatalf("InputAmount = %v, want 0", snapshot.InputAmount)
+	}
+	if snapshot.OutputAmount <= 0 {
+		t.Fatalf("OutputAmount = %v, want > 0", snapshot.OutputAmount)
+	}
+}

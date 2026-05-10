@@ -165,6 +165,49 @@ func TestResolveChannelModelPricingCarriesPriceComponents(t *testing.T) {
 	}
 }
 
+func TestBuildModelPricingIndexFromProviderDetailsMapCarriesPriceComponents(t *testing.T) {
+	index := buildModelPricingIndexFromProviderDetailsMap(map[string][]ProviderModelDetail{
+		"openai": {
+			{
+				Model:       "gpt-image-2",
+				Type:        ProviderModelTypeImage,
+				InputPrice:  0.008,
+				OutputPrice: 0.03,
+				PriceUnit:   ProviderPriceUnitPer1KTokens,
+				Currency:    ProviderPriceCurrencyUSD,
+				PriceComponents: []ProviderModelPriceComponentDetail{
+					{
+						Component:  ProviderModelPriceComponentText,
+						InputPrice: 0.005,
+						PriceUnit:  ProviderPriceUnitPer1KTokens,
+						Currency:   ProviderPriceCurrencyUSD,
+					},
+					{
+						Component:   ProviderModelPriceComponentImageGeneration,
+						OutputPrice: 0.03,
+						PriceUnit:   ProviderPriceUnitPer1KTokens,
+						Currency:    ProviderPriceCurrencyUSD,
+					},
+				},
+			},
+		},
+	})
+	entry, ok := index.byProviderAndModel["openai:gpt-image-2"]
+	if !ok {
+		t.Fatal("expected openai:gpt-image-2 entry")
+	}
+	if len(entry.Detail.PriceComponents) != 2 {
+		t.Fatalf("expected 2 price components, got %d", len(entry.Detail.PriceComponents))
+	}
+	seen := make(map[string]bool, len(entry.Detail.PriceComponents))
+	for _, component := range entry.Detail.PriceComponents {
+		seen[component.Component] = true
+	}
+	if !seen[ProviderModelPriceComponentText] || !seen[ProviderModelPriceComponentImageGeneration] {
+		t.Fatalf("expected text and image_generation components, got %#v", entry.Detail.PriceComponents)
+	}
+}
+
 func TestResolveImageRequestPricingMatchesComponent(t *testing.T) {
 	pricing := ResolveImageRequestPricing(ResolvedModelPricing{
 		Model:      "dall-e-3",

@@ -139,6 +139,11 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		strings.TrimSpace(meta.OriginModelName),
 		strings.TrimSpace(c.Request.URL.Path),
 	)
+	responsesImageTools, responsesImageToolsErr := parseResponsesImageToolSpecs(rawRequestBody)
+	if responsesImageToolsErr != nil {
+		logger.Errorf(ctx, "parse responses image tools failed: %s", responsesImageToolsErr.Error())
+		return openai.ErrorWrapper(responsesImageToolsErr, "parse_responses_image_tools_failed", http.StatusBadRequest)
+	}
 	groupReservedQuota, err := billing.ComputeTextPreConsumedQuota(promptTokens, textRequest.MaxTokens, pricing, groupRatio)
 	if err != nil {
 		logger.Errorf(ctx, "ComputeTextPreConsumedQuota failed: %s", err.Error())
@@ -199,7 +204,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		return respErr
 	}
 	// post-consume quota
-	go postConsumeQuota(ctx, usage, meta, upstreamRequest, pricing, preConsumedQuota, groupRatio, false, billingPlan.ChargeUserBalance(), packageReservation)
+	go postConsumeQuota(ctx, usage, meta, upstreamRequest, pricing, preConsumedQuota, groupRatio, estimateResult, responsesImageTools, false, billingPlan.ChargeUserBalance(), packageReservation)
 	groupQuotaSettled = true
 	return nil
 }

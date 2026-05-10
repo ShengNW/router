@@ -402,6 +402,8 @@ func relayResponsesResponse(c *gin.Context, resp *http.Response) (*model.Usage, 
 		return nil, ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError)
 	}
 	var envelope responsesEnvelope
+	var bridgeEnvelope responsesBridgeEnvelope
+	_ = json.Unmarshal(responseBody, &bridgeEnvelope)
 	_ = json.Unmarshal(responseBody, &envelope)
 	copyUpstreamResponseHeaders(c, resp.Header, false)
 	c.Writer.WriteHeader(resp.StatusCode)
@@ -412,9 +414,10 @@ func relayResponsesResponse(c *gin.Context, resp *http.Response) (*model.Usage, 
 		return nil, nil
 	}
 	return &model.Usage{
-		PromptTokens:     envelope.Usage.InputTokens,
-		CompletionTokens: envelope.Usage.OutputTokens,
-		TotalTokens:      envelope.Usage.TotalTokens,
+		PromptTokens:         envelope.Usage.InputTokens,
+		CompletionTokens:     envelope.Usage.OutputTokens,
+		TotalTokens:          envelope.Usage.TotalTokens,
+		ImageGenerationCalls: countResponsesImageGenerationCalls(bridgeEnvelope),
 	}, nil
 }
 

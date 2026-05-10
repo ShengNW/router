@@ -613,6 +613,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			},
 		},
 		{
+			Version:     "202605101230_log_billing_observability",
+			Description: "add billing observability fields to consume logs",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&Log{})
+			},
+		},
+		{
 			Version:     "202605041030_provider_model_supported_endpoints",
 			Description: "add provider model supported endpoints as channel endpoint candidates",
 			Up: func(tx *gorm.DB) error {
@@ -804,6 +811,13 @@ func runLogVersionedMigrations(db *gorm.DB) error {
 		{
 			Version:     "202604031500_log_billing_source",
 			Description: "add billing source field to consume logs",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&Log{})
+			},
+		},
+		{
+			Version:     "202605101230_log_billing_observability",
+			Description: "add billing observability fields to consume logs",
 			Up: func(tx *gorm.DB) error {
 				return tx.AutoMigrate(&Log{})
 			},
