@@ -3,10 +3,13 @@ package openai
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/yeying-community/router/internal/relay/model"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/yeying-community/router/internal/relay/model"
 )
 
 func ImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
@@ -19,6 +22,9 @@ func ImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCo
 	err = resp.Body.Close()
 	if err != nil {
 		return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return wrapImageUpstreamError(resp, responseBody), nil
 	}
 	err = json.Unmarshal(responseBody, &imageResponse)
 	if err != nil {
@@ -41,4 +47,26 @@ func ImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCo
 		return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
 	}
 	return nil, nil
+}
+
+func wrapImageUpstreamError(resp *http.Response, responseBody []byte) *model.ErrorWithStatusCode {
+	var errorResponse struct {
+		Error model.Error `json:"error"`
+	}
+	if err := json.Unmarshal(responseBody, &errorResponse); err == nil {
+		if strings.TrimSpace(errorResponse.Error.Message) != "" {
+			return &model.ErrorWithStatusCode{
+				Error:      errorResponse.Error,
+				StatusCode: resp.StatusCode,
+			}
+		}
+	}
+	return &model.ErrorWithStatusCode{
+		Error: model.Error{
+			Message: fmt.Sprintf("upstream returned %s", resp.Status),
+			Type:    "upstream_error",
+			Code:    "upstream_http_error",
+		},
+		StatusCode: resp.StatusCode,
+	}
 }
