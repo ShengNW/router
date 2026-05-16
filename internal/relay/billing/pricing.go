@@ -129,33 +129,63 @@ func ComputeImageBillingSnapshot(imageCount int, multiplier float64, pricing mod
 }
 
 func ComputeTraditionalImageTokenBasedBillingSnapshot(promptTokens int, imageOutputTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+	return ComputeTokenBasedBillingSnapshot(float64(promptTokens), float64(imageOutputTokens), pricing, groupRatio)
+}
+
+func ComputeTokenBasedBillingSnapshot(inputQuantity float64, outputQuantity float64, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
 	if ResolveImageBillingMode(pricing) != ImageBillingModeTokenBased {
 		return BillingSnapshot{}, fmt.Errorf("traditional image token-based billing requires token-based pricing for model %s", strings.TrimSpace(pricing.Model))
 	}
 	return buildBillingSnapshot(
-		float64(promptTokens),
-		float64(imageOutputTokens),
+		inputQuantity,
+		outputQuantity,
 		pricing.InputPrice,
 		pricing.OutputPrice,
 		pricing,
 		groupRatio,
-		promptTokens > 0 || imageOutputTokens > 0,
+		inputQuantity > 0 || outputQuantity > 0,
 	)
 }
 
-func ComputeResponseImageToolTokenBasedBillingSnapshot(imageOutputTokens int, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
+func ComputeResponseImageToolTokenBasedBillingSnapshot(outputQuantity float64, pricing model.ResolvedModelPricing, groupRatio float64) (BillingSnapshot, error) {
 	if ResolveImageBillingMode(pricing) != ImageBillingModeTokenBased {
 		return BillingSnapshot{}, fmt.Errorf("responses image tool token-based billing requires token-based pricing for model %s", strings.TrimSpace(pricing.Model))
 	}
 	return buildBillingSnapshot(
 		0,
-		float64(imageOutputTokens),
+		outputQuantity,
 		0,
 		pricing.OutputPrice,
 		pricing,
 		groupRatio,
-		imageOutputTokens > 0,
+		outputQuantity > 0,
 	)
+}
+
+func ComputeExplicitAmountBillingSnapshot(inputQuantity float64, outputQuantity float64, inputAmount float64, outputAmount float64, pricing model.ResolvedModelPricing, groupRatio float64, hasUsage bool) (BillingSnapshot, error) {
+	snapshot := BillingSnapshot{
+		PriceUnit:      normalizePriceUnit(pricing.PriceUnit),
+		Currency:       normalizeCurrency(pricing.Currency),
+		GroupRatio:     groupRatio,
+		InputQuantity:  inputQuantity,
+		OutputQuantity: outputQuantity,
+		InputAmount:    inputAmount,
+		OutputAmount:   outputAmount,
+	}
+	snapshot.Amount = snapshot.InputAmount + snapshot.OutputAmount
+	if snapshot.Amount > 0 {
+		yycRate, err := model.GetBillingCurrencyYYCPerUnit(snapshot.Currency)
+		if err != nil {
+			if groupRatio != 0 {
+				return BillingSnapshot{}, err
+			}
+		} else {
+			snapshot.YYCRate = yycRate
+		}
+	}
+	rawYYC := snapshot.Amount * snapshot.YYCRate * groupRatio
+	snapshot.YYCAmount = normalizeQuota(rawYYC, hasUsage, pricing, groupRatio)
+	return snapshot, nil
 }
 
 func ResolveImageBillingMode(pricing model.ResolvedModelPricing) ImageBillingMode {

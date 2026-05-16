@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
@@ -96,12 +97,22 @@ func maybeApplyResponsesImageToolBilling(snapshot *billing.BillingSnapshot, usag
 		if !supportsTraditionalImageTokenBilling(pricing) {
 			return responsesImageToolBillingDetail{}, "", nil
 		}
+		if isGPTImage2Model(pricing.Model) {
+			outputAmount, _, _, estimateErr := estimateGPTImage2OutputAmount(spec.Size, spec.Quality, usage.ImageGenerationCalls)
+			if estimateErr != nil {
+				return responsesImageToolBillingDetail{}, "", estimateErr
+			}
+			outputQuantity := outputAmount * 1000 / pricing.OutputPrice
+			imageOutputTokens = int(math.Round(outputQuantity))
+			extraSnapshot, errCompute = billing.ComputeResponseImageToolTokenBasedBillingSnapshot(outputQuantity, pricing, groupRatio)
+			break
+		}
 		var estimateErr error
 		imageOutputTokens, estimateErr = estimateTraditionalImageOutputTokens(spec.Model, spec.Size, spec.Quality, usage.ImageGenerationCalls)
 		if estimateErr != nil {
 			return responsesImageToolBillingDetail{}, "", estimateErr
 		}
-		extraSnapshot, errCompute = billing.ComputeResponseImageToolTokenBasedBillingSnapshot(imageOutputTokens, pricing, groupRatio)
+		extraSnapshot, errCompute = billing.ComputeResponseImageToolTokenBasedBillingSnapshot(float64(imageOutputTokens), pricing, groupRatio)
 	default:
 		return responsesImageToolBillingDetail{}, "", nil
 	}

@@ -2,8 +2,10 @@ package controller
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 )
 
@@ -34,6 +36,26 @@ func TestNormalizeFinalRelayErrorForTransientDoRequestFailed(t *testing.T) {
 			Message: "do request failed: i/o timeout",
 			Type:    "one_api_error",
 			Code:    "do_request_failed",
+		},
+	}
+
+	normalizeFinalRelayError(err)
+
+	if err.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("unexpected status code: got %d want %d", err.StatusCode, http.StatusServiceUnavailable)
+	}
+	if err.Message != "当前分组可用上游暂时不可用，请稍后再试" {
+		t.Fatalf("unexpected message: got %q", err.Message)
+	}
+}
+
+func TestNormalizeFinalRelayErrorForTransientUpstreamTransportGoaway(t *testing.T) {
+	err := &relaymodel.ErrorWithStatusCode{
+		StatusCode: http.StatusInternalServerError,
+		Error: relaymodel.Error{
+			Message: "do request failed: http2: server sent GOAWAY and closed the connection",
+			Type:    "one_api_error",
+			Code:    "upstream_transport_goaway",
 		},
 	}
 
@@ -229,5 +251,25 @@ func TestIsClientAbortRelayErrorSkipsUpstreamConnectionReset(t *testing.T) {
 
 	if isClientAbortRelayError(err) {
 		t.Fatalf("isClientAbortRelayError = true, want false")
+	}
+}
+
+func TestShouldRetrySkipsImageRelayModes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+
+	err := &relaymodel.ErrorWithStatusCode{
+		StatusCode: http.StatusInternalServerError,
+		Error: relaymodel.Error{
+			Message: "do request failed: http2: server sent GOAWAY and closed the connection",
+			Type:    "one_api_error",
+			Code:    "upstream_transport_goaway",
+		},
+	}
+
+	if shouldRetry(ctx, err) {
+		t.Fatalf("shouldRetry() = true, want false for image relay modes")
 	}
 }

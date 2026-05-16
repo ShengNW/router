@@ -192,6 +192,10 @@ func shouldRetry(c *gin.Context, bizErr *model.ErrorWithStatusCode) bool {
 	if bizErr == nil {
 		return false
 	}
+	switch getEffectiveRelayMode(c) {
+	case relaymode.ImagesGenerations, relaymode.ImagesEdits:
+		return false
+	}
 	if _, ok := c.Get(ctxkey.SpecificChannelId); ok {
 		return false
 	}
@@ -313,9 +317,18 @@ func isTransientUpstreamRelayError(err *model.ErrorWithStatusCode) bool {
 		if err.Type != "one_api_error" {
 			return true
 		}
-		return errorCodeString(err.Code) == "do_request_failed"
+		return isTransientUpstreamTransportErrorCode(errorCodeString(err.Code))
 	}
 	return false
+}
+
+func isTransientUpstreamTransportErrorCode(code string) bool {
+	switch strings.ToLower(strings.TrimSpace(code)) {
+	case "do_request_failed", "upstream_transport_goaway":
+		return true
+	default:
+		return false
+	}
 }
 
 func errorCodeString(code any) string {
