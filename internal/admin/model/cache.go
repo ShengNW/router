@@ -282,12 +282,29 @@ func CacheListSatisfiedChannels(group string, model string) ([]*Channel, error) 
 	return result, nil
 }
 
-func CacheListSatisfiedChannelsForRequest(group string, model string, requestPath string) ([]*Channel, error) {
+type ChannelCandidateStats struct {
+	ListedCount           int
+	EndpointFilteredCount int
+}
+
+func CacheListSatisfiedChannelsForRequestWithStats(group string, model string, requestPath string) ([]*Channel, ChannelCandidateStats, error) {
 	channels, err := CacheListSatisfiedChannels(group, model)
 	if err != nil {
-		return nil, err
+		return nil, ChannelCandidateStats{}, err
 	}
-	return cacheFilterChannelsByRequestEndpoint(channels, model, requestPath)
+	filtered, err := cacheFilterChannelsByRequestEndpoint(channels, model, requestPath)
+	if err != nil {
+		return nil, ChannelCandidateStats{}, err
+	}
+	return filtered, ChannelCandidateStats{
+		ListedCount:           len(channels),
+		EndpointFilteredCount: len(filtered),
+	}, nil
+}
+
+func CacheListSatisfiedChannelsForRequest(group string, model string, requestPath string) ([]*Channel, error) {
+	channels, _, err := CacheListSatisfiedChannelsForRequestWithStats(group, model, requestPath)
+	return channels, err
 }
 
 func CacheGetChannelModelEndpointSupport(channelID string, modelCandidates ...string) map[string]bool {

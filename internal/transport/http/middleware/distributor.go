@@ -66,21 +66,21 @@ func Distribute() func(c *gin.Context) {
 			}
 		} else {
 			requestModel = c.GetString(ctxkey.RequestModel)
-			candidates, err := model.CacheListSatisfiedChannelsForRequest(userGroup, requestModel, c.Request.URL.Path)
+			candidates, stats, err := model.CacheListSatisfiedChannelsForRequestWithStats(userGroup, requestModel, c.Request.URL.Path)
 			if err != nil {
 				message := fmt.Sprintf("当前分组 %s 下对于模型 %s 无可用渠道", userGroup, requestModel)
 				if channel != nil {
 					logger.RelayErrorf(ctx, "DISTRIBUTE decision=abort reason=channel_missing user_id=%s group=%s model=%s endpoint=%s channel_id=%s", userId, userGroup, requestModel, c.Request.URL.Path, channel.Id)
 					message = "数据库一致性已被破坏，请联系管理员"
 				}
-				logger.RelayErrorf(ctx, "DISTRIBUTE decision=abort reason=list_candidates_failed user_id=%s group=%s model=%s endpoint=%s message=%q error=%q", userId, userGroup, requestModel, c.Request.URL.Path, message, err.Error())
+				logger.RelayErrorf(ctx, "DISTRIBUTE decision=abort reason=list_candidates_failed user_id=%s group=%s model=%s endpoint=%s listed_candidates=%d endpoint_filtered_candidates=%d message=%q error=%q", userId, userGroup, requestModel, c.Request.URL.Path, stats.ListedCount, stats.EndpointFilteredCount, message, err.Error())
 				abortWithMessage(c, http.StatusServiceUnavailable, message)
 				return
 			}
 			channel = pickChannelByPriority(candidates, false)
 			if channel == nil {
 				message := fmt.Sprintf("当前分组 %s 下对于模型 %s 无可用渠道", userGroup, requestModel)
-				logger.RelayErrorf(ctx, "DISTRIBUTE decision=abort reason=no_available_channel user_id=%s group=%s model=%s endpoint=%s candidate_count=%d message=%q", userId, userGroup, requestModel, c.Request.URL.Path, len(candidates), message)
+				logger.RelayErrorf(ctx, "DISTRIBUTE decision=abort reason=no_available_channel user_id=%s group=%s model=%s endpoint=%s listed_candidates=%d endpoint_filtered_candidates=%d message=%q", userId, userGroup, requestModel, c.Request.URL.Path, stats.ListedCount, stats.EndpointFilteredCount, message)
 				abortWithMessage(c, http.StatusServiceUnavailable, message)
 				return
 			}

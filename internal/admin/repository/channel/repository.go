@@ -367,16 +367,17 @@ func DeleteDisabled() (int64, error) {
 
 func UpdateStatusByID(id string, status int) {
 	id = strings.TrimSpace(id)
-	err := model.RefreshGroupModelChannelsByChannelStatus(id, status == model.ChannelStatusEnabled)
-	if err != nil {
-		logger.SysError("failed to update ability status: " + err.Error())
-	}
-	err = model.DB.Model(&model.Channel{}).Where("id = ?", id).Updates(map[string]any{
+	err := model.DB.Model(&model.Channel{}).Where("id = ?", id).Updates(map[string]any{
 		"status":     status,
 		"updated_at": helper.GetTimestamp(),
 	}).Error
 	if err != nil {
 		logger.SysError("failed to update channel status: " + err.Error())
+		return
+	}
+	err = model.RefreshGroupModelChannelsByChannelStatus(id, status == model.ChannelStatusEnabled)
+	if err != nil {
+		logger.SysError("failed to update ability status: " + err.Error())
 	}
 }
 

@@ -100,7 +100,7 @@ func ListChannelModelUsageReferencesWithDB(db *gorm.DB, channelID string, modelN
 	rows := make([]GroupModelChannel, 0)
 	if err := db.
 		Where("channel_id = ? AND (model IN ? OR upstream_model IN ?)", normalizedChannelID, modelCandidates, modelCandidates).
-		Order(groupCol+" asc, model asc").
+		Order(groupCol + " asc, model asc").
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}
