@@ -348,6 +348,69 @@ func parseInputAsMessages(input any) []relaymodel.Message {
 	return nil
 }
 
+func buildSystemMessagesFromInstructions(instructions any) []relaymodel.Message {
+	switch value := instructions.(type) {
+	case nil:
+		return nil
+	case string:
+		if strings.TrimSpace(value) == "" {
+			return nil
+		}
+		return []relaymodel.Message{{
+			Role:    "system",
+			Content: value,
+		}}
+	case []string:
+		content := make([]any, 0, len(value))
+		for _, item := range value {
+			if strings.TrimSpace(item) == "" {
+				continue
+			}
+			content = append(content, map[string]any{
+				"type": "text",
+				"text": item,
+			})
+		}
+		if len(content) == 0 {
+			return nil
+		}
+		return []relaymodel.Message{{
+			Role:    "system",
+			Content: content,
+		}}
+	case []any:
+		if len(value) == 0 {
+			return nil
+		}
+		return []relaymodel.Message{{
+			Role:    "system",
+			Content: value,
+		}}
+	default:
+		trimmed := strings.TrimSpace(fmt.Sprint(instructions))
+		if trimmed == "" {
+			return nil
+		}
+		return []relaymodel.Message{{
+			Role:    "system",
+			Content: trimmed,
+		}}
+	}
+}
+
+func buildMessagesFromResponsesRequest(req *relaymodel.GeneralOpenAIRequest) []relaymodel.Message {
+	if req == nil {
+		return nil
+	}
+	messages := make([]relaymodel.Message, 0)
+	messages = append(messages, buildSystemMessagesFromInstructions(req.Instructions)...)
+	messages = append(messages, parseInputAsMessages(req.Input)...)
+	if len(messages) == 0 {
+		return nil
+	}
+	return messages
+}
+
 func supportsMessagesUpstream(meta *meta.Meta) bool {
 	if meta == nil {
 		return false
@@ -481,7 +544,7 @@ func convertTextRequestForUpstream(req *relaymodel.GeneralOpenAIRequest, downstr
 
 	if upstreamMode == relaymode.ChatCompletions {
 		if len(cloned.Messages) == 0 {
-			cloned.Messages = parseInputAsMessages(cloned.Input)
+			cloned.Messages = buildMessagesFromResponsesRequest(cloned)
 		}
 		if len(cloned.Messages) == 0 {
 			return nil, fmt.Errorf("field messages or input is required")
@@ -495,7 +558,7 @@ func convertTextRequestForUpstream(req *relaymodel.GeneralOpenAIRequest, downstr
 
 	if upstreamMode == relaymode.Messages {
 		if len(cloned.Messages) == 0 {
-			cloned.Messages = parseInputAsMessages(cloned.Input)
+			cloned.Messages = buildMessagesFromResponsesRequest(cloned)
 		}
 		if len(cloned.Messages) == 0 {
 			return nil, fmt.Errorf("field messages or input is required")

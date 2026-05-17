@@ -32,6 +32,7 @@ func extractStructuredMeta(req EstimateRequest) EstimateMeta {
 		} else {
 			extractResponsesInput(&meta, r.Input)
 		}
+		appendExtraAnyText(&meta, r.Instructions)
 		appendExtraAnyText(&meta, r.Prompt)
 		appendExtraAnyText(&meta, r.Metadata)
 		appendExtraAnyText(&meta, r.ToolChoice)

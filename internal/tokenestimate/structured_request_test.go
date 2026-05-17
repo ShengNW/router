@@ -88,6 +88,26 @@ func TestExtractStructuredMetaResponsesInput(t *testing.T) {
 	}
 }
 
+func TestExtractStructuredMetaResponsesTopLevelInstructions(t *testing.T) {
+	req := EstimateRequest{
+		RelayMode: relaymode.Responses,
+		Model:     "gpt-5.4",
+		Request: &relaymodel.GeneralOpenAIRequest{
+			Model:        "gpt-5.4",
+			Instructions: "reply in exactly one sentence",
+			Input:        "summarize the incident",
+		},
+	}
+
+	meta := extractStructuredMeta(req)
+	if !slices.Contains(meta.Texts, "reply in exactly one sentence") {
+		t.Fatalf("meta.Texts missing top-level instructions: %#v", meta.Texts)
+	}
+	if !slices.Contains(meta.Texts, "summarize the incident") {
+		t.Fatalf("meta.Texts missing input text: %#v", meta.Texts)
+	}
+}
+
 func TestExtractAnthropicMetaRaw(t *testing.T) {
 	raw := []byte(`{
 		"model":"claude-sonnet-4-6",

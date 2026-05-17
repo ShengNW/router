@@ -350,6 +350,35 @@ func TestConvertTextRequestForUpstreamToMessagesFromInput(t *testing.T) {
 	}
 }
 
+func TestConvertTextRequestForUpstreamToMessagesPreservesResponsesInstructions(t *testing.T) {
+	req := &relaymodel.GeneralOpenAIRequest{
+		Model:           "claude-opus-4.6",
+		Input:           "hello from responses input",
+		Instructions:    "reply in haiku form",
+		MaxOutputTokens: func() *int { value := 320; return &value }(),
+	}
+
+	converted, err := convertTextRequestForUpstream(req, relaymode.Responses, relaymode.Messages)
+	if err != nil {
+		t.Fatalf("convertTextRequestForUpstream returned error: %v", err)
+	}
+	if len(converted.Messages) != 2 {
+		t.Fatalf("len(converted.Messages) = %d, want 2", len(converted.Messages))
+	}
+	if converted.Messages[0].Role != "system" || converted.Messages[0].StringContent() != "reply in haiku form" {
+		t.Fatalf("converted.Messages[0] = %#v, want system instructions message", converted.Messages[0])
+	}
+	if converted.Messages[1].Role != "user" || converted.Messages[1].StringContent() != "hello from responses input" {
+		t.Fatalf("converted.Messages[1] = %#v, want converted user input message", converted.Messages[1])
+	}
+	if converted.Input != nil {
+		t.Fatalf("converted.Input = %#v, want nil", converted.Input)
+	}
+	if converted.MaxTokens != 320 {
+		t.Fatalf("converted.MaxTokens = %d, want 320", converted.MaxTokens)
+	}
+}
+
 func TestNormalizeMessagesRequestBodyUpdatesModel(t *testing.T) {
 	raw := []byte(`{"model":"claude-old","messages":[{"role":"user","content":"hello"}],"stream":true}`)
 	normalized, err := normalizeMessagesRequestBody(raw, "claude-sonnet-4-6")
