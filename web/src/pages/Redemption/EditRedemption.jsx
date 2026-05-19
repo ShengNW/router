@@ -264,28 +264,27 @@ const EditRedemption = () => {
             </AppFormRow>
             <AppFormRow>
               <AppField label={t('redemption.edit.face_value_amount')}>
-                <AppInputNumber
-                  className='router-section-input'
-                  name='face_value_amount'
-                  placeholder={t('redemption.edit.face_value_amount_placeholder')}
-                  onChange={handleInputChange}
-                  value={face_value_amount}
-                  step={face_value_unit === YYC_UNIT ? 1 : 0.01}
-                  precision={face_value_unit === YYC_UNIT ? 0 : 2}
-                  min={0}
-                  fluid
-                />
-              </AppField>
-              <AppField label={t('redemption.edit.face_value_unit')}>
-                <UnitDropdown
-                  variant='section'
-                  fluid
-                  name='face_value_unit'
-                  placeholder={t('redemption.edit.face_value_unit_placeholder')}
-                  options={unitOptions}
-                  value={face_value_unit}
-                  onChange={handleInputChange}
-                />
+                <div className='router-section-input-with-unit'>
+                  <AppInputNumber
+                    className='router-section-input router-section-input-with-unit-field'
+                    name='face_value_amount'
+                    placeholder={t('redemption.edit.face_value_amount_placeholder')}
+                    onChange={handleInputChange}
+                    value={face_value_amount}
+                    step={face_value_unit === YYC_UNIT ? 1 : 0.01}
+                    precision={face_value_unit === YYC_UNIT ? 0 : 2}
+                    min={0}
+                    fluid
+                  />
+                  <UnitDropdown
+                    variant='inputUnit'
+                    name='face_value_unit'
+                    placeholder={t('redemption.edit.face_value_unit_placeholder')}
+                    options={unitOptions}
+                    value={face_value_unit}
+                    onChange={handleInputChange}
+                  />
+                </div>
               </AppField>
             </AppFormRow>
             <AppFormRow>

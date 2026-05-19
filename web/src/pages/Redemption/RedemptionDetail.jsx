@@ -428,22 +428,32 @@ const RedemptionDetail = () => {
                     />
                   </AppField>
                 </AppFormRow>
-                <AppFormRow>
-                  {isEditing ? (
-                    <AppField label={t('redemption.edit.face_value_amount')}>
-                      <AppInputNumber
-                        className='router-section-input'
-                        fluid
-                        name='face_value_amount'
-                        value={inputs.face_value_amount}
-                        placeholder={t('redemption.edit.face_value_amount_placeholder')}
-                        onChange={handleInputChange}
-                        step={inputs.face_value_unit === YYC_UNIT ? 1 : 0.01}
-                        min={0}
-                      />
-                    </AppField>
-                  ) : (
-                    <AppField label={t('redemption.table.face_value')} readOnly>
+	                <AppFormRow>
+	                  {isEditing ? (
+	                    <AppField label={t('redemption.edit.face_value_amount')}>
+	                      <div className='router-section-input-with-unit'>
+	                        <AppInputNumber
+	                          className='router-section-input router-section-input-with-unit-field'
+	                          fluid
+	                          name='face_value_amount'
+	                          value={inputs.face_value_amount}
+	                          placeholder={t('redemption.edit.face_value_amount_placeholder')}
+	                          onChange={handleInputChange}
+	                          step={inputs.face_value_unit === YYC_UNIT ? 1 : 0.01}
+	                          min={0}
+	                        />
+	                        <UnitDropdown
+	                          variant='inputUnit'
+	                          name='face_value_unit'
+	                          placeholder={t('redemption.edit.face_value_unit_placeholder')}
+	                          options={unitOptions}
+	                          value={inputs.face_value_unit}
+	                          onChange={handleInputChange}
+	                        />
+	                      </div>
+	                    </AppField>
+	                  ) : (
+	                    <AppField label={t('redemption.table.face_value')} readOnly>
                       <AppInput
                         className='router-section-input'
                         value={formatAmountWithUnit(
@@ -454,40 +464,25 @@ const RedemptionDetail = () => {
                       />
                     </AppField>
                   )}
-                  {isEditing ? (
-                    <AppField label={t('redemption.edit.face_value_unit')}>
-                      <UnitDropdown
-                        variant='section'
-                        fluid
-                        name='face_value_unit'
-                        placeholder={t('redemption.edit.face_value_unit_placeholder')}
-                        options={unitOptions}
-                        value={inputs.face_value_unit}
-                        onChange={handleInputChange}
-                      />
-                    </AppField>
-                  ) : (
-                    <AppField label={t('redemption.table.credited_yyc')} readOnly>
-                      <AppInput
-                        className='router-section-input'
+	                  {isEditing ? (
+	                    <AppField label={t('redemption.edit.credit_yyc')} readOnly>
+	                      <AppInput
+	                        className='router-section-input'
+	                        value={yycPreview > 0 ? formatYYCValue(yycPreview) : '-'}
+	                        readOnly
+	                      />
+	                    </AppField>
+	                  ) : (
+	                    <AppField label={t('redemption.table.credited_yyc')} readOnly>
+	                      <AppInput
+	                        className='router-section-input'
                         value={redemption ? formatYYCValue(resolveCreditedYYC(redemption)) : ''}
                         readOnly
                       />
                     </AppField>
                   )}
                 </AppFormRow>
-                {isEditing ? (
-                  <AppFormRow>
-                    <AppField label={t('redemption.edit.credit_yyc')} readOnly>
-                      <AppInput
-                        className='router-section-input'
-                        value={yycPreview > 0 ? formatYYCValue(yycPreview) : '-'}
-                        readOnly
-                      />
-                    </AppField>
-                  </AppFormRow>
-                ) : null}
-                <AppFormRow>
+	                <AppFormRow>
                   {isEditing ? (
                     <AppField label={t('redemption.edit.code_validity_days')}>
                       <AppInputNumber

@@ -59,7 +59,8 @@ const PackageDetail = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState(null);
-  const [displayUnit, setDisplayUnit] = useState('USD');
+  const [dailyDisplayUnit, setDailyDisplayUnit] = useState('USD');
+  const [emergencyDisplayUnit, setEmergencyDisplayUnit] = useState('USD');
   const [currencyIndex, setCurrencyIndex] = useState(
     buildBillingCurrencyIndex([], { activeOnly: true }),
   );
@@ -83,7 +84,7 @@ const PackageDetail = () => {
         activeOnly: true,
       });
       setCurrencyIndex(next);
-      setDisplayUnit((current) => {
+      const resolveNextUnit = (current) => {
         const normalizedCurrent = (current || '').toString().trim().toUpperCase();
         if (normalizedCurrent && next[normalizedCurrent]) {
           return normalizedCurrent;
@@ -95,7 +96,9 @@ const PackageDetail = () => {
           .filter((code) => code)
           .sort((a, b) => a.localeCompare(b))[0];
         return fallbackUnit || 'YYC';
-      });
+      };
+      setDailyDisplayUnit(resolveNextUnit);
+      setEmergencyDisplayUnit(resolveNextUnit);
     } catch (error) {
       showError(error?.message || error);
     }
@@ -144,19 +147,7 @@ const PackageDetail = () => {
         ]}
         title={t('package_manage.dialog.detail_title')}
       />
-      <AppSection
-        extra={
-          <UnitDropdown
-            variant='section'
-            options={displayUnitOptions}
-            value={displayUnit}
-            onChange={(_, { value }) =>
-              setDisplayUnit((value || '').toString().trim().toUpperCase())
-            }
-            aria-label={t('package_manage.table.daily_quota_limit')}
-          />
-        }
-      >
+      <AppSection>
         <div className='router-entity-detail-page'>
             {loading ? (
               <div className='router-empty-cell'>{t('common.loading')}</div>
@@ -221,10 +212,19 @@ const PackageDetail = () => {
                         className='router-section-input router-section-input-with-unit-field'
                         value={renderPackageAmountValue(
                           resolvePackageYYCAmount(detail, 'daily'),
-                          displayUnit,
+                          dailyDisplayUnit,
                           currencyIndex,
                         )}
                         readOnly
+                      />
+                      <UnitDropdown
+                        variant='inputUnit'
+                        options={displayUnitOptions}
+                        value={dailyDisplayUnit}
+                        onChange={(_, { value }) =>
+                          setDailyDisplayUnit((value || '').toString().trim().toUpperCase())
+                        }
+                        aria-label={t('package_manage.table.daily_quota_limit')}
                       />
                     </div>
                   </AppField>
@@ -237,10 +237,19 @@ const PackageDetail = () => {
                         className='router-section-input router-section-input-with-unit-field'
                         value={renderPackageAmountValue(
                           resolvePackageYYCAmount(detail, 'emergency'),
-                          displayUnit,
+                          emergencyDisplayUnit,
                           currencyIndex,
                         )}
                         readOnly
+                      />
+                      <UnitDropdown
+                        variant='inputUnit'
+                        options={displayUnitOptions}
+                        value={emergencyDisplayUnit}
+                        onChange={(_, { value }) =>
+                          setEmergencyDisplayUnit((value || '').toString().trim().toUpperCase())
+                        }
+                        aria-label={t('package_manage.table.package_emergency_quota_limit')}
                       />
                     </div>
                   </AppField>
