@@ -265,6 +265,11 @@ const TopupPlansManager = () => {
     <>
       <AppFilterHeader
         className='router-block-gap-md'
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'business', label: t('header.business_operation') },
+          { key: 'topup', label: t('header.topup'), active: true },
+        ]}
         title={t('topup.manage.title')}
         titleClassName='router-ui-section-title'
         actions={

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AppAlert,
   AppButton,
   AppField,
+  AppFilterHeader,
   AppFormRow,
   AppInput,
   AppInputNumber,
@@ -12,6 +14,7 @@ import {
 import { showError, showSuccess } from '../../helpers';
 
 const WalletPage = () => {
+  const { t } = useTranslation();
   const [address, setAddress] = useState('');
   const [chainId, setChainId] = useState('');
   const [balance, setBalance] = useState('');
@@ -135,6 +138,14 @@ const WalletPage = () => {
 
   return (
     <div className='router-page-panel'>
+      <AppFilterHeader
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.user_workspace') },
+          { key: 'account', label: t('header.account') },
+          { key: 'wallet', label: 'Wallet', active: true },
+        ]}
+        title='Wallet'
+      />
       <h2 className='router-page-title'>钱包工具</h2>
       {!hasWallet && (
         <AppAlert type='warning' className='router-section-message' title={

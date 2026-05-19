@@ -831,6 +831,25 @@ const Task = () => {
     [filterOptions.channels, filterOptions.models, filterOptions.users],
   );
 
+  const rootBreadcrumbs = isSystemTaskPage
+    ? [
+        { key: 'workspace', label: t('header.admin_workspace') },
+        { key: 'resource', label: t('header.resource') },
+        { key: 'channel', label: t('header.channel') },
+        { key: 'task', label: pageTitle, active: true },
+      ]
+    : isAdminPage
+      ? [
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'operation', label: t('header.platform_operation') },
+          { key: 'task', label: pageTitle, active: true },
+        ]
+      : [
+          { key: 'workspace', label: t('header.user_workspace') },
+          { key: 'service', label: t('header.service') },
+          { key: 'task', label: pageTitle, active: true },
+        ];
+
   return (
     <div className='dashboard-container'>
       {returnPath !== '' ? (
@@ -882,6 +901,7 @@ const Task = () => {
         />
       ) : null}
       <AppFilterHeader
+            breadcrumbs={returnPath === '' ? rootBreadcrumbs : undefined}
             title={returnPath === '' ? pageTitle : undefined}
             titleClassName='router-ui-section-title'
             picker={

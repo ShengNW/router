@@ -324,6 +324,11 @@ const RedemptionsTable = () => {
     <>
       <AppFilterHeader
         className='router-block-gap-md'
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'business', label: t('header.business_operation') },
+          { key: 'redemption', label: t('header.redemption'), active: true },
+        ]}
         title={t('header.redemption')}
         actions={
           <div className='router-list-toolbar-actions'>

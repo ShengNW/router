@@ -460,6 +460,20 @@ const EditToken = () => {
           {isCreateMode ? (
             <>
               <AppFilterHeader
+                breadcrumbs={[
+                  { key: 'workspace', label: t('header.user_workspace') },
+                  { key: 'mine', label: t('header.mine') },
+                  {
+                    key: 'token-list',
+                    label: t('header.token'),
+                    onClick: handleCancel,
+                  },
+                  {
+                    key: 'token-create',
+                    label: t('token.edit.title_create'),
+                    active: true,
+                  },
+                ]}
                 className='router-block-gap-sm'
                 actions={
                   <AppButton

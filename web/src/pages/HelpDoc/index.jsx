@@ -1,8 +1,11 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import usageDocHtml from '../../assets/help/usage.html?raw';
+import { AppFilterHeader } from '../../router-ui';
 import './HelpDoc.css';
 
 const HelpDoc = () => {
+  const { t } = useTranslation();
   const html = useMemo(() => {
     return usageDocHtml
       .replaceAll('https://api.hanbbq.top', 'https://router.yeying.pub')
@@ -32,6 +35,14 @@ const HelpDoc = () => {
 
   return (
     <div className='dashboard-container'>
+      <AppFilterHeader
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.user_workspace') },
+          { key: 'help', label: t('header.help') },
+          { key: 'usage-guide', label: t('header.usage_guide'), active: true },
+        ]}
+        title={t('header.usage_guide')}
+      />
       <div
         className='router-help-doc-page'
         dangerouslySetInnerHTML={{ __html: html }}
