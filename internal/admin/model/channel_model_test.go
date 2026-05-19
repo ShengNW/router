@@ -1,13 +1,26 @@
 package model
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func float64Ptr(value float64) *float64 {
 	return &value
+}
+
+func openChannelModelTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:%s?mode=memory&cache=private", t.Name())), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	return db
 }
 
 func TestBuildDefaultChannelModelsWithProtocol_AnthropicPrefersMessages(t *testing.T) {
@@ -246,5 +259,135 @@ func TestBuildDisabledChannelModelConfigsNoopWhenTargetMissing(t *testing.T) {
 	}
 	if !updated[0].Selected {
 		t.Fatalf("updated[0].Selected = false, want true")
+	}
+}
+
+func TestValidateChannelModelDisableTransitionsWithDBBlocksWhenEnabledEndpointsExist(t *testing.T) {
+	db := openChannelModelTestDB(t)
+	if err := db.AutoMigrate(&ChannelModelEndpoint{}); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+	if err := db.Create(&ChannelModelEndpoint{
+		ChannelId: "channel-1",
+		Model:     "gpt-5.4",
+		Endpoint:  ChannelModelEndpointResponses,
+		Enabled:   true,
+	}).Error; err != nil {
+		t.Fatalf("create endpoint row: %v", err)
+	}
+	existingRows := []ChannelModel{
+		{
+			ChannelId:     "channel-1",
+			Model:         "gpt-5.4",
+			UpstreamModel: "gpt-5.4",
+			Selected:      true,
+		},
+	}
+	nextRows := []ChannelModel{
+		{
+			ChannelId:     "channel-1",
+			Model:         "gpt-5.4",
+			UpstreamModel: "gpt-5.4",
+			Selected:      false,
+		},
+	}
+	err := ValidateChannelModelDisableTransitionsWithDB(db, "channel-1", existingRows, nextRows)
+	if err == nil {
+		t.Fatalf("ValidateChannelModelDisableTransitionsWithDB error = nil, want block")
+	}
+	if !strings.Contains(err.Error(), "仍有已启用端点") {
+		t.Fatalf("error = %q, want enabled endpoint block", err.Error())
+	}
+}
+
+func TestDeleteChannelModelWithDBBlocksWhenModelStillReturned(t *testing.T) {
+	db := openChannelModelTestDB(t)
+	if err := db.AutoMigrate(
+		&Channel{},
+		&ChannelModel{},
+		&ChannelModelEndpoint{},
+		&ChannelModelEndpointPolicy{},
+		&ChannelModelSyncResult{},
+		&ChannelTest{},
+		&ChannelModelPriceComponent{},
+		&GroupModelChannel{},
+	); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+	if err := db.Create(&Channel{Id: "channel-1", Name: "channel-1", Protocol: "openai"}).Error; err != nil {
+		t.Fatalf("create channel: %v", err)
+	}
+	if err := db.Create(&ChannelModel{
+		ChannelId:     "channel-1",
+		Model:         "gpt-5.4",
+		UpstreamModel: "gpt-5.4",
+		Selected:      true,
+	}).Error; err != nil {
+		t.Fatalf("create channel model: %v", err)
+	}
+	if err := db.Create(&ChannelModelSyncResult{
+		ChannelId:     "channel-1",
+		Model:         "gpt-5.4",
+		UpstreamModel: "gpt-5.4",
+		Returned:      true,
+	}).Error; err != nil {
+		t.Fatalf("create sync result: %v", err)
+	}
+	err := DeleteChannelModelWithDB(db, "channel-1", "gpt-5.4", "")
+	if err == nil {
+		t.Fatalf("DeleteChannelModelWithDB error = nil, want block")
+	}
+	if !strings.Contains(err.Error(), "最近一次上游返回仍包含") {
+		t.Fatalf("error = %q, want returned block", err.Error())
+	}
+}
+
+func TestDeleteChannelModelWithDBBlocksWhenEnabledEndpointsExist(t *testing.T) {
+	db := openChannelModelTestDB(t)
+	if err := db.AutoMigrate(
+		&Channel{},
+		&ChannelModel{},
+		&ChannelModelEndpoint{},
+		&ChannelModelEndpointPolicy{},
+		&ChannelModelSyncResult{},
+		&ChannelTest{},
+		&ChannelModelPriceComponent{},
+		&GroupModelChannel{},
+	); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+	if err := db.Create(&Channel{Id: "channel-1", Name: "channel-1", Protocol: "openai"}).Error; err != nil {
+		t.Fatalf("create channel: %v", err)
+	}
+	if err := db.Create(&ChannelModel{
+		ChannelId:     "channel-1",
+		Model:         "gpt-5.4",
+		UpstreamModel: "gpt-5.4",
+		Selected:      true,
+	}).Error; err != nil {
+		t.Fatalf("create channel model: %v", err)
+	}
+	if err := db.Create(&ChannelModelSyncResult{
+		ChannelId:     "channel-1",
+		Model:         "gpt-5.4",
+		UpstreamModel: "gpt-5.4",
+		Returned:      false,
+	}).Error; err != nil {
+		t.Fatalf("create sync result: %v", err)
+	}
+	if err := db.Create(&ChannelModelEndpoint{
+		ChannelId: "channel-1",
+		Model:     "gpt-5.4",
+		Endpoint:  ChannelModelEndpointResponses,
+		Enabled:   true,
+	}).Error; err != nil {
+		t.Fatalf("create enabled endpoint: %v", err)
+	}
+	err := DeleteChannelModelWithDB(db, "channel-1", "gpt-5.4", "")
+	if err == nil {
+		t.Fatalf("DeleteChannelModelWithDB error = nil, want block")
+	}
+	if !strings.Contains(err.Error(), "仍有已启用端点") {
+		t.Fatalf("error = %q, want enabled endpoint block", err.Error())
 	}
 }

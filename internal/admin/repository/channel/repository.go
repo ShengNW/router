@@ -250,10 +250,14 @@ func Update(channel *model.Channel) error {
 			return err
 		}
 		if channel.ChannelModelsProvided {
-			if err := model.ValidateManualChannelModelsWithDB(tx, channel.Id, channel.GetChannelModels()); err != nil {
+			nextRows := channel.GetChannelModels()
+			if err := model.ValidateChannelModelDisableTransitionsWithDB(tx, channel.Id, existing.GetChannelModels(), nextRows); err != nil {
 				return err
 			}
-			if err := model.ReplaceChannelModelsWithDB(tx, channel.Id, channel.GetChannelModels()); err != nil {
+			if err := model.ValidateManualChannelModelsWithDB(tx, channel.Id, nextRows); err != nil {
+				return err
+			}
+			if err := model.ReplaceChannelModelsWithDB(tx, channel.Id, nextRows); err != nil {
 				return err
 			}
 			if err := model.EnsureChannelTestModelWithDB(tx, channel.Id); err != nil {
@@ -261,6 +265,9 @@ func Update(channel *model.Channel) error {
 			}
 		} else if channel.ModelsProvided {
 			nextRows := previewChannelModelSelection(existing.GetChannelModels(), channel.SelectedModelIDs())
+			if err := model.ValidateChannelModelDisableTransitionsWithDB(tx, channel.Id, existing.GetChannelModels(), nextRows); err != nil {
+				return err
+			}
 			if err := model.ValidateManualChannelModelsWithDB(tx, channel.Id, nextRows); err != nil {
 				return err
 			}
@@ -299,11 +306,19 @@ func UpdateModels(channelID string, rows []model.ChannelModel) error {
 		if err := tx.First(&existing, "id = ?", normalizedChannelID).Error; err != nil {
 			return err
 		}
-		existing.SetChannelModels(rows)
-		if err := model.ValidateManualChannelModelsWithDB(tx, normalizedChannelID, existing.GetChannelModels()); err != nil {
+		if err := model.HydrateChannelWithModels(tx, &existing); err != nil {
 			return err
 		}
-		if err := model.ReplaceChannelModelsWithDB(tx, normalizedChannelID, existing.GetChannelModels()); err != nil {
+		currentRows := existing.GetChannelModels()
+		existing.SetChannelModels(rows)
+		nextRows := existing.GetChannelModels()
+		if err := model.ValidateChannelModelDisableTransitionsWithDB(tx, normalizedChannelID, currentRows, nextRows); err != nil {
+			return err
+		}
+		if err := model.ValidateManualChannelModelsWithDB(tx, normalizedChannelID, nextRows); err != nil {
+			return err
+		}
+		if err := model.ReplaceChannelModelsWithDB(tx, normalizedChannelID, nextRows); err != nil {
 			return err
 		}
 		return model.EnsureChannelTestModelWithDB(tx, normalizedChannelID)

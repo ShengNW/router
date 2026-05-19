@@ -142,6 +142,74 @@ func FormatChannelModelUsageReferences(usages []ChannelModelUsageReference) stri
 	return strings.Join(parts, ", ")
 }
 
+func formatChannelModelEnabledEndpoints(rows []ChannelModelEndpoint) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	endpoints := make([]string, 0, len(rows))
+	seen := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		endpoint := NormalizeRequestedChannelModelEndpoint(row.Endpoint)
+		if endpoint == "" {
+			continue
+		}
+		if _, ok := seen[endpoint]; ok {
+			continue
+		}
+		seen[endpoint] = struct{}{}
+		endpoints = append(endpoints, endpoint)
+	}
+	sort.Strings(endpoints)
+	return strings.Join(endpoints, ", ")
+}
+
+func ValidateChannelModelDisableTransitionsWithDB(db *gorm.DB, channelID string, existingRows []ChannelModel, nextRows []ChannelModel) error {
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	normalizedChannelID := strings.TrimSpace(channelID)
+	if normalizedChannelID == "" {
+		return nil
+	}
+	existingByModel := make(map[string]ChannelModel)
+	for _, row := range NormalizeChannelModelsPreserveOrder(existingRows) {
+		modelName := strings.TrimSpace(row.Model)
+		if modelName == "" {
+			continue
+		}
+		existingByModel[modelName] = row
+	}
+	nextByModel := make(map[string]ChannelModel)
+	for _, row := range NormalizeChannelModelsPreserveOrder(nextRows) {
+		modelName := strings.TrimSpace(row.Model)
+		if modelName == "" {
+			continue
+		}
+		nextByModel[modelName] = row
+	}
+	for modelName, existingRow := range existingByModel {
+		if existingRow.Inactive || !existingRow.Selected {
+			continue
+		}
+		nextRow, ok := nextByModel[modelName]
+		if !ok {
+			continue
+		}
+		if !nextRow.Inactive && nextRow.Selected {
+			continue
+		}
+		enabledEndpointRows, err := ListEnabledChannelModelEndpointsByCandidatesWithDB(db, normalizedChannelID, existingRow.Model, existingRow.UpstreamModel)
+		if err != nil {
+			return err
+		}
+		if len(enabledEndpointRows) == 0 {
+			continue
+		}
+		return fmt.Errorf("模型 %s 仍有已启用端点，无法关闭：%s", displayChannelModelName(existingRow), formatChannelModelEnabledEndpoints(enabledEndpointRows))
+	}
+	return nil
+}
+
 func DeleteChannelModelWithDB(db *gorm.DB, channelID string, modelName string, upstreamModel string) error {
 	if db == nil {
 		return fmt.Errorf("database handle is nil")
@@ -157,6 +225,20 @@ func DeleteChannelModelWithDB(db *gorm.DB, channelID string, modelName string, u
 		Order("sort_order asc, model asc").
 		First(&targetRow).Error; err != nil {
 		return err
+	}
+	returned, err := HasReturnedChannelModelSyncResultWithDB(db, normalizedChannelID, targetRow.Model, targetRow.UpstreamModel)
+	if err != nil {
+		return err
+	}
+	if returned {
+		return fmt.Errorf("模型 %s 最近一次上游返回仍包含，无法删除", displayChannelModelName(targetRow))
+	}
+	enabledEndpointRows, err := ListEnabledChannelModelEndpointsByCandidatesWithDB(db, normalizedChannelID, targetRow.Model, targetRow.UpstreamModel)
+	if err != nil {
+		return err
+	}
+	if len(enabledEndpointRows) > 0 {
+		return fmt.Errorf("模型 %s 仍有已启用端点，无法删除：%s", displayChannelModelName(targetRow), formatChannelModelEnabledEndpoints(enabledEndpointRows))
 	}
 	usages, err := ListChannelModelUsageReferencesWithDB(db, normalizedChannelID, targetRow.Model, targetRow.UpstreamModel)
 	if err != nil {
