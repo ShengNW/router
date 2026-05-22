@@ -40,6 +40,7 @@
     "title": "充值中心",
     "display_currency": "展示币种",
     "mine": {
+      "balance": "余额",
       "billing": "账务",
       "package": "套餐"
     },
@@ -238,7 +239,7 @@
       }
     },
     "redemption_records": {
-      "title": "兑换入账记录",
+      "title": "兑换记录",
       "refresh": "刷新",
       "empty": "暂无兑换入账记录",
       "columns": {

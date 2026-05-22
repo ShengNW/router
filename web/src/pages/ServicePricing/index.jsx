@@ -17,7 +17,6 @@ const ServicePricing = () => {
             { key: 'pricing', label: t('topup.pricing.title'), active: true },
           ]}
           title={t('topup.pricing.page_title')}
-          meta={t('topup.pricing.subtitle')}
         />
         <PackagePurchasePage />
         <BalanceTopUpPage showCurrentBalance={false} />

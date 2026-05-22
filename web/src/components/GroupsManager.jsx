@@ -292,7 +292,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
   const [detailEditingSection, setDetailEditingSection] = useState('');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
   const [detailChannelModalOpen, setDetailChannelModalOpen] = useState(false);
-  const [detailChannelDraft, setDetailChannelDraft] = useState({ id: '', priority: 0 });
+  const [detailChannelDraft, setDetailChannelDraft] = useState({ id: '', priority: 0, models: [] });
   const [detailModelModalOpen, setDetailModelModalOpen] = useState(false);
   const [detailModelEditTarget, setDetailModelEditTarget] = useState('');
   const [detailModelChannelDrafts, setDetailModelChannelDrafts] = useState([]);
@@ -322,6 +322,10 @@ const GroupsManager = ({ detailGroupId = '' }) => {
   const formModelChannelLookup = useMemo(
     () => buildChannelLookup(formModelChannels),
     [formModelChannels]
+  );
+  const detailChannelLookup = useMemo(
+    () => buildChannelLookup(detailChannelRows),
+    [detailChannelRows]
   );
 
   const selectedFormChannelOptions = useMemo(
@@ -447,41 +451,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     if (submitting) return;
     clearDeleteState();
   };
-
-  const fetchCreateChannelOptions = useCallback(async () => {
-    setFormChannelLoading(true);
-    try {
-      const rows = [];
-      let page = 1;
-      while (page <= 50) {
-        const res = await API.get('/api/v1/admin/channels', {
-          params: {
-            page,
-            page_size: 100,
-            compact: 1,
-          },
-        });
-        const { success, message, data } = res.data || {};
-        if (!success) {
-          showError(message || t('group_manage.messages.bind_load_failed'));
-          return;
-        }
-        const pageItems = Array.isArray(data?.items) ? data.items : [];
-        rows.push(...pageItems);
-        const total = Number(data?.total || pageItems.length || 0);
-        if (pageItems.length === 0 || rows.length >= total || pageItems.length < 100) {
-          break;
-        }
-        page += 1;
-      }
-      setFormChannelOptions(toChannelOptions(rows));
-      setFormChannelIDs([]);
-    } catch (error) {
-      showError(error);
-    } finally {
-      setFormChannelLoading(false);
-    }
-  }, [t]);
 
   const fetchGroupModelsPayload = useCallback(async (groupID) => {
     const encodedID = encodeURIComponent(groupID || '');
@@ -657,7 +626,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     setActiveGroup(null);
     resetDetailState();
     resetFormState();
-    fetchCreateChannelOptions().then();
   };
 
   const openViewPanel = (row, options = {}) => {
@@ -766,7 +734,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
         name,
         description: (form.description || '').trim(),
         billing_ratio: billingRatio,
-        channel_ids: formChannelIDs,
       });
       const { success, message, data } = res.data || {};
       if (!success) {
@@ -884,6 +851,9 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     setDetailChannelDraft({
       id: (firstUnbound?.id || '').toString().trim(),
       priority: toSafePriorityNumber(firstUnbound?.priority, 0),
+      models: getChannelModelOptionRows(firstUnbound).map((item) =>
+        encodeChannelModelOptionValue(item)
+      ),
     });
     setDetailChannelModalOpen(true);
   }, [activeGroup, detailChannelsEditLocked, fetchGroupChannels, submitting]);
@@ -1035,7 +1005,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
       return;
     }
     setDetailChannelModalOpen(false);
-    setDetailChannelDraft({ id: '', priority: 0 });
+    setDetailChannelDraft({ id: '', priority: 0, models: [] });
   }, [submitting]);
 
   const cancelDetailSectionEdit = useCallback(() => {
@@ -1044,7 +1014,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     }
     setDetailEditingSection('');
     setDetailChannelModalOpen(false);
-    setDetailChannelDraft({ id: '', priority: 0 });
+    setDetailChannelDraft({ id: '', priority: 0, models: [] });
     closeDetailModelModal();
     resetFormState();
   }, [closeDetailModelModal, submitting]);
@@ -1127,23 +1097,47 @@ const GroupsManager = ({ detailGroupId = '' }) => {
       showInfo(t('group_manage.messages.channel_required'));
       return;
     }
-    const nextRows = (Array.isArray(detailChannelRows) ? detailChannelRows : []).map((item) => {
-      if ((item?.id || '').toString().trim() !== channelID) {
-        return item;
-      }
-      return {
-        ...item,
-        bound: true,
-        priority: toSafePriorityNumber(detailChannelDraft.priority, 0),
-      };
-    });
-    setDetailChannelRows(nextRows);
-    const ok = await submitDetailChannels(nextRows);
+    const selectedModelValues = Array.isArray(detailChannelDraft.models)
+      ? detailChannelDraft.models.filter((value) => typeof value === 'string' && value.trim() !== '')
+      : [];
+    if (selectedModelValues.length === 0) {
+      showInfo(t('group_manage.messages.model_required'));
+      return;
+    }
+    const editorState = await loadDetailModelEditorState();
+    if (!editorState) {
+      return;
+    }
+    const nextSelectedChannelIDs = [
+      ...new Set([...(editorState.selectedChannelIDs || []), channelID]),
+    ];
+    const nextItems = sortGroupModelRows([
+      ...(Array.isArray(editorState.items) ? editorState.items : []),
+      ...selectedModelValues.map((value) => {
+        const decoded = decodeChannelModelOptionValue(value);
+        return {
+          model: (decoded.model || '').trim(),
+          channel_id: channelID,
+          upstream_model: (decoded.upstream_model || '').trim(),
+          enabled: true,
+          priority: toSafePriorityNumber(detailChannelDraft.priority, 0),
+        };
+      }),
+    ]);
+    const ok = await saveDetailModels(nextItems, nextSelectedChannelIDs);
     if (!ok) {
       return;
     }
     closeDetailChannelModal();
-  }, [closeDetailChannelModal, detailChannelDraft.id, detailChannelDraft.priority, detailChannelRows, submitDetailChannels, t]);
+  }, [
+    closeDetailChannelModal,
+    detailChannelDraft.id,
+    detailChannelDraft.models,
+    detailChannelDraft.priority,
+    loadDetailModelEditorState,
+    saveDetailModels,
+    t,
+  ]);
 
   const removeDetailChannel = useCallback(async (row) => {
     if (!activeGroup || submitting) {
@@ -1700,12 +1694,24 @@ const GroupsManager = ({ detailGroupId = '' }) => {
   };
 
   const getChannelModelOptions = (channelID) => {
-    const channel = formModelChannelLookup[channelID];
+    const channel = formModelChannelLookup[channelID] || detailChannelLookup[channelID];
     const models = getChannelModelOptionRows(channel);
     return models.map((item) => ({
       key: `${channelID}-${item.upstream_model}-${item.model}`,
       text: item.label || item.model || item.upstream_model || '-',
       value: encodeChannelModelOptionValue(item),
+    }));
+  };
+
+  const getChannelModelTableRows = (channelID) => {
+    const channel = formModelChannelLookup[channelID] || detailChannelLookup[channelID];
+    const models = getChannelModelOptionRows(channel);
+    return models.map((item) => ({
+      key: `${channelID}-${item.upstream_model}-${item.model}`,
+      value: encodeChannelModelOptionValue(item),
+      model: item?.model || '',
+      upstream_model: item?.upstream_model || '',
+      label: item?.label || item?.model || item?.upstream_model || '-',
     }));
   };
 
@@ -2602,20 +2608,6 @@ const GroupsManager = ({ detailGroupId = '' }) => {
               }
             />
           </AppField>
-          <AppField label={t('group_manage.form.channels')}>
-            <AppSelect
-              className='router-section-dropdown'
-              multiple
-              search
-              disabled={formChannelLoading || submitting}
-              options={formChannelOptions}
-              value={formChannelIDs}
-              placeholder={t('group_manage.form.channels_placeholder')}
-              onChange={(e, { value }) =>
-                setFormChannelIDs(Array.isArray(value) ? value : [])
-              }
-            />
-          </AppField>
         </AppFormRow>
       </div>
     </div>
@@ -2769,7 +2761,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
       <AppModal
         open={detailChannelModalOpen}
         onClose={closeDetailChannelModal}
-        size='small'
+        size='large'
         title={t('group_manage.modal.add_channel_title')}
         footer={null}
       >
@@ -2783,12 +2775,84 @@ const GroupsManager = ({ detailGroupId = '' }) => {
                   placeholder={t('group_manage.form.channels_placeholder')}
                   options={detailAvailableChannelOptions}
                   value={detailChannelDraft.id || ''}
-                  onChange={(e, { value }) =>
+                  onChange={(e, { value }) => {
+                    const nextChannelID = (value || '').toString();
+                    const nextChannel = (Array.isArray(detailChannelRows) ? detailChannelRows : []).find(
+                      (item) => (item?.id || '').toString().trim() === nextChannelID.trim()
+                    );
                     setDetailChannelDraft((prev) => ({
                       ...prev,
-                      id: (value || '').toString(),
-                    }))
-                  }
+                      id: nextChannelID,
+                      models: getChannelModelOptionRows(nextChannel).map((item) =>
+                        encodeChannelModelOptionValue(item)
+                      ),
+                    }));
+                  }}
+                />
+              </AppField>
+            </AppFormRow>
+            <AppFormRow>
+              <AppField label={t('group_manage.edit.models')} required>
+                <AppTable
+                  className='router-detail-table'
+                  pagination={false}
+                  size='small'
+                  rowKey='value'
+                  dataSource={getChannelModelTableRows(detailChannelDraft.id || '')}
+                  locale={{ emptyText: t('group_manage.detail.empty_model_channels') }}
+                  rowSelection={{
+                    selectedRowKeys: Array.isArray(detailChannelDraft.models) ? detailChannelDraft.models : [],
+                    columnWidth: 72,
+                    columnTitle: t('group_manage.detail.selected'),
+                    getCheckboxProps: () => ({
+                      disabled:
+                        submitting ||
+                        (detailChannelDraft.id || '').toString().trim() === '',
+                    }),
+                    getTitleCheckboxProps: () => ({
+                      disabled:
+                        submitting ||
+                        (detailChannelDraft.id || '').toString().trim() === '',
+                    }),
+                    onSelect: (record, selected) => {
+                      setDetailChannelDraft((prev) => {
+                        const current = new Set(Array.isArray(prev.models) ? prev.models : []);
+                        if (selected) {
+                          current.add(record.value);
+                        } else {
+                          current.delete(record.value);
+                        }
+                        return {
+                          ...prev,
+                          models: getChannelModelTableRows(prev.id || '')
+                            .map((item) => item.value)
+                            .filter((value) => current.has(value)),
+                        };
+                      });
+                    },
+                    onSelectAll: (selected) => {
+                      setDetailChannelDraft((prev) => ({
+                        ...prev,
+                        models: selected
+                          ? getChannelModelTableRows(prev.id || '').map((item) => item.value)
+                          : [],
+                      }));
+                    },
+                  }}
+                  columns={[
+                    {
+                      title: t('group_manage.edit.model'),
+                      dataIndex: 'model',
+                      key: 'model',
+                      render: (value) => value || '-',
+                    },
+                    {
+                      title: t('group_manage.edit.upstream_model'),
+                      dataIndex: 'upstream_model',
+                      key: 'upstream_model',
+                      render: (value) => value || '-',
+                    },
+                  ]}
                 />
               </AppField>
             </AppFormRow>

@@ -40,6 +40,7 @@
     "title": "Top Up Center",
     "display_currency": "Display",
     "mine": {
+      "balance": "Balance",
       "billing": "Billing",
       "package": "Package"
     },
