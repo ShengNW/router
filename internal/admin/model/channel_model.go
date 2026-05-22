@@ -399,6 +399,72 @@ func SyncFetchedChannelModelsWithDB(db *gorm.DB, channelID string, fetchedRows [
 	return ReplaceChannelModelsWithDB(db, normalizedChannelID, rows)
 }
 
+func AppendMissingFetchedChannelModelsWithDB(db *gorm.DB, channelID string, fetchedRows []ChannelModel) error {
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	normalizedChannelID := strings.TrimSpace(channelID)
+	if normalizedChannelID == "" {
+		return nil
+	}
+	existingRows, err := listChannelModelRowsByChannelIDWithDB(db, normalizedChannelID)
+	if err != nil {
+		return err
+	}
+	channelProtocol, err := loadChannelProtocolByChannelIDWithDB(db, normalizedChannelID)
+	if err != nil {
+		return err
+	}
+	normalizedExisting := NormalizeChannelModelsPreserveOrder(existingRows)
+	normalizedFetched := NormalizeChannelModelsPreserveOrder(fetchedRows)
+	existingKeys := make(map[string]struct{}, len(normalizedExisting)*2)
+	for _, row := range normalizedExisting {
+		modelName := strings.TrimSpace(row.Model)
+		upstreamModel := strings.TrimSpace(row.UpstreamModel)
+		if modelName != "" {
+			existingKeys["model:"+modelName] = struct{}{}
+		}
+		if upstreamModel != "" {
+			existingKeys["upstream:"+upstreamModel] = struct{}{}
+		}
+	}
+	nextRows := make([]ChannelModel, 0, len(normalizedExisting)+len(normalizedFetched))
+	nextRows = append(nextRows, normalizedExisting...)
+	for _, row := range normalizedFetched {
+		modelName := strings.TrimSpace(row.Model)
+		upstreamModel := strings.TrimSpace(row.UpstreamModel)
+		if upstreamModel == "" {
+			upstreamModel = modelName
+		}
+		if modelName == "" {
+			modelName = upstreamModel
+		}
+		if modelName == "" {
+			continue
+		}
+		if _, ok := existingKeys["model:"+modelName]; ok {
+			continue
+		}
+		if upstreamModel != "" {
+			if _, ok := existingKeys["upstream:"+upstreamModel]; ok {
+				continue
+			}
+		}
+		appended := row
+		appended.Model = modelName
+		appended.UpstreamModel = upstreamModel
+		appended.Selected = false
+		appended.Inactive = false
+		completeChannelModelRowDefaults(&appended, channelProtocol)
+		nextRows = append(nextRows, appended)
+		existingKeys["model:"+modelName] = struct{}{}
+		if upstreamModel != "" {
+			existingKeys["upstream:"+upstreamModel] = struct{}{}
+		}
+	}
+	return ReplaceChannelModelsWithDB(db, normalizedChannelID, nextRows)
+}
+
 func SyncFetchedChannelModelsFromBaseWithDB(db *gorm.DB, channelID string, baseRows []ChannelModel, fetchedRows []ChannelModel) error {
 	if db == nil {
 		return fmt.Errorf("database handle is nil")

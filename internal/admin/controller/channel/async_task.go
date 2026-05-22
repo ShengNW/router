@@ -268,6 +268,11 @@ func executeChannelRefreshModelsTask(task *model.AsyncTask) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(fetchedRows) > 0 {
+		if err := model.AppendMissingFetchedChannelModelsWithDB(model.DB, channelID, fetchedRows); err != nil {
+			return "", err
+		}
+	}
 	if err := model.ReplaceChannelModelSyncResultsWithDB(model.DB, channelID, resolvedChannel.GetChannelModels(), fetchedRows, task.Id); err != nil {
 		return "", err
 	}

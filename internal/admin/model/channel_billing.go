@@ -655,7 +655,7 @@ func GetEffectiveChannelBillingProfileWithDB(db *gorm.DB, channel *Channel) (Cha
 		return row, false, nil
 	}
 	if errorsIsRecordNotFound(err) {
-		return ChannelBillingProfile{}, false, fmt.Errorf("渠道账务未配置")
+		return ChannelBillingProfile{}, false, nil
 	}
 	return ChannelBillingProfile{}, false, err
 }

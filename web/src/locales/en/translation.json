@@ -369,6 +369,7 @@
       "updated_at": "Updated At",
       "response_time": "Response Time",
       "capabilities": "Capabilities",
+      "billing": "Billing",
       "balance": "Balance",
       "priority": "Priority",
       "actions": "Actions",
