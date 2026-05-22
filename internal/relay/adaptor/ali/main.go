@@ -132,11 +132,12 @@ func embeddingResponseAli2OpenAI(response *EmbeddingResponse) *openai.EmbeddingR
 	return &openAIEmbeddingResponse
 }
 
-func responseAli2OpenAI(response *ChatResponse) *openai.TextResponse {
+func responseAli2OpenAI(response *ChatResponse, modelName string) *openai.TextResponse {
 	fullTextResponse := openai.TextResponse{
 		Id:      response.RequestId,
 		Object:  "chat.completion",
 		Created: helper.GetTimestamp(),
+		Model:   strings.TrimSpace(modelName),
 		Choices: response.Output.Choices,
 		Usage: model.Usage{
 			PromptTokens:     response.Usage.InputTokens,
@@ -147,7 +148,7 @@ func responseAli2OpenAI(response *ChatResponse) *openai.TextResponse {
 	return &fullTextResponse
 }
 
-func streamResponseAli2OpenAI(aliResponse *ChatResponse) *openai.ChatCompletionsStreamResponse {
+func streamResponseAli2OpenAI(aliResponse *ChatResponse, modelName string) *openai.ChatCompletionsStreamResponse {
 	if len(aliResponse.Output.Choices) == 0 {
 		return nil
 	}
@@ -162,13 +163,13 @@ func streamResponseAli2OpenAI(aliResponse *ChatResponse) *openai.ChatCompletions
 		Id:      aliResponse.RequestId,
 		Object:  "chat.completion.chunk",
 		Created: helper.GetTimestamp(),
-		Model:   "qwen",
+		Model:   strings.TrimSpace(modelName),
 		Choices: []openai.ChatCompletionsStreamResponseChoice{choice},
 	}
 	return &response
 }
 
-func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
+func StreamHandler(c *gin.Context, resp *http.Response, modelName string) (*model.ErrorWithStatusCode, *model.Usage) {
 	var usage model.Usage
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -204,7 +205,7 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 			usage.CompletionTokens = aliResponse.Usage.OutputTokens
 			usage.TotalTokens = aliResponse.Usage.InputTokens + aliResponse.Usage.OutputTokens
 		}
-		response := streamResponseAli2OpenAI(&aliResponse)
+		response := streamResponseAli2OpenAI(&aliResponse, modelName)
 		if response == nil {
 			continue
 		}
@@ -227,7 +228,7 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 	return nil, &usage
 }
 
-func Handler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
+func Handler(c *gin.Context, resp *http.Response, modelName string) (*model.ErrorWithStatusCode, *model.Usage) {
 	ctx := c.Request.Context()
 	var aliResponse ChatResponse
 	responseBody, err := io.ReadAll(resp.Body)
@@ -254,8 +255,7 @@ func Handler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *
 			StatusCode: resp.StatusCode,
 		}, nil
 	}
-	fullTextResponse := responseAli2OpenAI(&aliResponse)
-	fullTextResponse.Model = "qwen"
+	fullTextResponse := responseAli2OpenAI(&aliResponse, modelName)
 	jsonResponse, err := json.Marshal(fullTextResponse)
 	if err != nil {
 		return openai.ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil

@@ -98,9 +98,9 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Met
 		return compatibleAdaptor.DoResponse(c, resp, meta)
 	default:
 		if meta.IsStream {
-			err, usage = StreamHandler(c, resp)
+			err, usage = StreamHandler(c, resp, meta.ActualModelName)
 		} else {
-			err, usage = Handler(c, resp)
+			err, usage = Handler(c, resp, meta.ActualModelName)
 		}
 	}
 	return
