@@ -4142,7 +4142,8 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   const toggleModelSelection = useCallback(
     async (upstreamModel, checked) => {
       const nextConfigs = visibleChannelModels.map((row) =>
-        row.upstream_model === upstreamModel && canSelectChannelModel(row)
+        row.upstream_model === upstreamModel &&
+        (checked ? canSelectChannelModel(row) : row.selected === true)
           ? {
               ...row,
               selected: !!checked,
