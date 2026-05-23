@@ -1055,7 +1055,8 @@
       "delete_title": "确认删除分组",
       "delete_confirm": "确定删除分组 {{id}} 吗？",
       "model_delete_confirm": "确定删除模型 {{model}} 吗？",
-      "bind_channels_title": "配置分组 {{id}} 的渠道"
+      "bind_channels_title": "配置分组 {{id}} 的渠道",
+      "add_model_selected": "已选择 {{count}} 个模型"
     },
     "detail_tabs": {
       "overview": "概览",

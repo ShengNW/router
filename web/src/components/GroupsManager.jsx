@@ -298,7 +298,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
   const [detailModelChannelDrafts, setDetailModelChannelDrafts] = useState([]);
   const [detailAddModelModalOpen, setDetailAddModelModalOpen] = useState(false);
   const [detailAddModelOptions, setDetailAddModelOptions] = useState([]);
-  const [detailAddModelValue, setDetailAddModelValue] = useState('');
+  const [detailAddModelValues, setDetailAddModelValues] = useState([]);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -997,7 +997,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
     }
     setDetailAddModelModalOpen(false);
     setDetailAddModelOptions([]);
-    setDetailAddModelValue('');
+    setDetailAddModelValues([]);
   }, [submitting]);
 
   const closeDetailChannelModal = useCallback(() => {
@@ -1912,7 +1912,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
         .filter((item) => item !== '')
     );
     const selectedChannelIDSet = new Set(editorState.selectedChannelIDs || []);
-    const optionsMap = new Map();
+    const optionMap = new Map();
     (Array.isArray(editorState.channels) ? editorState.channels : []).forEach((channel) => {
       const channelID = (channel?.id || '').toString().trim();
       if (channelID === '' || !selectedChannelIDSet.has(channelID)) {
@@ -1920,37 +1920,99 @@ const GroupsManager = ({ detailGroupId = '' }) => {
       }
       getChannelModelOptionRows(channel).forEach((item) => {
         const modelName = (item?.model || '').toString().trim();
-        if (modelName === '' || existingModelSet.has(modelName) || optionsMap.has(modelName)) {
+        if (modelName === '' || existingModelSet.has(modelName)) {
           return;
         }
-        optionsMap.set(modelName, {
+        const current = optionMap.get(modelName) || {
           key: modelName,
           value: modelName,
-          text: modelName,
+          model: modelName,
+          channels: [],
+        };
+        current.channels.push({
+          channel_id: channelID,
+          channel_name: (channel?.name || channelID).toString().trim(),
+          upstream_model: (item?.upstream_model || '').toString().trim(),
+          priority: toSafePriorityNumber(channel?.priority, 0),
         });
+        optionMap.set(modelName, current);
       });
     });
-    const options = [...optionsMap.values()].sort((left, right) =>
-      (left.text || '').localeCompare(right.text || '')
-    );
+    const options = [...optionMap.values()]
+      .map((item) => ({
+        ...item,
+        channel_count: item.channels.length,
+      }))
+      .sort((left, right) => (left.model || '').localeCompare(right.model || ''));
     if (options.length === 0) {
       showInfo(t('group_manage.messages.model_add_empty'));
       return;
     }
     setDetailAddModelOptions(options);
-    setDetailAddModelValue(options[0]?.value || '');
+    setDetailAddModelValues([]);
     setDetailAddModelModalOpen(true);
   }, [detailModelEntries, loadDetailModelEditorState, t]);
 
   const submitDetailAddModel = useCallback(async () => {
-    const modelName = (detailAddModelValue || '').toString().trim();
-    if (modelName === '') {
+    const selectedModels = Array.isArray(detailAddModelValues)
+      ? detailAddModelValues.map((value) => (value || '').toString().trim()).filter(Boolean)
+      : [];
+    if (selectedModels.length === 0) {
       showInfo(t('group_manage.messages.model_required'));
       return;
     }
-    closeDetailAddModelModal();
-    await openDetailModelEdit({ model: modelName });
-  }, [closeDetailAddModelModal, detailAddModelValue, openDetailModelEdit, t]);
+    const editorState = await loadDetailModelEditorState();
+    if (!editorState) {
+      return;
+    }
+    const selectedSet = new Set(selectedModels);
+    const existingRows = Array.isArray(editorState.items) ? editorState.items : [];
+    const existingKeys = new Set(
+      existingRows.map((item) => `${(item?.model || '').toString().trim()}::${(item?.channel_id || '').toString().trim()}`)
+    );
+    const rowsByModel = new Map(detailAddModelOptions.map((item) => [item.model, item]));
+    const appendedRows = [];
+    for (const modelName of selectedSet) {
+      const option = rowsByModel.get(modelName);
+      for (const channel of Array.isArray(option?.channels) ? option.channels : []) {
+        const channelID = (channel?.channel_id || '').toString().trim();
+        if (channelID === '') {
+          continue;
+        }
+        const dedupeKey = `${modelName}::${channelID}`;
+        if (existingKeys.has(dedupeKey)) {
+          continue;
+        }
+        existingKeys.add(dedupeKey);
+        appendedRows.push({
+          model: modelName,
+          channel_id: channelID,
+          upstream_model: (channel?.upstream_model || '').toString().trim(),
+          enabled: true,
+          priority: toSafePriorityNumber(channel?.priority, 0),
+          channel_name: (channel?.channel_name || channelID).toString().trim(),
+        });
+      }
+    }
+    if (appendedRows.length === 0) {
+      showInfo(t('group_manage.messages.model_add_empty'));
+      return;
+    }
+    const saved = await saveDetailModels(
+      sortGroupModelRows([...existingRows, ...appendedRows]),
+      editorState.selectedChannelIDs || [],
+    );
+    if (saved) {
+      closeDetailAddModelModal();
+    }
+  }, [
+    closeDetailAddModelModal,
+    detailAddModelOptions,
+    detailAddModelValues,
+    loadDetailModelEditorState,
+    saveDetailModels,
+    t,
+  ]);
 
   const updateDetailModelChannelDraft = useCallback((channelID, updater) => {
     setDetailModelChannelDrafts((prev) =>
@@ -2725,19 +2787,67 @@ const GroupsManager = ({ detailGroupId = '' }) => {
       <AppModal
         open={detailAddModelModalOpen}
         onClose={closeDetailAddModelModal}
-        size='small'
+        size='large'
         title={t('group_manage.modal.add_model_title')}
         footer={null}
       >
         <div className='router-page-stack'>
-          <AppSelect
-            className='router-inline-dropdown'
-            search
-            options={detailAddModelOptions}
-            value={detailAddModelValue}
-            placeholder={t('group_manage.edit.model_placeholder')}
-            onChange={(e, { value }) => setDetailAddModelValue(value || '')}
+          <AppTable
+            className='router-detail-table'
+            rowKey={(row) => row.model}
+            pagination={{
+              pageSize: 8,
+              showSizeChanger: false,
+            }}
+            rowSelection={{
+              selectedRowKeys: detailAddModelValues,
+              onChange: (keys) => setDetailAddModelValues(keys),
+            }}
+            dataSource={detailAddModelOptions}
+            locale={{ emptyText: t('group_manage.messages.model_add_empty') }}
+            columns={[
+              {
+                title: t('group_manage.edit.model'),
+                dataIndex: 'model',
+                key: 'model',
+                width: 220,
+                render: (value) => (
+                  <div className='router-cell-truncate' title={value || '-'}>
+                    {value || '-'}
+                  </div>
+                ),
+              },
+              {
+                title: t('group_manage.detail.channel_count'),
+                dataIndex: 'channel_count',
+                key: 'channel_count',
+                width: 110,
+                render: (value) => Number(value || 0),
+              },
+              {
+                title: t('group_manage.detail.model_channels'),
+                dataIndex: 'channels',
+                key: 'channels',
+                render: (channels) => (
+                  <div className='router-tag-group'>
+                    {(Array.isArray(channels) ? channels : []).map((item) => (
+                      <AppTag
+                        key={`${item.channel_id}-${item.upstream_model}`}
+                        className='router-tag'
+                      >
+                        {item.channel_name || item.channel_id}
+                      </AppTag>
+                    ))}
+                  </div>
+                ),
+              },
+            ]}
           />
+          <div className='router-text-meta'>
+            {t('group_manage.modal.add_model_selected', {
+              count: detailAddModelValues.length,
+            })}
+          </div>
           <AppFormActions>
             <AppButton
               className='router-modal-button'
@@ -2750,7 +2860,7 @@ const GroupsManager = ({ detailGroupId = '' }) => {
               className='router-modal-button'
               color='blue'
               onClick={submitDetailAddModel}
-              disabled={submitting}
+              disabled={submitting || detailAddModelValues.length === 0}
             >
               {t('group_manage.buttons.confirm')}
             </AppButton>
