@@ -2241,15 +2241,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     (row) => {
       const providerId = resolvePreferredProviderForModel(row);
       const providerDetails = providerModelDetailsIndex[providerId] || {};
-      const candidates = [];
-      normalizeExplicitChannelModelEndpoints(
-        row?.type,
-        row?.endpoints || row?.endpoint_list || [],
-        row?.endpoint,
-        inputs.protocol,
-      ).forEach((endpoint) => {
-        candidates.push(endpoint);
-      });
+      const providerCandidates = [];
       let matchedProviderDetail = false;
       buildProviderLookupKeys(row).forEach((key) => {
         const detail = providerDetails[key];
@@ -2261,9 +2253,17 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
           return;
         }
         detail.supported_endpoints.forEach((endpoint) => {
-          candidates.push(endpoint);
+          providerCandidates.push(endpoint);
         });
       });
+      const candidates = matchedProviderDetail
+        ? providerCandidates
+        : normalizeExplicitChannelModelEndpoints(
+            row?.type,
+            row?.endpoints || row?.endpoint_list || [],
+            row?.endpoint,
+            inputs.protocol,
+          );
       const seen = new Set();
       const result = [];
       candidates.forEach((endpoint) => {
@@ -2319,7 +2319,10 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
         inputs.protocol,
       );
       const providerEndpoints = getProviderCandidateEndpointsForModel(row);
-      if (normalizedCurrent !== '') {
+      if (
+        normalizedCurrent !== '' &&
+        providerEndpoints.includes(normalizedCurrent)
+      ) {
         return normalizedCurrent;
       }
       return providerEndpoints[0] || '';

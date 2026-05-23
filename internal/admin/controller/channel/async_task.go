@@ -112,6 +112,9 @@ func CreateChannelModelTestTasks(channelID string, createdBy string, requestedTe
 		if endpointErr != nil {
 			return nil, createdCount, reusedCount, endpointErr
 		}
+		if err := validateChannelModelTestEndpointAgainstProvider(row, normalizedEndpoint); err != nil {
+			return nil, createdCount, reusedCount, err
+		}
 		if resolveSelectionModelType(row) == model.ProviderModelTypeAudio {
 			stream = nil
 		}
@@ -137,6 +140,41 @@ func CreateChannelModelTestTasks(channelID string, createdBy string, requestedTe
 		tasks = append(tasks, task)
 	}
 	return tasks, createdCount, reusedCount, nil
+}
+
+func validateChannelModelTestEndpointAgainstProvider(row model.ChannelModel, endpoint string) error {
+	normalizedEndpoint := model.NormalizeRequestedChannelModelEndpoint(endpoint)
+	if normalizedEndpoint == "" {
+		return fmt.Errorf("模型测试端点无效")
+	}
+	provider := model.NormalizeGroupModelProviderValue(row.Provider)
+	if provider == "" {
+		providerByModel, err := model.LoadUniqueProviderMapByModelsWithDB(model.DB, []string{row.Model, row.UpstreamModel})
+		if err != nil {
+			return err
+		}
+		provider = model.ResolveProviderFromModelMap(providerByModel, row.UpstreamModel, row.Model)
+	}
+	displayModel := strings.TrimSpace(row.UpstreamModel)
+	if displayModel == "" {
+		displayModel = strings.TrimSpace(row.Model)
+	}
+	if provider == "" {
+		return fmt.Errorf("模型 %s 缺少供应商官方信息，不能测试端点 %s", displayModel, normalizedEndpoint)
+	}
+	endpointMap, err := model.LoadProviderModelEndpointMapByModelsWithDB(model.DB, provider, []string{row.Model, row.UpstreamModel})
+	if err != nil {
+		return err
+	}
+	candidates := model.NormalizeProviderLookupCandidates(row.Model, row.UpstreamModel)
+	for _, candidate := range candidates {
+		for _, allowedEndpoint := range endpointMap[candidate] {
+			if model.NormalizeRequestedChannelModelEndpoint(allowedEndpoint) == normalizedEndpoint {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("模型 %s 的供应商官方端点范围不包含 %s", displayModel, normalizedEndpoint)
 }
 
 func CreateChannelRefreshModelsTask(channelID string, createdBy string, traceID string) (model.AsyncTask, bool, error) {
