@@ -6,7 +6,23 @@ import {
   AppFormRow,
   AppInput,
   AppSelect,
+  AppSwitch,
 } from '../../../router-ui';
+
+const billingModeOptions = (t) => [
+  { value: 'unsupported', label: t('channel.edit.billing.modes.unsupported') },
+  { value: 'manual', label: t('channel.edit.billing.modes.manual') },
+  { value: 'builtin_openai', label: t('channel.edit.billing.modes.builtin_openai') },
+  { value: 'builtin_closeai', label: t('channel.edit.billing.modes.builtin_closeai') },
+  { value: 'builtin_openai_sb', label: t('channel.edit.billing.modes.builtin_openai_sb') },
+  { value: 'builtin_aiproxy', label: t('channel.edit.billing.modes.builtin_aiproxy') },
+  { value: 'builtin_api2gpt', label: t('channel.edit.billing.modes.builtin_api2gpt') },
+  { value: 'builtin_aigc2d', label: t('channel.edit.billing.modes.builtin_aigc2d') },
+  { value: 'builtin_siliconflow', label: t('channel.edit.billing.modes.builtin_siliconflow') },
+  { value: 'builtin_deepseek', label: t('channel.edit.billing.modes.builtin_deepseek') },
+  { value: 'builtin_openrouter', label: t('channel.edit.billing.modes.builtin_openrouter') },
+  { value: 'builtin_cdk', label: t('channel.edit.billing.modes.builtin_cdk') },
+];
 
 const ChannelDetailOverviewTab = ({
   t,
@@ -27,7 +43,18 @@ const ChannelDetailOverviewTab = ({
   protocolSelectionHintContent,
   protocolSpecificFields,
   timestamp2string,
+  billingProfile,
+  detailBillingEditing,
+  detailBillingDraft,
+  billingSubmitting,
+  detailBillingEditLocked,
+  setDetailBillingEditing,
+  onUpdateBillingProfileDraft,
+  onCancelBillingProfileEdit,
+  onSaveBillingProfile,
 }) => {
+  const billingReadonly = !detailBillingEditing || billingSubmitting;
+
   return (
     <>
       <AppDetailSection
@@ -135,6 +162,106 @@ const ChannelDetailOverviewTab = ({
                 inputs.updated_at ? timestamp2string(inputs.updated_at) : '-'
               }
               readOnly
+            />
+          </AppField>
+        </AppFormRow>
+      </AppDetailSection>
+      <AppDetailSection
+        title={t('channel.edit.billing.profile_title')}
+        titleTag='span'
+        headerEnd={
+          detailBillingEditing ? (
+            <>
+              <AppButton
+                type='button'
+                className='router-page-button'
+                onClick={onCancelBillingProfileEdit}
+                disabled={billingSubmitting}
+              >
+                {t('channel.edit.buttons.cancel')}
+              </AppButton>
+              <AppButton
+                type='button'
+                className='router-page-button'
+                color='blue'
+                loading={billingSubmitting}
+                disabled={billingSubmitting}
+                onClick={onSaveBillingProfile}
+              >
+                {t('channel.edit.buttons.save')}
+              </AppButton>
+            </>
+          ) : (
+            <AppButton
+              type='button'
+              className='router-page-button'
+              color='blue'
+              disabled={detailBillingEditLocked}
+              onClick={() => setDetailBillingEditing(true)}
+            >
+              {t('common.edit')}
+            </AppButton>
+          )
+        }
+      >
+        <AppFormRow>
+          <AppField label={t('channel.edit.billing.profile_enabled')}>
+            <AppSwitch
+              checked={
+                detailBillingEditing
+                  ? detailBillingDraft?.enabled === true
+                  : billingProfile?.enabled === true
+              }
+              disabled={billingReadonly}
+              onChange={(e, { checked }) =>
+                onUpdateBillingProfileDraft({
+                  enabled: checked === true,
+                })
+              }
+            />
+          </AppField>
+          <AppField label={t('channel.edit.billing.billing_mode')}>
+            {detailBillingEditing ? (
+              <AppSelect
+                className='router-section-input'
+                options={billingModeOptions(t)}
+                value={detailBillingDraft?.billing_mode || 'unsupported'}
+                onChange={(e, { value }) =>
+                  onUpdateBillingProfileDraft({
+                    billing_mode: (value || 'unsupported').toString(),
+                  })
+                }
+                disabled={billingSubmitting}
+              />
+            ) : (
+              <AppInput
+                className='router-section-input'
+                value={
+                  billingProfile?.billing_mode
+                    ? t(
+                        `channel.edit.billing.modes.${billingProfile.billing_mode}`,
+                        { defaultValue: billingProfile.billing_mode },
+                      )
+                    : '-'
+                }
+                readOnly
+              />
+            )}
+          </AppField>
+          <AppField label={t('channel.edit.billing.billing_api_base_url')}>
+            <AppInput
+              className='router-section-input'
+              value={
+                detailBillingEditing
+                  ? detailBillingDraft?.billing_api_base_url || ''
+                  : billingProfile?.billing_api_base_url || '-'
+              }
+              onChange={(e, { value }) =>
+                onUpdateBillingProfileDraft({
+                  billing_api_base_url: (value || '').toString(),
+                })
+              }
+              readOnly={billingReadonly}
             />
           </AppField>
         </AppFormRow>

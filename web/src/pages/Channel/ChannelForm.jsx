@@ -2016,6 +2016,10 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     isDetailMode &&
     !detailBasicEditing &&
     (detailModelsEditing || detailBillingEditing);
+  const detailBillingEditLocked =
+    isDetailMode &&
+    !detailBillingEditing &&
+    (detailBasicEditing || detailModelsEditing);
   const detailModelsEditLocked =
     isDetailMode && (detailBasicEditing || detailBillingEditing);
   const detailTestingReadonly = isDetailMode && isAnyDetailSectionEditing;
@@ -5250,6 +5254,15 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
                 }
                 protocolSpecificFields={renderProtocolSpecificFields()}
                 timestamp2string={timestamp2string}
+                billingProfile={channelBillingProfile}
+                detailBillingEditing={detailBillingEditing}
+                detailBillingDraft={detailBillingDraft}
+                billingSubmitting={channelBillingSubmitting}
+                detailBillingEditLocked={detailBillingEditLocked}
+                setDetailBillingEditing={setDetailBillingEditing}
+                onUpdateBillingProfileDraft={updateBillingProfileDraft}
+                onCancelBillingProfileEdit={cancelDetailBillingEdit}
+                onSaveBillingProfile={saveDetailBillingProfile}
               />
             )}
             {showStepTwo && inputs.protocol !== 'proxy' && (
@@ -5381,19 +5394,12 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
               <ChannelDetailBillingTab
                 t={t}
                 billingSummary={channelBillingSummary}
-                billingProfile={channelBillingProfile}
                 billingLoading={channelBillingLoading}
                 billingError={channelBillingError}
                 billingSnapshots={channelBillingSnapshots}
                 billingActions={channelBillingActions}
                 billingReadonly={detailBillingReadonly}
                 billingSubmitting={channelBillingSubmitting}
-                detailBillingEditing={detailBillingEditing}
-                detailBillingDraft={detailBillingDraft}
-                setDetailBillingEditing={setDetailBillingEditing}
-                onUpdateBillingProfileDraft={updateBillingProfileDraft}
-                onCancelBillingProfileEdit={cancelDetailBillingEdit}
-                onSaveBillingProfile={saveDetailBillingProfile}
                 onOpenActivatePage={openChannelBillingActivatePage}
                 onManualSnapshotUpdate={updateChannelManualBillingSnapshot}
                 timestamp2string={timestamp2string}
