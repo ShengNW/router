@@ -25,6 +25,7 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay"
+	aliadaptor "github.com/yeying-community/router/internal/relay/adaptor/ali"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	"github.com/yeying-community/router/internal/relay/billing"
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"
@@ -628,12 +629,25 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 
 	var requestBody io.Reader
 	if relayMode == relaymode.ImagesEdits {
-		requestBodyBuffer, contentType, buildErr := buildMultipartImageEditBody(form, imageRequest)
-		if buildErr != nil {
-			return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+		if meta.ChannelProtocol == relaychannel.Ali && aliadaptor.IsQwenImageModel(imageRequest.Model) {
+			finalRequest, buildErr := aliadaptor.ConvertQwenImageEditRequest(*imageRequest, form)
+			if buildErr != nil {
+				return openai.ErrorWrapper(buildErr, "convert_image_request_failed", http.StatusInternalServerError)
+			}
+			jsonStr, buildErr := json.Marshal(finalRequest)
+			if buildErr != nil {
+				return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+			}
+			c.Request.Header.Set("Content-Type", "application/json")
+			requestBody = bytes.NewBuffer(jsonStr)
+		} else {
+			requestBodyBuffer, contentType, buildErr := buildMultipartImageEditBody(form, imageRequest)
+			if buildErr != nil {
+				return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+			}
+			c.Request.Header.Set("Content-Type", contentType)
+			requestBody = bytes.NewBuffer(requestBodyBuffer.Bytes())
 		}
-		c.Request.Header.Set("Content-Type", contentType)
-		requestBody = bytes.NewBuffer(requestBodyBuffer.Bytes())
 	} else if isModelMapped || meta.ChannelProtocol == relaychannel.Azure { // make Azure channel request body
 		jsonStr, err := json.Marshal(imageRequest)
 		if err != nil {

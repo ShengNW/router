@@ -23,6 +23,7 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay"
 	relayadaptor "github.com/yeying-community/router/internal/relay/adaptor"
+	aliadaptor "github.com/yeying-community/router/internal/relay/adaptor/ali"
 	openaiadaptor "github.com/yeying-community/router/internal/relay/adaptor/openai"
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
@@ -1152,6 +1153,83 @@ func executeChannelImageEditModelTest(ctx context.Context, channel *model.Channe
 	if err := writer.Close(); err != nil {
 		execution.Err = err
 		execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+		return execution
+	}
+	if channel.GetChannelProtocol() == relaychannel.Ali && aliadaptor.IsQwenImageModel(actualModelName) {
+		form, err := multipart.NewReader(bytes.NewReader(bodyBuffer.Bytes()), writer.Boundary()).ReadForm(32 << 20)
+		if err != nil {
+			execution.Err = err
+			execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+			return execution
+		}
+		defer form.RemoveAll()
+		imageRequest := relaymodel.ImageRequest{
+			Model:  actualModelName,
+			Prompt: "Replace the image with a simple blue square on a white background.",
+		}
+		convertedRequest, err := aliadaptor.ConvertQwenImageEditRequest(imageRequest, form)
+		if err != nil {
+			execution.Err = err
+			execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+			return execution
+		}
+		requestBody, err := json.Marshal(convertedRequest)
+		if err != nil {
+			execution.Err = err
+			execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+			return execution
+		}
+		c, relayMeta, err := newChannelRelayRuntimeContext(model.ChannelModelEndpointImageEdit, channel, ctx)
+		if err != nil {
+			execution.Err = err
+			execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+			return execution
+		}
+		adaptor := relay.GetAdaptor(relayMeta.APIType)
+		if adaptor == nil {
+			execution.Err = fmt.Errorf("invalid api type: %d", relayMeta.APIType)
+			execution.OutputPayload = marshalJSONForLog(map[string]any{"error": execution.Err.Error()})
+			return execution
+		}
+		adaptor.Init(relayMeta)
+		relayMeta.OriginModelName = strings.TrimSpace(modelName)
+		relayMeta.ActualModelName = actualModelName
+		baseURL := channel.ResolveAPIBaseURLForModel(model.ChannelModelEndpointImageEdit, modelName, actualModelName)
+		requestURL := resolveChannelModelTestRequestURL(baseURL, model.ChannelModelEndpointImageEdit, adaptor, relayMeta)
+		execution.BaseURL = baseURL
+		execution.RequestURL = requestURL
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Request.Header.Set("Accept", "application/json")
+		execution.InputPayload = buildHTTPRequestPayloadForLog(http.MethodPost, requestURL, c.Request.Header, requestBody)
+		startedAt := time.Now()
+		resp, err := adaptor.DoRequest(c, relayMeta, bytes.NewBuffer(requestBody))
+		execution.LatencyMs = time.Since(startedAt).Milliseconds()
+		if err != nil {
+			execution.Err = err
+			execution.OutputPayload = marshalJSONForLog(map[string]any{"error": err.Error()})
+			return execution
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			execution.Err = err
+			execution.OutputPayload = buildHTTPResponsePayloadForLog(resp.StatusCode, resp.Header, nil)
+			return execution
+		}
+		execution.ResponseStatusCode = resp.StatusCode
+		execution.ResponseHeader = resp.Header.Clone()
+		execution.ResponseBody = append([]byte(nil), body...)
+		execution.OutputPayload = buildHTTPResponsePayloadForLog(resp.StatusCode, resp.Header, body)
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			execution.Err = parseChannelUpstreamError(resp.StatusCode, body)
+			return execution
+		}
+		preview := "图片编辑接口返回成功"
+		imageResponse := openaiadaptor.ImageResponse{}
+		if err := json.Unmarshal(body, &imageResponse); err == nil && len(imageResponse.Data) > 0 {
+			preview = fmt.Sprintf("返回 %d 个图片结果", len(imageResponse.Data))
+		}
+		execution.Message = preview
 		return execution
 	}
 

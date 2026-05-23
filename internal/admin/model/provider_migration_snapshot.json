@@ -2275,7 +2275,8 @@
         "status": "active",
         "description": "Qwen-Image 2.0 是图像生成模型。",
         "supported_endpoints": [
-          "/v1/images/generations"
+          "/v1/images/generations",
+          "/v1/images/edits"
         ],
         "input_price": 0.15,
         "price_unit": "per_image",
@@ -2289,7 +2290,8 @@
         "status": "active",
         "description": "Qwen-Image 2.0 Pro 是更高质量的图像生成模型。",
         "supported_endpoints": [
-          "/v1/images/generations"
+          "/v1/images/generations",
+          "/v1/images/edits"
         ],
         "input_price": 0.2,
         "price_unit": "per_image",

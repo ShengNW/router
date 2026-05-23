@@ -61,7 +61,7 @@ func qwenProviderSupportedEndpoints(modelType string, modelName string, current 
 		if len(current) > 0 {
 			return NormalizeProviderModelSupportedEndpointsForModel(modelType, modelName, current), true
 		}
-		return []string{ChannelModelEndpointImages}, true
+		return []string{ChannelModelEndpointImages, ChannelModelEndpointImageEdit}, true
 	case strings.HasSuffix(normalizedModelName, "-realtime"),
 		strings.Contains(normalizedModelName, "omni-realtime"):
 		return []string{ChannelModelEndpointRealtime}, true

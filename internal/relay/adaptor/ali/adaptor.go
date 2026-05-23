@@ -39,6 +39,12 @@ func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
 		} else {
 			fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/text2image/image-synthesis", meta.BaseURL)
 		}
+	case relaymode.ImagesEdits:
+		if isQwenImageModel(meta.ActualModelName) {
+			fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/multimodal-generation/generation", meta.BaseURL)
+		} else {
+			fullRequestURL = openaiadaptor.GetFullRequestURL(meta.BaseURL, meta.RequestURLPath, relaychannel.OpenAI)
+		}
 	case relaymode.Completions:
 		fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/completions", meta.BaseURL)
 	default:
@@ -50,6 +56,9 @@ func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Request, meta *meta.Meta) error {
 	adaptor.SetupCommonRequestHeader(c, req, meta)
+	if isQwenImageModel(meta.ActualModelName) && (meta.Mode == relaymode.ImagesGenerations || meta.Mode == relaymode.ImagesEdits) {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if meta.IsStream {
 		req.Header.Set("Accept", "text/event-stream")
 		req.Header.Set("X-DashScope-SSE", "enable")
@@ -96,7 +105,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, meta *meta.Meta, requestBody io.Read
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Meta) (usage *model.Usage, err *model.ErrorWithStatusCode) {
 	switch meta.Mode {
-	case relaymode.ImagesGenerations:
+	case relaymode.ImagesGenerations, relaymode.ImagesEdits:
 		if isQwenImageModel(meta.ActualModelName) {
 			err, usage = QwenImageHandler(c, resp)
 		} else {
@@ -126,5 +135,9 @@ func (a *Adaptor) GetChannelName() string {
 }
 
 func isQwenImageModel(modelName string) bool {
+	return IsQwenImageModel(modelName)
+}
+
+func IsQwenImageModel(modelName string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "qwen-image")
 }

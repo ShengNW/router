@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -77,6 +78,23 @@ func TestGetRequestURL_LegacyImageUsesText2ImagePath(t *testing.T) {
 	}
 }
 
+func TestGetRequestURL_QwenImageEditUsesMultimodalGenerationPath(t *testing.T) {
+	adaptor := &Adaptor{}
+	got, err := adaptor.GetRequestURL(&meta.Meta{
+		Mode:            relaymode.ImagesEdits,
+		BaseURL:         "https://dashscope.aliyuncs.com",
+		ActualModelName: "qwen-image-2.0-pro",
+		RequestURLPath:  "/v1/images/edits",
+	})
+	if err != nil {
+		t.Fatalf("GetRequestURL() error = %v", err)
+	}
+	want := "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+	if got != want {
+		t.Fatalf("GetRequestURL() = %q, want %q", got, want)
+	}
+}
+
 func TestConvertImageRequest_QwenImageUsesMultimodalMessages(t *testing.T) {
 	adaptor := &Adaptor{}
 	adaptor.Init(&meta.Meta{ActualModelName: "qwen-image-2.0"})
@@ -101,6 +119,53 @@ func TestConvertImageRequest_QwenImageUsesMultimodalMessages(t *testing.T) {
 	}
 	if len(qwenRequest.Input.Messages) != 1 || len(qwenRequest.Input.Messages[0].Content) != 1 || qwenRequest.Input.Messages[0].Content[0].Text != "draw a blue square" {
 		t.Fatalf("messages = %#v, want prompt text content", qwenRequest.Input.Messages)
+	}
+}
+
+func TestConvertQwenImageEditRequestUsesDataURIImageContent(t *testing.T) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("model", "qwen-image-2.0"); err != nil {
+		t.Fatalf("WriteField(model) error = %v", err)
+	}
+	if err := writer.WriteField("prompt", "make it blue"); err != nil {
+		t.Fatalf("WriteField(prompt) error = %v", err)
+	}
+	part, err := writer.CreateFormFile("image", "test.png")
+	if err != nil {
+		t.Fatalf("CreateFormFile(image) error = %v", err)
+	}
+	if _, err := part.Write([]byte{0x89, 0x50, 0x4e, 0x47}); err != nil {
+		t.Fatalf("Write(image) error = %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("writer.Close() error = %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(body.Bytes()), writer.Boundary()).ReadForm(32 << 20)
+	if err != nil {
+		t.Fatalf("ReadForm() error = %v", err)
+	}
+	defer form.RemoveAll()
+
+	converted, err := ConvertQwenImageEditRequest(relaymodel.ImageRequest{
+		Model:  "qwen-image-2.0",
+		Prompt: "make it blue",
+		Size:   "1024x1024",
+	}, form)
+	if err != nil {
+		t.Fatalf("ConvertQwenImageEditRequest() error = %v", err)
+	}
+	if converted.Parameters.Size != "1024*1024" {
+		t.Fatalf("size = %q, want 1024*1024", converted.Parameters.Size)
+	}
+	if len(converted.Input.Messages) != 1 || len(converted.Input.Messages[0].Content) != 2 {
+		t.Fatalf("messages = %#v, want image+text content", converted.Input.Messages)
+	}
+	if converted.Input.Messages[0].Content[0].Image == "" || converted.Input.Messages[0].Content[0].Text != "" {
+		t.Fatalf("first content = %#v, want image data uri", converted.Input.Messages[0].Content[0])
+	}
+	if converted.Input.Messages[0].Content[1].Text != "make it blue" {
+		t.Fatalf("second content = %#v, want prompt text", converted.Input.Messages[0].Content[1])
 	}
 }
 

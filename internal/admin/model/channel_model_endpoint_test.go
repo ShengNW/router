@@ -66,8 +66,8 @@ func TestDefaultProviderModelSupportedEndpointsByProvider(t *testing.T) {
 	}
 
 	qwenImage := DefaultProviderModelSupportedEndpoints("qwen", ProviderModelTypeImage, "qwen-image-2.0")
-	if len(qwenImage) != 1 || qwenImage[0] != ChannelModelEndpointImages {
-		t.Fatalf("qwen image default endpoints = %#v, want images", qwenImage)
+	if len(qwenImage) != 2 || qwenImage[0] != ChannelModelEndpointImages || qwenImage[1] != ChannelModelEndpointImageEdit {
+		t.Fatalf("qwen image default endpoints = %#v, want images+edits", qwenImage)
 	}
 }
 

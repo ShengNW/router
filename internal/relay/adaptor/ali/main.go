@@ -3,8 +3,12 @@ package ali
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -92,6 +96,55 @@ func ConvertQwenImageRequest(request model.ImageRequest) *QwenImageRequest {
 	imageRequest.Parameters.Size = strings.Replace(request.Size, "x", "*", -1)
 	imageRequest.ResponseFormat = request.ResponseFormat
 	return &imageRequest
+}
+
+func ConvertQwenImageEditRequest(request model.ImageRequest, form *multipart.Form) (*QwenImageRequest, error) {
+	if form == nil {
+		return nil, errors.New("multipart form is required")
+	}
+	files := form.File["image"]
+	if len(files) == 0 {
+		return nil, errors.New("image file is required")
+	}
+	imageDataURI, err := readMultipartImageDataURI(files[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var imageRequest QwenImageRequest
+	imageRequest.Model = request.Model
+	imageRequest.Input.Messages = []QwenImageMessage{
+		{
+			Role: "user",
+			Content: []QwenImageContent{
+				{Image: imageDataURI},
+				{Text: request.Prompt},
+			},
+		},
+	}
+	imageRequest.Parameters.Size = strings.Replace(request.Size, "x", "*", -1)
+	imageRequest.ResponseFormat = request.ResponseFormat
+	return &imageRequest, nil
+}
+
+func readMultipartImageDataURI(fileHeader *multipart.FileHeader) (string, error) {
+	if fileHeader == nil {
+		return "", errors.New("image file is required")
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+	contentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data)), nil
 }
 
 func EmbeddingHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {

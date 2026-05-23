@@ -355,8 +355,8 @@ func TestBuildProviderMigrationSeeds_QwenUsesExplicitEndpointTruthTable(t *testi
 				}
 				found[detail.Model] = true
 			case "qwen-image-2.0", "qwen-image-2.0-pro":
-				if len(detail.SupportedEndpoints) != 1 || detail.SupportedEndpoints[0] != ChannelModelEndpointImages {
-					t.Fatalf("%s supported_endpoints=%#v, want [images]", detail.Model, detail.SupportedEndpoints)
+				if len(detail.SupportedEndpoints) != 2 || detail.SupportedEndpoints[0] != ChannelModelEndpointImages || detail.SupportedEndpoints[1] != ChannelModelEndpointImageEdit {
+					t.Fatalf("%s supported_endpoints=%#v, want [images edits]", detail.Model, detail.SupportedEndpoints)
 				}
 				found[detail.Model] = true
 			}
