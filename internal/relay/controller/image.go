@@ -56,8 +56,11 @@ const (
 	imageEstimateSourceGPTImage2Examples      = "gpt_image_2_examples_local"
 	imageEstimateSourceGPTImage2Edits         = "gpt_image_2_edits_local"
 	imageEstimateSourceImageCountRatio        = "image_count_ratio"
+	imageUsageSourceProviderResponse          = "provider_response"
+	imageEstimateSourceQwenImageOutputCount   = "qwen_image_output_count"
 	imageSettlementModeEstimateOnly           = "estimate_only"
 	imageSettlementModeLocalEstimateFinal     = "local_estimate_final"
+	imageSettlementModeProviderUsageFinal     = "provider_usage_final"
 )
 
 func validateImageBillingPricing(pricing adminmodel.ResolvedModelPricing) error {
@@ -912,11 +915,23 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}(c.Request.Context())
 	groupQuotaSettled = true
 
-	// do response
 	_, respErr := adaptor.DoResponse(c, resp, meta)
 	if respErr != nil {
 		logger.Errorf(ctx, "image relay response failed user_id=%s group=%s channel_id=%s model=%s endpoint=%s err=%+v", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), c.Request.URL.Path, respErr)
 		return respErr
+	}
+	if outputCount, ok := aliadaptor.QwenImageOutputCount(c); ok && billing.ResolveImageBillingMode(pricing) == billing.ImageBillingModePerImage {
+		finalSnapshot, snapshotErr := billing.ComputeImageBillingSnapshot(outputCount, 1, pricing, groupRatio)
+		if snapshotErr != nil {
+			logger.Errorf(ctx, "qwen image final billing snapshot failed user_id=%s group=%s channel_id=%s model=%s output_count=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), outputCount, snapshotErr.Error())
+			return openai.ErrorWrapper(snapshotErr, "calculate_image_quota_failed", http.StatusInternalServerError)
+		}
+		finalSnapshot.PricingSource = strings.TrimSpace(pricing.Source)
+		finalSnapshot.UsageSource = imageUsageSourceProviderResponse
+		finalSnapshot.EstimateSource = imageEstimateSourceQwenImageOutputCount
+		finalSnapshot.SettlementMode = imageSettlementModeProviderUsageFinal
+		billingSnapshot = finalSnapshot
+		quota = billingSnapshot.YYCAmount
 	}
 
 	return nil

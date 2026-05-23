@@ -1236,6 +1236,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return upsertProviderMigrationProvidersWithDB(tx, "qwen")
 			},
 		},
+		{
+			Version:     "202605231500_qwen_image_provider_pricing",
+			Description: "upsert qwen image provider per-image pricing",
+			Up: func(tx *gorm.DB) error {
+				return upsertProviderMigrationProvidersWithDB(tx, "qwen")
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

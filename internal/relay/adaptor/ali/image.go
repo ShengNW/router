@@ -17,6 +17,8 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
+const qwenImageOutputCountContextKey = "qwen_image_output_count"
+
 func ImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
 	apiKey := c.Request.Header.Get("Authorization")
 	apiKey = strings.TrimPrefix(apiKey, "Bearer ")
@@ -94,12 +96,14 @@ func QwenImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStat
 	imageResponse := openai.ImageResponse{
 		Created: helper.GetTimestamp(),
 	}
+	outputCount := 0
 	for _, choice := range aliResponse.Output.Choices {
 		for _, content := range choice.Message.Content {
 			imageURL := strings.TrimSpace(content.Image)
 			if imageURL == "" {
 				continue
 			}
+			outputCount++
 			data := openai.ImageData{Url: imageURL}
 			if responseFormat == "b64_json" {
 				imageData, err := getImageData(imageURL)
@@ -112,6 +116,7 @@ func QwenImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStat
 			imageResponse.Data = append(imageResponse.Data, data)
 		}
 	}
+	c.Set(qwenImageOutputCountContextKey, outputCount)
 
 	jsonResponse, err := json.Marshal(imageResponse)
 	if err != nil {

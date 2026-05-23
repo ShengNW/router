@@ -758,8 +758,8 @@ func TestBuildProviderMigrationSeeds_OfficialPricingBackfillForPreviouslyUnprice
 			"qwen3.5-plus":       {modelType: ProviderModelTypeText, input: 0.0008, output: 0.0048, priceUnit: ProviderPriceUnitPer1KTokens, currency: "CNY"},
 			"qwen3.5-flash":      {modelType: ProviderModelTypeText, input: 0.0002, output: 0.002, priceUnit: ProviderPriceUnitPer1KTokens, currency: "CNY"},
 			"qwen3-max":          {modelType: ProviderModelTypeText, input: 0.0025, output: 0.01, priceUnit: ProviderPriceUnitPer1KTokens, currency: "CNY"},
-			"qwen-image-2.0":     {modelType: ProviderModelTypeImage, input: 0.15, priceUnit: ProviderPriceUnitPerImage, currency: "CNY"},
-			"qwen-image-2.0-pro": {modelType: ProviderModelTypeImage, input: 0.2, priceUnit: ProviderPriceUnitPerImage, currency: "CNY"},
+			"qwen-image-2.0":     {modelType: ProviderModelTypeImage, input: 0.2, priceUnit: ProviderPriceUnitPerImage, currency: "CNY"},
+			"qwen-image-2.0-pro": {modelType: ProviderModelTypeImage, input: 0.5, priceUnit: ProviderPriceUnitPerImage, currency: "CNY"},
 		},
 		"minimax": {
 			"speech-2.5-hd-preview": {modelType: ProviderModelTypeAudio, input: 0.1, priceUnit: ProviderPriceUnitPer1KChars, currency: ProviderPriceCurrencyUSD},

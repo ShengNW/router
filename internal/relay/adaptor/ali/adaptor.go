@@ -141,3 +141,15 @@ func isQwenImageModel(modelName string) bool {
 func IsQwenImageModel(modelName string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "qwen-image")
 }
+
+func QwenImageOutputCount(c *gin.Context) (int, bool) {
+	if c == nil {
+		return 0, false
+	}
+	value, exists := c.Get(qwenImageOutputCountContextKey)
+	if !exists {
+		return 0, false
+	}
+	count, ok := value.(int)
+	return count, ok
+}

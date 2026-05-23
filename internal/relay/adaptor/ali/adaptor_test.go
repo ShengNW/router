@@ -193,6 +193,9 @@ func TestQwenImageHandlerWritesOpenAIImageResponse(t *testing.T) {
 	if len(payload.Data) != 1 || payload.Data[0].Url != "https://example.com/image.png" {
 		t.Fatalf("handler payload data = %#v, want image url", payload.Data)
 	}
+	if count, ok := QwenImageOutputCount(ctx); !ok || count != 1 {
+		t.Fatalf("QwenImageOutputCount() = (%d, %t), want (1, true)", count, ok)
+	}
 }
 
 func TestResponseAli2OpenAIRetainsActualModelName(t *testing.T) {

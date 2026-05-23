@@ -2278,7 +2278,7 @@
           "/v1/images/generations",
           "/v1/images/edits"
         ],
-        "input_price": 0.15,
+        "input_price": 0.2,
         "price_unit": "per_image",
         "currency": "CNY",
         "source": "migration",
@@ -2293,7 +2293,7 @@
           "/v1/images/generations",
           "/v1/images/edits"
         ],
-        "input_price": 0.2,
+        "input_price": 0.5,
         "price_unit": "per_image",
         "currency": "CNY",
         "source": "migration",
