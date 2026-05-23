@@ -73,6 +73,9 @@ const OperationSetting = ({ section = '' }) => {
     ChannelDisableThreshold: 0,
     LogConsumeEnabled: '',
     RetryTimes: 0,
+    ChannelBillingAutoRefreshEnabled: 'true',
+    ChannelBillingAutoRefreshIntervalSeconds: 1800,
+    ChannelBillingAutoRefreshLastRunAt: 0,
   });
   const [originInputs, setOriginInputs] = useState({});
   const [groupOptions, setGroupOptions] = useState([]);
@@ -398,6 +401,33 @@ const OperationSetting = ({ section = '' }) => {
             `${retryLimit}`
           ) {
             await updateOption('RetryTimes', `${retryLimit}`);
+          }
+        }
+        break;
+      case 'general':
+        {
+          const billingRefreshInterval = Math.trunc(
+            Number(inputs.ChannelBillingAutoRefreshIntervalSeconds || 0)
+          );
+          if (
+            !Number.isFinite(billingRefreshInterval) ||
+            billingRefreshInterval < 60
+          ) {
+            showError(
+              t('setting.operation.general.channel_billing_auto_refresh.interval_invalid')
+            );
+            break;
+          }
+          if (
+            normalizeOptionValue(
+              originInputs.ChannelBillingAutoRefreshIntervalSeconds,
+              '1800'
+            ) !== `${billingRefreshInterval}`
+          ) {
+            await updateOption(
+              'ChannelBillingAutoRefreshIntervalSeconds',
+              `${billingRefreshInterval}`
+            );
           }
         }
         break;
@@ -763,6 +793,80 @@ const OperationSetting = ({ section = '' }) => {
                 </AppButton>
               </AppFormActions>
               {shouldRenderDividerAfter('log') ? <AppDivider /> : null}
+            </>
+          ) : null}
+
+          {sectionVisible.general ? (
+            <>
+              <AppFilterHeader
+                title={t('setting.operation.general.title')}
+                titleClassName='router-ui-section-title'
+                className='router-toolbar-compact'
+              />
+              <AppFormRow>
+                <AppField
+                  label={t(
+                    'setting.operation.general.channel_billing_auto_refresh.enabled'
+                  )}
+                >
+                  <AppSwitch
+                    checked={inputs.ChannelBillingAutoRefreshEnabled === 'true'}
+                    onChange={() =>
+                      handleInputChange(null, {
+                        name: 'ChannelBillingAutoRefreshEnabled',
+                        value:
+                          inputs.ChannelBillingAutoRefreshEnabled === 'true'
+                            ? 'false'
+                            : 'true',
+                      })
+                    }
+                  />
+                </AppField>
+                <AppField
+                  label={t(
+                    'setting.operation.general.channel_billing_auto_refresh.interval_seconds'
+                  )}
+                >
+                  <AppInputNumber
+                    className='router-section-input'
+                    name='ChannelBillingAutoRefreshIntervalSeconds'
+                    onChange={handleInputChange}
+                    value={inputs.ChannelBillingAutoRefreshIntervalSeconds}
+                    min={60}
+                    precision={0}
+                    fluid
+                  />
+                </AppField>
+              </AppFormRow>
+              <AppFormRow>
+                <AppField
+                  label={t(
+                    'setting.operation.general.channel_billing_auto_refresh.last_run'
+                  )}
+                >
+                  <AppInput
+                    className='router-section-input'
+                    value={
+                      Number(inputs.ChannelBillingAutoRefreshLastRunAt || 0) > 0
+                        ? timestamp2string(
+                            Number(inputs.ChannelBillingAutoRefreshLastRunAt || 0)
+                          )
+                        : '-'
+                    }
+                    readOnly
+                  />
+                </AppField>
+              </AppFormRow>
+              <AppFormActions align='start'>
+                <AppButton
+                  className='router-section-button'
+                  onClick={() => {
+                    saveSectionConfig('general').then();
+                  }}
+                >
+                  {t('setting.operation.general.buttons.save')}
+                </AppButton>
+              </AppFormActions>
             </>
           ) : null}
 

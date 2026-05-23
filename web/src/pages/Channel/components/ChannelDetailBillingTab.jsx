@@ -73,6 +73,7 @@ const ChannelDetailBillingTab = ({
   billingActions,
   billingReadonly,
   billingSubmitting,
+  onRefreshBilling,
   onOpenActivatePage,
   onManualSnapshotUpdate,
   timestamp2string,
@@ -116,7 +117,24 @@ const ChannelDetailBillingTab = ({
   };
 
   return (
-    <AppDetailSection title={t('channel.edit.billing.title')} titleTag='span'>
+    <AppDetailSection
+      title={t('channel.edit.billing.title')}
+      titleTag='span'
+      headerEnd={
+        billingSummary?.refresh_supported ? (
+          <AppButton
+            type='button'
+            className='router-page-button'
+            color='blue'
+            loading={billingSubmitting}
+            disabled={billingSubmitting}
+            onClick={onRefreshBilling}
+          >
+            {t('channel.edit.billing.refresh_now')}
+          </AppButton>
+        ) : null
+      }
+    >
       <div>
         <AppAlert
           type='info'

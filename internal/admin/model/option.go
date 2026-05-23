@@ -45,6 +45,9 @@ func InitOptionMap() {
 	config.OptionMap["FXAutoSyncLastRunAt"] = strconv.FormatInt(config.FXAutoSyncLastRunAt, 10)
 	config.OptionMap["FXAutoSyncLastSuccessAt"] = strconv.FormatInt(config.FXAutoSyncLastSuccessAt, 10)
 	config.OptionMap["FXAutoSyncLastError"] = config.FXAutoSyncLastError
+	config.OptionMap["ChannelBillingAutoRefreshEnabled"] = strconv.FormatBool(config.ChannelBillingAutoRefreshEnabled)
+	config.OptionMap["ChannelBillingAutoRefreshIntervalSeconds"] = strconv.Itoa(config.ChannelBillingAutoRefreshIntervalSeconds)
+	config.OptionMap["ChannelBillingAutoRefreshLastRunAt"] = strconv.FormatInt(config.ChannelBillingAutoRefreshLastRunAt, 10)
 	config.OptionMap["ChannelDisableThreshold"] = strconv.FormatFloat(config.ChannelDisableThreshold, 'f', -1, 64)
 	config.OptionMap["SMTPServer"] = ""
 	config.OptionMap["SMTPFrom"] = ""
@@ -142,6 +145,8 @@ func UpdateOptionMap(key string, value string) (err error) {
 			config.LogConsumeEnabled = boolValue
 		case "FXAutoSyncEnabled":
 			config.FXAutoSyncEnabled = boolValue
+		case "ChannelBillingAutoRefreshEnabled":
+			config.ChannelBillingAutoRefreshEnabled = boolValue
 		}
 	}
 	switch key {
@@ -199,6 +204,15 @@ func UpdateOptionMap(key string, value string) (err error) {
 		config.FXAutoSyncLastSuccessAt, _ = strconv.ParseInt(value, 10, 64)
 	case "FXAutoSyncLastError":
 		config.FXAutoSyncLastError = strings.TrimSpace(value)
+	case "ChannelBillingAutoRefreshIntervalSeconds":
+		interval, _ := strconv.Atoi(value)
+		if interval < 60 {
+			interval = 60
+			config.OptionMap[key] = strconv.Itoa(interval)
+		}
+		config.ChannelBillingAutoRefreshIntervalSeconds = interval
+	case "ChannelBillingAutoRefreshLastRunAt":
+		config.ChannelBillingAutoRefreshLastRunAt, _ = strconv.ParseInt(value, 10, 64)
 	case "ChannelDisableThreshold":
 		config.ChannelDisableThreshold, _ = strconv.ParseFloat(value, 64)
 	case "QuotaPerUnit":

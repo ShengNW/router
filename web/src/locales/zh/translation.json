@@ -589,6 +589,7 @@
         "billing_api_base_url": "账务 API 地址",
         "profile_update_success": "账务配置保存成功",
         "profile_update_failed": "账务配置保存失败",
+        "refresh_now": "刷新账务",
         "current_quotas_title": "当前账务额度",
         "billing_mode": "账务方式",
         "updated_at": "更新时间",
@@ -2286,6 +2287,12 @@
         "chat_link_placeholder": "例如 ChatGPT Next Web 的部署地址",
         "quota_per_unit": "USD -> YYC 折算比率",
         "quota_per_unit_placeholder": "1 USD 折算为多少 YYC",
+        "channel_billing_auto_refresh": {
+          "enabled": "启用渠道账务自动刷新",
+          "interval_seconds": "刷新间隔（秒）",
+          "last_run": "最近运行时间",
+          "interval_invalid": "刷新间隔必须大于或等于 60 秒"
+        },
         "buttons": {
           "save": "保存通用设置"
         }

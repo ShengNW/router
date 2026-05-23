@@ -589,6 +589,7 @@
         "billing_api_base_url": "Billing API Base URL",
         "profile_update_success": "Billing profile updated",
         "profile_update_failed": "Failed to update billing profile",
+        "refresh_now": "Refresh Billing",
         "current_quotas_title": "Current Billing Quotas",
         "billing_mode": "Billing Mode",
         "updated_at": "Updated At",
@@ -2288,6 +2289,12 @@
         "chat_link_placeholder": "e.g.: ChatGPT Next Web deployment address",
         "quota_per_unit": "USD -> YYC Conversion Rate",
         "quota_per_unit_placeholder": "How many YYC 1 USD converts to",
+        "channel_billing_auto_refresh": {
+          "enabled": "Enable channel billing auto refresh",
+          "interval_seconds": "Refresh interval (seconds)",
+          "last_run": "Last run time",
+          "interval_invalid": "Refresh interval must be greater than or equal to 60 seconds"
+        },
         "buttons": {
           "save": "Save General Settings"
         }

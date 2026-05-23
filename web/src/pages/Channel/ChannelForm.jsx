@@ -1909,6 +1909,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   const fetchingModelsRef = useRef(false);
   const pendingRefreshTaskIdRef = useRef('');
   const pendingRefreshSignatureRef = useRef('');
+  const pendingBillingRefreshTaskIdRef = useRef('');
   const deferredModelSearchKeyword = useDeferredValue(modelSearchKeyword);
   const currentProtocolOption = useMemo(() => {
     const normalizedProtocol = (inputs.protocol || '')
@@ -3179,6 +3180,66 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     [channelId, refreshChannelBillingState, t],
   );
 
+  const submitChannelBillingRefresh = useCallback(
+    async (targetChannelId, options = {}) => {
+      const normalizedChannelId = (targetChannelId || '').toString().trim();
+      if (normalizedChannelId === '') {
+        throw new Error(t('channel.messages.billing_update_submit_failed'));
+      }
+      const { silent = false } = options;
+      const res = await API.post(
+        `/api/v1/admin/channel/${normalizedChannelId}/refresh`,
+        {
+          action: 'billing',
+        },
+      );
+      const { success, message, data, meta } = res.data || {};
+      if (!success) {
+        throw new Error(message || t('channel.messages.billing_update_submit_failed'));
+      }
+      const refreshTask = normalizeAsyncTasks([data?.task])[0];
+      if (!refreshTask?.id) {
+        throw new Error(t('channel.messages.billing_update_submit_failed'));
+      }
+      pendingBillingRefreshTaskIdRef.current = refreshTask.id;
+      setChannelTasks((prev) =>
+        normalizeAsyncTasks([...normalizeAsyncTasks(prev), refreshTask]),
+      );
+      if (!silent) {
+        showSuccess(
+          meta?.reused
+            ? t('channel.messages.billing_update_reused', {
+                name: (inputs.name || normalizedChannelId).toString().trim(),
+              })
+            : t('channel.messages.billing_update_submitted', {
+                name: (inputs.name || normalizedChannelId).toString().trim(),
+              }),
+        );
+      }
+      return refreshTask;
+    },
+    [inputs.name, t],
+  );
+
+  const refreshChannelBillingNow = useCallback(async () => {
+    const targetChannelId = (channelId || '').toString().trim();
+    if (targetChannelId === '') {
+      return;
+    }
+    setChannelBillingSubmitting(true);
+    try {
+      await submitChannelBillingRefresh(targetChannelId);
+    } catch (error) {
+      showError(
+        error?.message || t('channel.messages.billing_update_submit_failed'),
+      );
+    } finally {
+      if (pendingBillingRefreshTaskIdRef.current === '') {
+        setChannelBillingSubmitting(false);
+      }
+    }
+  }, [channelId, submitChannelBillingRefresh, t]);
+
   const updateChannelManualBillingSnapshot = useCallback(
     async ({ items, message }) => {
       const targetChannelId = (channelId || '').toString().trim();
@@ -3283,6 +3344,12 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
       setDetailBillingDraft(normalizedProfile);
       setDetailBillingEditing(false);
       await refreshChannelBillingState(targetChannelId);
+      if (
+        Array.isArray(normalizedProfile?.action_capabilities) &&
+        normalizedProfile.action_capabilities.includes('refresh_billing')
+      ) {
+        await submitChannelBillingRefresh(targetChannelId, { silent: true });
+      }
       showSuccess(t('channel.edit.billing.profile_update_success'));
     } catch (error) {
       showError(
@@ -3295,6 +3362,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     channelId,
     detailBillingDraft,
     refreshChannelBillingState,
+    submitChannelBillingRefresh,
     t,
   ]);
 
@@ -4650,6 +4718,37 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
             }
             pendingRefreshSignatureRef.current = '';
           }
+          const billingRefreshTaskId = pendingBillingRefreshTaskIdRef.current;
+          if (billingRefreshTaskId !== '') {
+            let completedBillingRefreshTask = null;
+            try {
+              completedBillingRefreshTask = await fetchTaskById(
+                billingRefreshTaskId,
+              );
+            } catch {
+              completedBillingRefreshTask = null;
+            }
+            pendingBillingRefreshTaskIdRef.current = '';
+            setChannelBillingSubmitting(false);
+            if (
+              completedBillingRefreshTask &&
+              normalizeAsyncTaskStatus(completedBillingRefreshTask.status) ===
+                'succeeded'
+            ) {
+              showSuccess(
+                t('channel.messages.billing_update_success', {
+                  name: (inputs.name || targetChannelId).toString().trim(),
+                }),
+              );
+            } else {
+              showError(
+                completedBillingRefreshTask?.error_message ||
+                  t('channel.messages.billing_update_failed', {
+                    name: (inputs.name || targetChannelId).toString().trim(),
+                  }),
+              );
+            }
+          }
         }
       } catch {
         // keep current local state and retry on next tick
@@ -4660,9 +4759,11 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     channelId,
     channelTasks,
     hasChannelID,
+    inputs.name,
     loadChannelTasksFromServer,
     loadChannelTestsFromServer,
     refreshChannelRuntimeState,
+    t,
   ]);
 
   useEffect(() => {
@@ -5390,6 +5491,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
                 billingActions={channelBillingActions}
                 billingReadonly={detailBillingReadonly}
                 billingSubmitting={channelBillingSubmitting}
+                onRefreshBilling={refreshChannelBillingNow}
                 onOpenActivatePage={openChannelBillingActivatePage}
                 onManualSnapshotUpdate={updateChannelManualBillingSnapshot}
                 timestamp2string={timestamp2string}
