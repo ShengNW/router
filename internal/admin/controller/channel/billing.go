@@ -690,7 +690,7 @@ func refreshAllChannelsBilling() error {
 		if strings.TrimSpace(profile.BillingMode) == model.ChannelBillingModeBuiltinCDK {
 			primaryAmount, err := refreshAndPersistChannelCDKBilling(channel, profile, "批量自动刷新账务")
 			if err == nil && primaryAmount <= 0 {
-				monitor.DisableChannel(channel.Id, channel.DisplayName(), "余额不足")
+				monitor.DisableChannelForInsufficientBalance(channel.Id, channel.DisplayName(), primaryAmount)
 			}
 			time.Sleep(config.RequestInterval)
 			continue
@@ -703,7 +703,7 @@ func refreshAllChannelsBilling() error {
 				continue
 			}
 			if primaryAmount <= 0 {
-				monitor.DisableChannel(channel.Id, channel.DisplayName(), "余额不足")
+				monitor.DisableChannelForInsufficientBalance(channel.Id, channel.DisplayName(), primaryAmount)
 			}
 		}
 		time.Sleep(config.RequestInterval)

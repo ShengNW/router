@@ -44,6 +44,23 @@ func DisableChannel(channelId string, channelName string, reason string) {
 	notifyRootUser(subject, content)
 }
 
+func DisableChannelForInsufficientBalance(channelId string, channelName string, balance float64) {
+	model.UpdateChannelStatusById(channelId, model.ChannelStatusAutoDisabled)
+	logger.SysLog(fmt.Sprintf("channel #%s has been disabled due to insufficient balance: %.4f", channelId, balance))
+	subject := fmt.Sprintf("渠道余额不足提醒")
+	content := message.EmailTemplate(
+		subject,
+		fmt.Sprintf(`
+			<p>您好！</p>
+			<p>渠道「<strong>%s</strong>」（#%s）定时刷新账务后发现余额不足，已被系统自动禁用。</p>
+			<p>当前余额：</p>
+			<p style="background-color: #f8f8f8; padding: 10px; border-radius: 4px;"><strong>%.4f</strong></p>
+			<p>请及时检查上游账户余额或补充采购记录。</p>
+		`, channelName, channelId, balance),
+	)
+	notifyRootUser(subject, content)
+}
+
 func MetricDisableChannel(channelId string, successRate float64) {
 	model.UpdateChannelStatusById(channelId, model.ChannelStatusAutoDisabled)
 	logger.SysLog(fmt.Sprintf("channel #%s has been disabled due to low success rate: %.2f", channelId, successRate*100))

@@ -11,6 +11,7 @@ import (
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/admin/model"
+	"github.com/yeying-community/router/internal/admin/monitor"
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
 )
 
@@ -374,6 +375,7 @@ func executeChannelRefreshBillingTask(task *model.AsyncTask) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		disableChannelForScheduledBillingInsufficientBalance(task, channelRow, primaryAmount)
 		return marshalJSONForLog(map[string]any{
 			"channel_id":           channelID,
 			"billing_mode":         model.ChannelBillingModeBuiltinCDK,
@@ -389,6 +391,7 @@ func executeChannelRefreshBillingTask(task *model.AsyncTask) (string, error) {
 	if err := persistChannelAutoBillingSnapshot(channelRow, primaryAmount, "自动刷新账务"); err != nil {
 		return "", err
 	}
+	disableChannelForScheduledBillingInsufficientBalance(task, channelRow, primaryAmount)
 	return marshalJSONForLog(map[string]any{
 		"channel_id":           channelID,
 		"billing_api_base_url": resolveChannelBillingAPIBaseURL(channelRow, profile),
@@ -396,6 +399,19 @@ func executeChannelRefreshBillingTask(task *model.AsyncTask) (string, error) {
 		"billing_request_urls": resolveChannelBillingRequestURLs(channelRow),
 		"primary_amount":       primaryAmount,
 	}), nil
+}
+
+func disableChannelForScheduledBillingInsufficientBalance(task *model.AsyncTask, channelRow *model.Channel, primaryAmount float64) {
+	if task == nil || channelRow == nil {
+		return
+	}
+	if strings.TrimSpace(task.CreatedBy) != "" {
+		return
+	}
+	if primaryAmount > 0 {
+		return
+	}
+	monitor.DisableChannelForInsufficientBalance(channelRow.Id, channelRow.DisplayName(), primaryAmount)
 }
 
 func logChannelAsyncTestExecution(task *model.AsyncTask, result model.ChannelTest, execution channelModelTestExecution) {
