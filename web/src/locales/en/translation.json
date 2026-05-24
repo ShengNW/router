@@ -1303,12 +1303,6 @@
       "copy_success": "Copied to clipboard!",
       "copy_failed": "Unable to copy to clipboard, please copy manually. Token has been filled in the search box.",
       "operation_success": "Operation completed successfully!"
-    },
-    "sort": {
-      "placeholder": "Sort By",
-      "default": "Default Order",
-      "by_remain": "Sort by Remaining YYC",
-      "by_used": "Sort by Used YYC"
     }
   },
   "common": {
@@ -1747,14 +1741,7 @@
         "activated": "Activated",
         "banned": "Banned",
         "unknown": "Unknown Status"
-      },
-      "sort": {
-        "default": "Default Order",
-        "by_quota": "Sort by Remaining YYC",
-        "by_used_quota": "Sort by Used YYC",
-        "by_request_count": "Sort by Request Count"
-      },
-      "sort_by": "Sort By"
+      }
     },
     "buttons": {
       "add": "Add User",

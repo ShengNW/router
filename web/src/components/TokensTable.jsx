@@ -31,11 +31,16 @@ import {
   AppMenuDropdown,
   AppPagination,
   AppPopconfirm,
-  AppSelect,
   AppTable,
   AppTag,
   AppToolbar,
 } from '../router-ui';
+
+const compareTextValue = (left, right) =>
+  String(left || '').localeCompare(String(right || ''));
+
+const compareNumberValue = (left, right) =>
+  Number(left || 0) - Number(right || 0);
 
 const normalizeTokenRow = (raw) => {
   if (!raw || typeof raw !== 'object') {
@@ -102,25 +107,6 @@ function renderShortToken(key) {
   return `${withPrefix.slice(0, 8)}...${withPrefix.slice(-6)}`;
 }
 
-function resolveTokenSortValue(token, key) {
-  switch (key) {
-    case 'name':
-      return (token?.name || '').toString();
-    case 'status':
-      return Number(token?.status || 0);
-    case 'usedAmount':
-      return Number(token?.yycUsed || 0);
-    case 'remainingAmount':
-      return Number(token?.yycRemaining || 0);
-    case 'createdTime':
-      return Number(token?.createdTime || 0);
-    case 'expiredTime':
-      return Number(token?.expiredTime || 0);
-    default:
-      return '';
-  }
-}
-
 const TokensTable = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -141,7 +127,10 @@ const TokensTable = () => {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
-  const [orderBy, setOrderBy] = useState('');
+  const [tableSorter, setTableSorter] = useState({
+    columnKey: null,
+    order: null,
+  });
   const [currencyIndex, setCurrencyIndex] = useState(() =>
     buildPublicDisplayCurrencyIndex([]),
   );
@@ -152,9 +141,7 @@ const TokensTable = () => {
   const loadTokens = useCallback(
     async (page) => {
       const normalizedPage = Number(page) > 0 ? Number(page) : 1;
-      const res = await API.get(
-        `/api/v1/public/token/?page=${normalizedPage}&order=${orderBy}`,
-      );
+      const res = await API.get(`/api/v1/public/token/?page=${normalizedPage}`);
       const { success, message, data, meta } = res.data;
       if (success) {
         const normalizedRows = Array.isArray(data)
@@ -180,7 +167,7 @@ const TokensTable = () => {
       }
       setLoading(false);
     },
-    [orderBy],
+    [],
   );
 
   const onPaginationChange = (e, { activePage }) => {
@@ -362,7 +349,6 @@ const TokensTable = () => {
       // if keyword is blank, load files instead.
       await loadTokens(1);
       setActivePage(1);
-      setOrderBy('');
       return;
     }
     setSearching(true);
@@ -392,34 +378,15 @@ const TokensTable = () => {
     event.stopPropagation();
   };
 
-  const sortToken = (key) => {
-    if (tokens.length === 0) return;
-    setLoading(true);
-    let sortedTokens = [...tokens];
-    sortedTokens.sort((a, b) => {
-      const leftValue = resolveTokenSortValue(a, key);
-      const rightValue = resolveTokenSortValue(b, key);
-      if (
-        typeof leftValue === 'number' &&
-        typeof rightValue === 'number' &&
-        !Number.isNaN(leftValue) &&
-        !Number.isNaN(rightValue)
-      ) {
-        return leftValue - rightValue;
-      } else {
-        return String(leftValue).localeCompare(String(rightValue));
-      }
-    });
-    if (sortedTokens[0].id === tokens[0].id) {
-      sortedTokens.reverse();
+  const handleTableChange = (_, __, sorter) => {
+    if (!sorter || Array.isArray(sorter) || !sorter.columnKey || !sorter.order) {
+      setTableSorter({ columnKey: null, order: null });
+      return;
     }
-    setTokens(sortedTokens);
-    setLoading(false);
-  };
-
-  const handleOrderByChange = (e, { value }) => {
-    setOrderBy(value);
-    setActivePage(1);
+    setTableSorter({
+      columnKey: sorter.columnKey,
+      order: sorter.order,
+    });
   };
 
   const visibleTokenCount = tokens.filter((token) => !token?.deleted).length;
@@ -467,25 +434,6 @@ const TokensTable = () => {
         }
         query={
           <div className='router-list-toolbar-query router-list-toolbar-query-compact'>
-            <AppSelect
-              className='router-section-dropdown router-dropdown-min-170'
-              placeholder={t('token.sort.placeholder')}
-              options={[
-                { key: '', text: t('token.sort.default'), value: '' },
-                {
-                  key: 'remaining_amount',
-                  text: t('token.sort.by_remain'),
-                  value: 'remain_quota',
-                },
-                {
-                  key: 'used_amount',
-                  text: t('token.sort.by_used'),
-                  value: 'used_quota',
-                },
-              ]}
-              value={orderBy}
-              onChange={handleOrderByChange}
-            />
             <form
               className='router-search-form-xs'
               onSubmit={(event) => {
@@ -514,6 +462,7 @@ const TokensTable = () => {
           pagination={false}
           scroll={{ x: TOKEN_LIST_TABLE_MIN_WIDTH }}
           rowKey='id'
+          onChange={handleTableChange}
           dataSource={tokens
             .slice((activePage - 1) * ITEMS_PER_PAGE, activePage * ITEMS_PER_PAGE)
             .filter((token) => !token?.deleted)}
@@ -529,37 +478,25 @@ const TokensTable = () => {
           })}
           columns={[
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortToken('name');
-                }}
-              >
-                {t('token.table.name')}
-              </span>
-            ),
+            title: t('token.table.name'),
             dataIndex: 'name',
             key: 'name',
             width: TOKEN_LIST_COLUMN_WIDTHS.name,
             ellipsis: true,
+            sorter: (a, b) => compareTextValue(a.name, b.name),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'name' ? tableSorter.order : null,
             render: (value) => value || t('token.table.no_name'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortToken('status');
-                }}
-              >
-                {t('token.table.status')}
-              </span>
-            ),
+            title: t('token.table.status'),
             dataIndex: 'status',
             key: 'status',
             className: 'router-table-col-status-compact',
             width: TOKEN_LIST_COLUMN_WIDTHS.status,
+            sorter: (a, b) => compareNumberValue(a.status, b.status),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'status' ? tableSorter.order : null,
             render: (value) => renderStatus(value, t),
           },
           {
@@ -612,14 +549,7 @@ const TokensTable = () => {
           {
             title: (
               <div className='router-table-header-with-control'>
-                <span
-                  className='router-sortable-header'
-                  onClick={() => {
-                    sortToken('usedAmount');
-                  }}
-                >
-                  {t('token.table.used_amount')}
-                </span>
+                <span>{t('token.table.used_amount')}</span>
                 <UnitDropdown
                   variant='header'
                   compact
@@ -637,20 +567,17 @@ const TokensTable = () => {
             dataIndex: 'yycUsed',
             key: 'usedAmount',
             width: TOKEN_LIST_COLUMN_WIDTHS.usedAmount,
+            sorter: (a, b) => compareNumberValue(a.yycUsed, b.yycUsed),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'usedAmount' ? tableSorter.order : null,
             render: (value) =>
               formatDisplayAmountFromYYC(value, displayUnit, currencyIndex),
           },
           {
             title: (
               <div className='router-table-header-with-control'>
-                <span
-                  className='router-sortable-header'
-                  onClick={() => {
-                    sortToken('remainingAmount');
-                  }}
-                >
-                  {t('token.table.remain_amount')}
-                </span>
+                <span>{t('token.table.remain_amount')}</span>
                 <UnitDropdown
                   variant='header'
                   compact
@@ -668,43 +595,39 @@ const TokensTable = () => {
             dataIndex: 'yycRemaining',
             key: 'remainingAmount',
             width: TOKEN_LIST_COLUMN_WIDTHS.remainingAmount,
+            sorter: (a, b) => compareNumberValue(a.yycRemaining, b.yycRemaining),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'remainingAmount'
+                ? tableSorter.order
+                : null,
             render: (value, token) =>
               token.hasUnlimitedYYCLimit
                 ? t('token.table.unlimited')
                 : formatDisplayAmountFromYYC(value, displayUnit, currencyIndex),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortToken('createdTime');
-                }}
-              >
-                {t('token.table.created_time')}
-              </span>
-            ),
+            title: t('token.table.created_time'),
             dataIndex: 'createdTime',
             key: 'createdTime',
             className: 'router-table-col-datetime',
             width: TOKEN_LIST_COLUMN_WIDTHS.createdTime,
+            sorter: (a, b) => compareNumberValue(a.createdTime, b.createdTime),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'createdTime' ? tableSorter.order : null,
             render: (value) => renderTimestamp(value),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortToken('expiredTime');
-                }}
-              >
-                {t('token.table.expired_time')}
-              </span>
-            ),
+            title: t('token.table.expired_time'),
             dataIndex: 'expiredTime',
             key: 'expiredTime',
             className: 'router-table-col-datetime',
             width: TOKEN_LIST_COLUMN_WIDTHS.expiredTime,
+            sorter: (a, b) => compareNumberValue(a.expiredTime, b.expiredTime),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'expiredTime' ? tableSorter.order : null,
             render: (value) =>
               value === -1 ? t('token.table.never_expire') : renderTimestamp(value),
           },

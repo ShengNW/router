@@ -42,6 +42,12 @@ import {
   AppToolbar,
 } from '../router-ui';
 
+const compareTextValue = (left, right) =>
+  String(left || '').localeCompare(String(right || ''));
+
+const compareNumberValue = (left, right) =>
+  Number(left || 0) - Number(right || 0);
+
 function renderTimestamp(timestamp, trace_id) {
   return (
     <code
@@ -240,6 +246,10 @@ const LogsTable = () => {
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [tableSorter, setTableSorter] = useState({
+    columnKey: null,
+    order: null,
+  });
   const [searchKeyword, setSearchKeyword] = useState('');
   const [logType, setLogType] = useState(0);
   const [filterOptions, setFilterOptions] = useState({
@@ -647,27 +657,15 @@ const LogsTable = () => {
     setActivePage(1);
   }, [searchKeyword, activeFilterKeys, username, token_name, model_name, channel, group_id, start_timestamp, end_timestamp]);
 
-  const sortLog = (key) => {
-    if (logs.length === 0) return;
-    setLoading(true);
-    let sortedLogs = [...logs];
-    if (typeof sortedLogs[0][key] === 'string') {
-      sortedLogs.sort((a, b) => {
-        return ('' + a[key]).localeCompare(b[key]);
-      });
-    } else {
-      sortedLogs.sort((a, b) => {
-        if (a[key] === b[key]) return 0;
-        if (a[key] > b[key]) return -1;
-        if (a[key] < b[key]) return 1;
-        return 0;
-      });
+  const handleTableChange = (_, __, sorter) => {
+    if (!sorter || Array.isArray(sorter) || !sorter.columnKey || !sorter.order) {
+      setTableSorter({ columnKey: null, order: null });
+      return;
     }
-    if (sortedLogs[0].id === logs[0].id) {
-      sortedLogs.reverse();
-    }
-    setLogs(sortedLogs);
-    setLoading(false);
+    setTableSorter({
+      columnKey: sorter.columnKey,
+      order: sorter.order,
+    });
   };
 
   const filteredLogs = useMemo(() => {
@@ -692,6 +690,52 @@ const LogsTable = () => {
       return haystacks.some((item) => item.includes(keyword));
     });
   }, [logs, searchKeyword]);
+
+  const sortedFilteredLogs = useMemo(() => {
+    if (!tableSorter.columnKey || !tableSorter.order) {
+      return filteredLogs;
+    }
+    const nextLogs = [...filteredLogs];
+    nextLogs.sort((left, right) => {
+      switch (tableSorter.columnKey) {
+        case 'created_at':
+          return compareNumberValue(left.created_at, right.created_at);
+        case 'channel':
+          return compareTextValue(
+            getLogChannelLabel(left),
+            getLogChannelLabel(right),
+          );
+        case 'group_id':
+          return compareTextValue(
+            left.group_name || left.group_id,
+            right.group_name || right.group_id,
+          );
+        case 'type':
+          return compareNumberValue(left.type, right.type);
+        case 'model_name':
+          return compareTextValue(left.model_name, right.model_name);
+        case 'username':
+          return compareTextValue(left.username, right.username);
+        case 'token_name':
+          return compareTextValue(left.token_name, right.token_name);
+        case 'prompt_tokens':
+          return compareNumberValue(left.prompt_tokens, right.prompt_tokens);
+        case 'completion_tokens':
+          return compareNumberValue(
+            left.completion_tokens,
+            right.completion_tokens,
+          );
+        case 'yycAmount':
+          return compareNumberValue(left.yycAmount, right.yycAmount);
+        default:
+          return 0;
+      }
+    });
+    if (tableSorter.order === 'descend') {
+      nextLogs.reverse();
+    }
+    return nextLogs;
+  }, [filteredLogs, tableSorter]);
 
   const resolveOptionLabel = useCallback(
     (filterKey, value) => {
@@ -929,12 +973,13 @@ const LogsTable = () => {
           className='router-list-table router-table-fit-page router-log-table'
           pagination={false}
           scroll={{ x: LOG_LIST_TABLE_MIN_WIDTH }}
+          onChange={handleTableChange}
           rowKey={(log) =>
             log.id ||
             log.trace_id ||
             `${log.timestamp || ''}-${log.type || ''}-${log.token_name || ''}-${log.model_name || ''}`
           }
-          dataSource={filteredLogs
+          dataSource={sortedFilteredLogs
             .slice((activePage - 1) * ITEMS_PER_PAGE, activePage * ITEMS_PER_PAGE)
             .filter((log) => !log.deleted)}
           locale={{ emptyText: loading ? t('common.loading') : t('task.empty') }}
@@ -947,38 +992,28 @@ const LogsTable = () => {
           })}
           columns={[
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortLog('created_time');
-                }}
-              >
-                {t('log.table.time')}
-              </span>
-            ),
+            title: t('log.table.time'),
             dataIndex: 'created_at',
             key: 'created_at',
             className: 'router-table-col-datetime',
             width: LOG_LIST_COLUMN_WIDTHS.time,
+            sorter: true,
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'created_at' ? tableSorter.order : null,
             render: (value, log) => renderTimestamp(value, log.trace_id),
           },
           ...(isAdminScope
             ? [
                 {
-                  title: (
-                    <span
-                      className='router-sortable-header'
-                      onClick={() => {
-                        sortLog('channel');
-                      }}
-                    >
-                      {t('log.table.channel')}
-                    </span>
-                  ),
+                  title: t('log.table.channel'),
                   key: 'channel',
                   width: LOG_LIST_COLUMN_WIDTHS.channel,
                   ellipsis: true,
+                  sorter: true,
+                  sortDirections: ['ascend', 'descend'],
+                  sortOrder:
+                    tableSorter.columnKey === 'channel' ? tableSorter.order : null,
                   render: (_, log) =>
                     log.channel ? (
                       <Link
@@ -995,19 +1030,14 @@ const LogsTable = () => {
                     ),
                 },
                 {
-                  title: (
-                    <span
-                      className='router-sortable-header'
-                      onClick={() => {
-                        sortLog('group_id');
-                      }}
-                    >
-                      {t('log.table.group')}
-                    </span>
-                  ),
+                  title: t('log.table.group'),
                   key: 'group_id',
                   width: LOG_LIST_COLUMN_WIDTHS.group,
                   ellipsis: true,
+                  sorter: true,
+                  sortDirections: ['ascend', 'descend'],
+                  sortOrder:
+                    tableSorter.columnKey === 'group_id' ? tableSorter.order : null,
                   render: (_, log) =>
                     log.group_id ? (
                       <Link
@@ -1026,37 +1056,26 @@ const LogsTable = () => {
               ]
             : []),
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortLog('type');
-                }}
-              >
-                {t('log.table.type')}
-              </span>
-            ),
+            title: t('log.table.type'),
             dataIndex: 'type',
             key: 'type',
             className: 'router-table-col-type-narrow',
             width: LOG_LIST_COLUMN_WIDTHS.type,
+            sorter: true,
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'type' ? tableSorter.order : null,
             render: (value) => renderType(value),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortLog('model_name');
-                }}
-              >
-                {t('log.table.model')}
-              </span>
-            ),
+            title: t('log.table.model'),
             dataIndex: 'model_name',
             key: 'model_name',
             width: LOG_LIST_COLUMN_WIDTHS.model,
             ellipsis: true,
+            sorter: true,
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'model_name' ? tableSorter.order : null,
             render: (value) => (value ? renderColorLabel(value) : ''),
           },
           ...(showAmountColumns()
@@ -1064,20 +1083,17 @@ const LogsTable = () => {
                 ...(isAdminScope
                   ? [
                       {
-                        title: (
-                          <span
-                            className='router-sortable-header'
-                            onClick={() => {
-                              sortLog('username');
-                            }}
-                          >
-                          {t('log.table.username')}
-                        </span>
-                      ),
-                      key: 'username',
-                      width: LOG_LIST_COLUMN_WIDTHS.username,
-                      ellipsis: true,
-                      render: (_, log) =>
+                        title: t('log.table.username'),
+                        key: 'username',
+                        width: LOG_LIST_COLUMN_WIDTHS.username,
+                        ellipsis: true,
+                        sorter: true,
+                        sortDirections: ['ascend', 'descend'],
+                        sortOrder:
+                          tableSorter.columnKey === 'username'
+                            ? tableSorter.order
+                            : null,
+                        render: (_, log) =>
                           log.username ? (
                             <Link
                               to={`/user/detail/${log.user_id}`}
@@ -1092,67 +1108,51 @@ const LogsTable = () => {
                     ]
                   : []),
                 {
-                  title: (
-                    <span
-                      className='router-sortable-header'
-                      onClick={() => {
-                        sortLog('token_name');
-                      }}
-                    >
-                      {t('log.table.token_name')}
-                    </span>
-                    ),
-                    dataIndex: 'token_name',
-                    key: 'token_name',
-                    width: LOG_LIST_COLUMN_WIDTHS.tokenName,
-                    ellipsis: true,
-                    render: (value) => (value ? renderColorLabel(value) : ''),
-                  },
+                  title: t('log.table.token_name'),
+                  dataIndex: 'token_name',
+                  key: 'token_name',
+                  width: LOG_LIST_COLUMN_WIDTHS.tokenName,
+                  ellipsis: true,
+                  sorter: true,
+                  sortDirections: ['ascend', 'descend'],
+                  sortOrder:
+                    tableSorter.columnKey === 'token_name'
+                      ? tableSorter.order
+                      : null,
+                  render: (value) => (value ? renderColorLabel(value) : ''),
+                },
                 {
-                  title: (
-                    <span
-                      className='router-sortable-header'
-                      onClick={() => {
-                        sortLog('prompt_tokens');
-                      }}
-                    >
-                      {t('log.table.prompt_tokens')}
-                    </span>
-                    ),
-                    dataIndex: 'prompt_tokens',
-                    key: 'prompt_tokens',
-                    className: 'router-table-col-status-narrow',
-                    width: LOG_LIST_COLUMN_WIDTHS.promptTokens,
-                    render: (value) => value || '',
-                  },
+                  title: t('log.table.prompt_tokens'),
+                  dataIndex: 'prompt_tokens',
+                  key: 'prompt_tokens',
+                  className: 'router-table-col-status-narrow',
+                  width: LOG_LIST_COLUMN_WIDTHS.promptTokens,
+                  sorter: true,
+                  sortDirections: ['ascend', 'descend'],
+                  sortOrder:
+                    tableSorter.columnKey === 'prompt_tokens'
+                      ? tableSorter.order
+                      : null,
+                  render: (value) => value || '',
+                },
                 {
-                  title: (
-                    <span
-                      className='router-sortable-header'
-                      onClick={() => {
-                        sortLog('completion_tokens');
-                      }}
-                    >
-                      {t('log.table.completion_tokens')}
-                    </span>
-                    ),
-                    dataIndex: 'completion_tokens',
-                    key: 'completion_tokens',
-                    className: 'router-table-col-status-narrow',
-                    width: LOG_LIST_COLUMN_WIDTHS.completionTokens,
-                    render: (value) => value || '',
-                  },
+                  title: t('log.table.completion_tokens'),
+                  dataIndex: 'completion_tokens',
+                  key: 'completion_tokens',
+                  className: 'router-table-col-status-narrow',
+                  width: LOG_LIST_COLUMN_WIDTHS.completionTokens,
+                  sorter: true,
+                  sortDirections: ['ascend', 'descend'],
+                  sortOrder:
+                    tableSorter.columnKey === 'completion_tokens'
+                      ? tableSorter.order
+                      : null,
+                  render: (value) => value || '',
+                },
                 {
                   title: isAdminScope ? (
                     <div className='router-table-header-with-control'>
-                      <span
-                        className='router-sortable-header'
-                        onClick={() => {
-                          sortLog('yycAmount');
-                        }}
-                      >
-                        {t('log.table.quota')}
-                      </span>
+                      <span>{t('log.table.quota')}</span>
                       <UnitDropdown
                         variant='header'
                         compact
@@ -1167,18 +1167,17 @@ const LogsTable = () => {
                       />
                     </div>
                   ) : (
-                    <span
-                      className='router-sortable-header'
-                      onClick={() => {
-                        sortLog('yycAmount');
-                      }}
-                    >
-                      {t('log.table.quota')}
-                    </span>
+                    <span>{t('log.table.quota')}</span>
                   ),
                   dataIndex: 'yycAmount',
                   key: 'yycAmount',
                   width: LOG_LIST_COLUMN_WIDTHS.quota,
+                  sorter: true,
+                  sortDirections: ['ascend', 'descend'],
+                  sortOrder:
+                    tableSorter.columnKey === 'yycAmount'
+                      ? tableSorter.order
+                      : null,
                   render: (value) =>
                     isAdminScope
                       ? formatDisplayAmountFromYYC(value, displayUnit, currencyIndex)

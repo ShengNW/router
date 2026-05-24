@@ -31,6 +31,18 @@ import {
   AppTooltip,
 } from '../router-ui';
 
+const compareTextValue = (left, right) =>
+  String(left || '').localeCompare(String(right || ''));
+
+const compareNumberValue = (left, right) =>
+  Number(left || 0) - Number(right || 0);
+
+const compareArrayValue = (left, right) =>
+  compareTextValue(
+    Array.isArray(left) ? left.join(',') : left,
+    Array.isArray(right) ? right.join(',') : right,
+  );
+
 const normalizeAsyncTaskStatus = (value) => {
   const normalized = (value || '').toString().trim().toLowerCase();
   switch (normalized) {
@@ -144,6 +156,10 @@ const ChannelsTable = () => {
   const [disableBlockedImpact, setDisableBlockedImpact] = useState(null);
   const currentPagePath = `${location.pathname}${location.search}${location.hash}`;
   const [billingRefreshTasks, setBillingRefreshTasks] = useState({});
+  const [tableSorter, setTableSorter] = useState({
+    columnKey: null,
+    order: null,
+  });
   const [protocolMap, setProtocolMap] = useState(() =>
     buildProtocolMap(getChannelProtocolOptions(), t)
   );
@@ -454,26 +470,15 @@ const ChannelsTable = () => {
     setSearchKeyword(value.trim());
   };
 
-  const sortChannel = (key) => {
-    if (channels.length === 0) return;
-    setLoading(true);
-    let sortedChannels = [...channels];
-    sortedChannels.sort((a, b) => {
-      const leftValue = Array.isArray(a[key]) ? a[key].join(',') : a[key];
-      const rightValue = Array.isArray(b[key]) ? b[key].join(',') : b[key];
-      if (!isNaN(leftValue)) {
-        // If the value is numeric, subtract to sort
-        return leftValue - rightValue;
-      } else {
-        // If the value is not numeric, sort as strings
-        return ('' + leftValue).localeCompare(String(rightValue));
-      }
-    });
-    if (sortedChannels[0].id === channels[0].id) {
-      sortedChannels.reverse();
+  const handleTableChange = (_, __, sorter) => {
+    if (!sorter || Array.isArray(sorter) || !sorter.columnKey || !sorter.order) {
+      setTableSorter({ columnKey: null, order: null });
+      return;
     }
-    setChannels(sortedChannels);
-    setLoading(false);
+    setTableSorter({
+      columnKey: sorter.columnKey,
+      order: sorter.order,
+    });
   };
 
   const pagedChannels = channels;
@@ -744,6 +749,7 @@ const ChannelsTable = () => {
           pagination={false}
           scroll={{ x: CHANNEL_LIST_TABLE_MIN_WIDTH }}
           rowKey={(channel) => channel.id}
+          onChange={handleTableChange}
           dataSource={visibleChannels}
           rowSelection={tableRowSelection}
           locale={{ emptyText: '-' }}
@@ -753,121 +759,87 @@ const ChannelsTable = () => {
           })}
           columns={[
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('name');
-                }}
-              >
-                {t('channel.table.id')}
-              </span>
-            ),
+            title: t('channel.table.id'),
             dataIndex: 'name',
             key: 'name',
             width: CHANNEL_LIST_COLUMN_WIDTHS.name,
             ellipsis: true,
+            sorter: (a, b) => compareTextValue(a.name, b.name),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'name' ? tableSorter.order : null,
             render: (_, channel) => renderChannelName(channel, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('protocol');
-                }}
-              >
-                {t('channel.table.type')}
-              </span>
-            ),
+            title: t('channel.table.type'),
             dataIndex: 'protocol',
             key: 'protocol',
             className: 'router-table-col-type-narrow',
             width: CHANNEL_LIST_COLUMN_WIDTHS.type,
+            sorter: (a, b) => compareTextValue(a.protocol, b.protocol),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'protocol' ? tableSorter.order : null,
             render: (value) => renderProtocol(value, protocolMap),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('status');
-                }}
-              >
-                {t('channel.table.status')}
-              </span>
-            ),
+            title: t('channel.table.status'),
             dataIndex: 'status',
             key: 'status',
             className: 'router-table-col-status-compact',
             width: CHANNEL_LIST_COLUMN_WIDTHS.status,
+            sorter: (a, b) => compareNumberValue(a.status, b.status),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'status' ? tableSorter.order : null,
             render: (value) => renderStatus(value, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('created_time');
-                }}
-              >
-                {t('channel.table.created_time')}
-              </span>
-            ),
+            title: t('channel.table.created_time'),
             dataIndex: 'created_time',
             key: 'created_time',
             className: 'router-table-col-datetime',
             width: CHANNEL_LIST_COLUMN_WIDTHS.createdAt,
+            sorter: (a, b) => compareNumberValue(a.created_time, b.created_time),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'created_time' ? tableSorter.order : null,
             render: (value) => (value ? renderTimestamp(value) : '-'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('updated_at');
-                }}
-              >
-                {t('channel.table.updated_at')}
-              </span>
-            ),
+            title: t('channel.table.updated_at'),
             dataIndex: 'updated_at',
             key: 'updated_at',
             className: 'router-table-col-datetime',
             width: CHANNEL_LIST_COLUMN_WIDTHS.updatedAt,
+            sorter: (a, b) => compareNumberValue(a.updated_at, b.updated_at),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'updated_at' ? tableSorter.order : null,
             render: (value) => (value ? renderTimestamp(value) : '-'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('capabilities');
-                }}
-              >
-                {t('channel.table.capabilities')}
-              </span>
-            ),
+            title: t('channel.table.capabilities'),
             dataIndex: 'capabilities',
             key: 'capabilities',
             width: CHANNEL_LIST_COLUMN_WIDTHS.capabilities,
             ellipsis: true,
+            sorter: (a, b) => compareArrayValue(a.capabilities, b.capabilities),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'capabilities' ? tableSorter.order : null,
             render: (value) => renderCapabilities(value, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('billing_summary');
-                }}
-              >
-                {t('channel.table.billing')}
-              </span>
-            ),
+            title: t('channel.table.billing'),
             dataIndex: 'billing_summary',
             key: 'billing_summary',
             width: CHANNEL_LIST_COLUMN_WIDTHS.balance,
+            sorter: (a, b) =>
+              compareTextValue(a.billing_summary, b.billing_summary),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'billing_summary'
+                ? tableSorter.order
+                : null,
             render: (_, channel, idx) => (
               <div onClick={stopRowClick}>
                 <AppTooltip
@@ -904,20 +876,15 @@ const ChannelsTable = () => {
             ),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('priority');
-                }}
-              >
-                {t('channel.table.priority')}
-              </span>
-            ),
+            title: t('channel.table.priority'),
             dataIndex: 'priority',
             key: 'priority',
             className: 'router-table-col-status-compact',
             width: CHANNEL_LIST_COLUMN_WIDTHS.priority,
+            sorter: (a, b) => compareNumberValue(a.priority, b.priority),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'priority' ? tableSorter.order : null,
             render: (value, channel, idx) => (
               <div onClick={stopRowClick}>
                 <AppTooltip title={t('channel.table.priority_tip')}>

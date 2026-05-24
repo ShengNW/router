@@ -33,6 +33,12 @@ import {
   AppTag,
 } from '../router-ui';
 
+const compareTextValue = (left, right) =>
+  String(left || '').localeCompare(String(right || ''));
+
+const compareNumberValue = (left, right) =>
+  Number(left || 0) - Number(right || 0);
+
 function renderTimestamp(timestamp) {
   return <>{timestamp2string(timestamp)}</>;
 }
@@ -136,6 +142,10 @@ const RedemptionsTable = () => {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
+  const [tableSorter, setTableSorter] = useState({
+    columnKey: null,
+    order: null,
+  });
   const [displayUnit, setDisplayUnit] = useState('USD');
   const [currencyIndex, setCurrencyIndex] = useState(
     buildBillingCurrencyIndex([], { placeholderCodes: ['USD', 'CNY'] })
@@ -291,24 +301,15 @@ const RedemptionsTable = () => {
     setSearchKeyword(value.trim());
   };
 
-  const sortRedemption = (key) => {
-    if (redemptions.length === 0) return;
-    setLoading(true);
-    let sortedRedemptions = [...redemptions];
-    sortedRedemptions.sort((a, b) => {
-      if (!isNaN(a[key])) {
-        // If the value is numeric, subtract to sort
-        return a[key] - b[key];
-      } else {
-        // If the value is not numeric, sort as strings
-        return ('' + a[key]).localeCompare(b[key]);
-      }
-    });
-    if (sortedRedemptions[0].id === redemptions[0].id) {
-      sortedRedemptions.reverse();
+  const handleTableChange = (_, __, sorter) => {
+    if (!sorter || Array.isArray(sorter) || !sorter.columnKey || !sorter.order) {
+      setTableSorter({ columnKey: null, order: null });
+      return;
     }
-    setRedemptions(sortedRedemptions);
-    setLoading(false);
+    setTableSorter({
+      columnKey: sorter.columnKey,
+      order: sorter.order,
+    });
   };
 
   const refresh = async () => {
@@ -369,6 +370,7 @@ const RedemptionsTable = () => {
           pagination={false}
           scroll={{ x: REDEMPTION_LIST_TABLE_MIN_WIDTH }}
           rowKey={(redemption) => redemption.id}
+          onChange={handleTableChange}
           dataSource={redemptions
             .slice(
               (activePage - 1) * ITEMS_PER_PAGE,
@@ -387,67 +389,43 @@ const RedemptionsTable = () => {
           })}
           columns={[
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortRedemption('name');
-                }}
-              >
-                {t('redemption.table.name')}
-              </span>
-            ),
+            title: t('redemption.table.name'),
             dataIndex: 'name',
             key: 'name',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.name,
             ellipsis: true,
+            sorter: (a, b) => compareTextValue(a.name, b.name),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'name' ? tableSorter.order : null,
             render: (value) => value || t('redemption.table.no_name'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortRedemption('group_name');
-                }}
-              >
-                {t('redemption.table.group')}
-              </span>
-            ),
+            title: t('redemption.table.group'),
             dataIndex: 'groupLabel',
             key: 'groupLabel',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.group,
             ellipsis: true,
+            sorter: (a, b) => compareTextValue(a.groupLabel, b.groupLabel),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'groupLabel' ? tableSorter.order : null,
             render: (value) => value || '-',
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortRedemption('status');
-                }}
-              >
-                {t('redemption.table.status')}
-              </span>
-            ),
+            title: t('redemption.table.status'),
             dataIndex: 'status',
             key: 'status',
             className: 'router-table-col-status-compact',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.status,
+            sorter: (a, b) => compareNumberValue(a.status, b.status),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'status' ? tableSorter.order : null,
             render: (value) => renderStatus(value, t),
           },
           {
             title: (
               <div className='router-table-header-with-control router-redemption-face-value-header'>
-                <span
-                  className='router-sortable-header'
-                  onClick={() => {
-                    sortRedemption('creditedYYC');
-                  }}
-                >
-                  {t('redemption.table.face_value')}
-                </span>
+                <span>{t('redemption.table.face_value')}</span>
                 <UnitDropdown
                   variant='header'
                   compact
@@ -464,57 +442,51 @@ const RedemptionsTable = () => {
             ),
             key: 'face_value',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.faceValue,
+            sorter: (a, b) => compareNumberValue(a.creditedYYC, b.creditedYYC),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'face_value' ? tableSorter.order : null,
             render: (_, redemption) =>
               renderDisplayFaceValue(redemption, displayUnit, currencyIndex),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortRedemption('created_time');
-                }}
-              >
-                {t('redemption.table.created_time')}
-              </span>
-            ),
+            title: t('redemption.table.created_time'),
             key: 'created_time',
             className: 'router-table-col-datetime',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.createdTime,
+            sorter: (a, b) => compareNumberValue(a.createdTime, b.createdTime),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'created_time' ? tableSorter.order : null,
             render: (_, redemption) =>
               renderTimestamp(redemption.createdTime || redemption.created_time),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortRedemption('code_expires_at');
-                }}
-              >
-                {t('redemption.table.code_expires_at')}
-              </span>
-            ),
+            title: t('redemption.table.code_expires_at'),
             dataIndex: 'code_expires_at',
             key: 'code_expires_at',
             className: 'router-table-col-datetime',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.codeExpiresAt,
+            sorter: (a, b) =>
+              compareNumberValue(a.code_expires_at, b.code_expires_at),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'code_expires_at'
+                ? tableSorter.order
+                : null,
             render: (value) => renderExpiryTime(value, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortRedemption('redeemed_time');
-                }}
-              >
-                {t('redemption.table.redeemed_time')}
-              </span>
-            ),
+            title: t('redemption.table.redeemed_time'),
             key: 'redeemed_time',
             className: 'router-table-col-datetime',
             width: REDEMPTION_LIST_COLUMN_WIDTHS.redeemedTime,
+            sorter: (a, b) => compareNumberValue(a.redeemedTime, b.redeemedTime),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'redeemed_time'
+                ? tableSorter.order
+                : null,
             render: (_, redemption) =>
               redemption.redeemedTime
                 ? renderTimestamp(redemption.redeemedTime)

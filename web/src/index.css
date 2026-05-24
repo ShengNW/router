@@ -3784,10 +3784,6 @@ body,
     cursor: pointer;
 }
 
-.router-sortable-header {
-    cursor: pointer;
-}
-
 .router-table-header-with-control {
     display: inline-flex;
     align-items: center;

@@ -26,7 +26,6 @@ import {
   AppIcon,
   AppInput,
   AppPagination,
-  AppSelect,
   AppTable,
   AppTag,
   AppTooltip,
@@ -70,6 +69,20 @@ const formatFullNumber = (value) => {
   return numericValue.toLocaleString();
 };
 
+const formatUserBalanceValue = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return '0.00';
+  }
+  return numericValue.toFixed(2);
+};
+
+const compareTextValue = (left, right) =>
+  String(left || '').localeCompare(String(right || ''));
+
+const compareNumberValue = (left, right) =>
+  Number(left || 0) - Number(right || 0);
+
 const UsersTable = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -82,7 +95,10 @@ const UsersTable = () => {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searching, setSearching] = useState(false);
-  const [orderBy, setOrderBy] = useState('');
+  const [tableSorter, setTableSorter] = useState({
+    columnKey: null,
+    order: null,
+  });
   const [currencyIndex, setCurrencyIndex] = useState(() =>
     buildPublicDisplayCurrencyIndex([]),
   );
@@ -93,9 +109,7 @@ const UsersTable = () => {
   const loadUsers = useCallback(
     async (page) => {
       const normalizedPage = Number(page) > 0 ? Number(page) : 1;
-      const res = await API.get(
-        `/api/v1/admin/user/?page=${normalizedPage}&order=${orderBy}`,
-      );
+      const res = await API.get(`/api/v1/admin/user/?page=${normalizedPage}`);
       const { success, message, data, meta } = res.data;
       if (success) {
         setIsSearchMode(false);
@@ -118,7 +132,7 @@ const UsersTable = () => {
       }
       setLoading(false);
     },
-    [orderBy],
+    [],
   );
 
   const refresh = async () => {
@@ -228,7 +242,6 @@ const UsersTable = () => {
       // if keyword is blank, load files instead.
       await loadUsers(1);
       setActivePage(1);
-      setOrderBy('');
       return;
     }
     setSearching(true);
@@ -261,29 +274,15 @@ const UsersTable = () => {
     1,
   );
 
-  const sortUser = (key) => {
-    if (users.length === 0) return;
-    setLoading(true);
-    let sortedUsers = [...users];
-    sortedUsers.sort((a, b) => {
-      if (!isNaN(a[key])) {
-        // If the value is numeric, subtract to sort
-        return a[key] - b[key];
-      } else {
-        // If the value is not numeric, sort as strings
-        return ('' + a[key]).localeCompare(b[key]);
-      }
-    });
-    if (sortedUsers[0].id === users[0].id) {
-      sortedUsers.reverse();
+  const handleTableChange = (_, __, sorter) => {
+    if (!sorter || Array.isArray(sorter) || !sorter.columnKey || !sorter.order) {
+      setTableSorter({ columnKey: null, order: null });
+      return;
     }
-    setUsers(sortedUsers);
-    setLoading(false);
-  };
-
-  const handleOrderByChange = (e, { value }) => {
-    setOrderBy(value);
-    setActivePage(1);
+    setTableSorter({
+      columnKey: sorter.columnKey,
+      order: sorter.order,
+    });
   };
 
   const renderCountValue = (value) => (
@@ -332,20 +331,6 @@ const UsersTable = () => {
         }
         query={
           <div className='router-list-toolbar-query router-list-toolbar-query-compact'>
-            <AppSelect
-              className='router-section-dropdown router-dropdown-min-170'
-              placeholder={t('user.table.sort_by')}
-              options={[
-                { key: '', text: t('user.table.sort.default'), value: '' },
-                {
-                  key: 'request_count',
-                  text: t('user.table.sort.by_request_count'),
-                  value: 'request_count',
-                },
-              ]}
-              value={orderBy}
-              onChange={handleOrderByChange}
-            />
             <div className='router-search-form-xs'>
               <AppInput
                 className='router-section-input'
@@ -368,6 +353,7 @@ const UsersTable = () => {
           pagination={false}
           scroll={{ x: USER_LIST_TABLE_MIN_WIDTH }}
           rowKey={(user) => user.id}
+          onChange={handleTableChange}
           dataSource={users
             .slice(
               (activePage - 1) * ITEMS_PER_PAGE,
@@ -380,20 +366,15 @@ const UsersTable = () => {
           })}
           columns={[
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('username');
-                }}
-              >
-                {t('user.table.username')}
-              </span>
-            ),
+            title: t('user.table.username'),
             dataIndex: 'username',
             key: 'username',
             width: USER_LIST_COLUMN_WIDTHS.username,
             ellipsis: true,
+            sorter: (a, b) => compareTextValue(a.username, b.username),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'username' ? tableSorter.order : null,
             render: (_, user) => (
               <AppTooltip
                 title={
@@ -434,20 +415,18 @@ const UsersTable = () => {
               ),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('active_package_name');
-                }}
-              >
-                {t('user.table.package')}
-              </span>
-            ),
+            title: t('user.table.package'),
             dataIndex: 'active_package_name',
             key: 'active_package_name',
             width: USER_LIST_COLUMN_WIDTHS.package,
             ellipsis: true,
+            sorter: (a, b) =>
+              compareTextValue(a.active_package_name, b.active_package_name),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'active_package_name'
+                ? tableSorter.order
+                : null,
             render: (value) => (value ? renderText(value, 18) : '-'),
           },
           {
@@ -472,95 +451,78 @@ const UsersTable = () => {
             className: 'router-redemption-face-value-header',
             width: USER_LIST_COLUMN_WIDTHS.balance,
             render: (_, user) =>
-              yycToBillingInputValue(
-                user.yyc_balance ?? user.quota,
-                balanceUnit,
-                currencyIndex,
+              formatUserBalanceValue(
+                yycToBillingInputValue(
+                  user.yyc_balance ?? user.quota,
+                  balanceUnit,
+                  currencyIndex,
+                ),
               ),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('request_count');
-                }}
-              >
-                {t('user.table.request_count')}
-              </span>
-            ),
+            title: t('user.table.request_count'),
             dataIndex: 'request_count',
             key: 'request_count',
             className: 'router-table-col-status-narrow',
             width: USER_LIST_COLUMN_WIDTHS.requestCount,
+            sorter: (a, b) => compareNumberValue(a.request_count, b.request_count),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'request_count'
+                ? tableSorter.order
+                : null,
             render: (value) => renderCountValue(value),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('created_at');
-                }}
-              >
-                {t('user.table.created_at')}
-              </span>
-            ),
+            title: t('user.table.created_at'),
             dataIndex: 'created_at',
             key: 'created_at',
             className: 'router-table-col-datetime',
             width: USER_LIST_COLUMN_WIDTHS.createdAt,
+            sorter: (a, b) => compareNumberValue(a.created_at, b.created_at),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'created_at'
+                ? tableSorter.order
+                : null,
             render: (value) => (value ? timestamp2string(value) : '-'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('updated_at');
-                }}
-              >
-                {t('user.table.updated_at')}
-              </span>
-            ),
+            title: t('user.table.updated_at'),
             dataIndex: 'updated_at',
             key: 'updated_at',
             className: 'router-table-col-datetime',
             width: USER_LIST_COLUMN_WIDTHS.updatedAt,
+            sorter: (a, b) => compareNumberValue(a.updated_at, b.updated_at),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'updated_at'
+                ? tableSorter.order
+                : null,
             render: (value) => (value ? timestamp2string(value) : '-'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('role');
-                }}
-              >
-                {t('user.table.role_text')}
-              </span>
-            ),
+            title: t('user.table.role_text'),
             dataIndex: 'role',
             key: 'role',
             className: 'router-table-col-status-compact',
             width: USER_LIST_COLUMN_WIDTHS.role,
+            sorter: (a, b) => compareNumberValue(a.role, b.role),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'role' ? tableSorter.order : null,
             render: (value) => renderRole(value, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortUser('status');
-                }}
-              >
-                {t('user.table.status_text')}
-              </span>
-            ),
+            title: t('user.table.status_text'),
             dataIndex: 'status',
             key: 'status',
             className: 'router-table-col-status-compact',
             width: USER_LIST_COLUMN_WIDTHS.status,
+            sorter: (a, b) => compareNumberValue(a.status, b.status),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'status' ? tableSorter.order : null,
             render: (value) => renderStatus(value),
           },
           {
