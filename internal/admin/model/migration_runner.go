@@ -1250,6 +1250,18 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return backfillProviderModelTagsWithDB(tx)
 			},
 		},
+		{
+			Version:     "202605251930_channel_protocol_ali_label",
+			Description: "rename ali channel protocol label to Ali",
+			Up: func(tx *gorm.DB) error {
+				return tx.Model(&ChannelProtocolCatalog{}).
+					Where("name = ?", "ali").
+					Updates(map[string]any{
+						"label":      "Ali",
+						"updated_at": helper.GetTimestamp(),
+					}).Error
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

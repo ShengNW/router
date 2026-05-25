@@ -37,7 +37,7 @@ export const CHANNEL_PROTOCOL_OPTIONS = [
   },
   {
     key: 'ali',
-    text: '阿里通义千问',
+    text: 'Ali',
     value: 'ali',
     color: 'orange',
     tip: '阿里兼容模式与原生接口统一使用该渠道',
