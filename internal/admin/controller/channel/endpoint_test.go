@@ -60,9 +60,24 @@ func callUpdateChannelEndpointForTest(t *testing.T, channelID string, body any) 
 	return resp
 }
 
-func TestUpdateChannelEndpointRequiresExactModelTestResult(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	db := newChannelEndpointControllerTestDB(t)
+func callGetChannelEndpointsForTest(t *testing.T, channelID string) map[string]any {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Params = gin.Params{{Key: "id", Value: channelID}}
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/channel/"+channelID+"/endpoints", nil)
+
+	GetChannelEndpoints(c)
+
+	var resp map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response %q: %v", recorder.Body.String(), err)
+	}
+	return resp
+}
+
+func seedEndpointControllerChannel(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	if err := db.Create(&model.Channel{
 		Id:       "channel-1",
 		Name:     "channel-1",
@@ -90,6 +105,12 @@ func TestUpdateChannelEndpointRequiresExactModelTestResult(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("create provider model: %v", err)
 	}
+}
+
+func TestUpdateChannelEndpointRequiresExactModelTestResult(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newChannelEndpointControllerTestDB(t)
+	seedEndpointControllerChannel(t, db)
 	if err := db.Create(&model.ChannelModelEndpointTestResult{
 		ChannelId:      "channel-1",
 		Model:          "other-model",
@@ -129,5 +150,39 @@ func TestUpdateChannelEndpointRequiresExactModelTestResult(t *testing.T) {
 	})
 	if resp["success"] != true {
 		t.Fatalf("UpdateChannelEndpoint success=%v, message=%v, want true", resp["success"], resp["message"])
+	}
+}
+
+func TestGetChannelEndpointsDoesNotShowLooseUpstreamModelSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newChannelEndpointControllerTestDB(t)
+	seedEndpointControllerChannel(t, db)
+	if err := db.Create(&model.ChannelModelEndpointTestResult{
+		ChannelId:      "channel-1",
+		Model:          "other-model",
+		Endpoint:       model.ChannelModelEndpointChat,
+		UpstreamModel:  "qwen3.7-max",
+		LastTestStatus: model.ChannelModelEndpointTestStatusSuccess,
+		LastSupported:  true,
+	}).Error; err != nil {
+		t.Fatalf("create loose endpoint test result: %v", err)
+	}
+
+	resp := callGetChannelEndpointsForTest(t, "channel-1")
+	if resp["success"] != true {
+		t.Fatalf("GetChannelEndpoints success=%v message=%v, want true", resp["success"], resp["message"])
+	}
+	data := resp["data"].(map[string]any)
+	items := data["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("items len=%d, want 1", len(items))
+	}
+	item := items[0].(map[string]any)
+	if status, ok := item["last_test_status"].(string); ok && status != "" {
+		t.Fatalf("last_test_status=%q, want empty because exact model has no result", status)
+	}
+	reason, _ := item["enable_block_reason"].(string)
+	if !strings.Contains(reason, "缺少最近一次成功测试结果") {
+		t.Fatalf("enable_block_reason=%q, want exact test result block reason", reason)
 	}
 }
