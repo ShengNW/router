@@ -10,13 +10,13 @@ import { formatYYCValue } from '../../helpers/render';
 import UnitDropdown from '../../components/UnitDropdown';
 import {
   AppButton,
+  AppDetailSection,
   AppField,
   AppFilterHeader,
   AppFormActions,
   AppFormRow,
   AppInput,
   AppInputNumber,
-  AppSection,
   AppSelect,
   AppSpin,
 } from '../../router-ui';
@@ -198,43 +198,43 @@ const EditRedemption = () => {
 
   return (
     <div className='dashboard-container'>
-      <AppSection>
-        <AppFilterHeader
-          breadcrumbs={[
-            { key: 'workspace', label: t('header.admin_workspace') },
-            { key: 'business', label: t('header.business_operation') },
-            {
-              key: 'redemption-list',
-              label: t('header.redemption'),
-              onClick: handleCancel,
-            },
-            {
-              key: 'redemption-create',
-              label: t('redemption.edit.title_create'),
-              active: true,
-            },
-          ]}
-          title={t('redemption.edit.title_create')}
-          className='router-block-gap-sm'
-          actions={
-            <>
-              <AppButton className='router-page-button' onClick={handleCancel} disabled={submitting}>
-                {t('redemption.edit.buttons.cancel')}
-              </AppButton>
-              <AppButton
-                className='router-page-button'
-                color='blue'
-                onClick={submit}
-                loading={submitting}
-                disabled={loading || submitting}
-              >
-                {t('redemption.edit.buttons.submit')}
-              </AppButton>
-            </>
-          }
-        />
+      <AppFilterHeader
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'business', label: t('header.business_operation') },
+          {
+            key: 'redemption-list',
+            label: t('header.redemption'),
+            onClick: handleCancel,
+          },
+          {
+            key: 'redemption-create',
+            label: t('redemption.edit.title_create'),
+            active: true,
+          },
+        ]}
+        title={t('redemption.edit.title_create')}
+        className='router-block-gap-sm'
+        actions={
+          <>
+            <AppButton className='router-page-button' onClick={handleCancel} disabled={submitting}>
+              {t('redemption.edit.buttons.cancel')}
+            </AppButton>
+            <AppButton
+              className='router-page-button'
+              color='blue'
+              onClick={submit}
+              loading={submitting}
+              disabled={loading || submitting}
+            >
+              {t('redemption.edit.buttons.submit')}
+            </AppButton>
+          </>
+        }
+      />
+      <div className='router-entity-detail-page'>
         <AppSpin spinning={loading}>
-          <div className='router-page-stack'>
+          <AppDetailSection title={t('common.basic_info')} bodyClassName='router-page-stack'>
             <AppFormRow>
               <AppField label={t('redemption.edit.name')} required>
                 <AppInput
@@ -350,9 +350,9 @@ const EditRedemption = () => {
                 {t('redemption.edit.buttons.submit')}
               </AppButton>
             </AppFormActions>
-          </div>
+          </AppDetailSection>
         </AppSpin>
-      </AppSection>
+      </div>
     </div>
   );
 };

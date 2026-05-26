@@ -23,7 +23,6 @@ import {
   AppFormRow,
   AppInput,
   AppInputNumber,
-  AppSection,
   AppSwitch,
   AppTable,
   AppTag,
@@ -486,10 +485,7 @@ const EditToken = () => {
           }
         />
       )}
-      <AppSection
-        title={isCreateMode ? t('token.edit.title_create') : undefined}
-      >
-          {isCreateMode ? (
+      {isCreateMode ? (
             <div className='router-page-stack'>
                 <AppFormRow>
                   <AppField label={t('token.edit.name')} required={isCreateMode}>
@@ -624,8 +620,8 @@ const EditToken = () => {
                   </AppField>
                 </AppFormRow>
               </div>
-          ) : (
-            <div className='router-entity-detail-page'>
+      ) : (
+        <div className='router-entity-detail-page'>
               <AppDetailSection
                 title={t('common.basic_info')}
                 headerStart={renderStatus(Number(inputs.status || 0))}
@@ -697,7 +693,7 @@ const EditToken = () => {
                       />
                     </AppField>
                   </AppFormRow>
-                </AppDetailSection>
+              </AppDetailSection>
               <AppDetailSection
                 title={t('token.detail.sections.models')}
                 headerEnd={
@@ -733,7 +729,7 @@ const EditToken = () => {
                     onChange={handleModelKeywordChange}
                   />
                   {renderModelTable(modelsReadonly)}
-                </AppDetailSection>
+              </AppDetailSection>
               <AppDetailSection
                 title={t('token.detail.sections.limits')}
                 headerEnd={
@@ -868,10 +864,9 @@ const EditToken = () => {
                       </AppField>
                     </AppFormRow>
                   ) : null}
-                </AppDetailSection>
-            </div>
-          )}
-      </AppSection>
+              </AppDetailSection>
+        </div>
+      )}
     </div>
   );
 };

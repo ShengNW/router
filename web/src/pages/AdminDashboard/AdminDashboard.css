@@ -3,10 +3,30 @@
 }
 
 .admin-dashboard-toolbar {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: #f8fafc;
+  margin-bottom: 12px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 10px;
+}
+
+.admin-dashboard-toolbar .router-filter-header-title-row {
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.admin-dashboard-toolbar .router-page-header-breadcrumb {
+  width: 100%;
+}
+
+.admin-dashboard-toolbar .router-toolbar-meta {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.admin-dashboard-toolbar .router-filter-toolbar {
+  align-items: center;
+  justify-content: space-between;
 }
 
 .admin-dashboard-period {
