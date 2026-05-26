@@ -7,7 +7,6 @@ import {
   AppDetailSection,
   AppFilterHeader,
   AppIcon,
-  AppSection,
   AppTag,
 } from '../../router-ui';
 
@@ -203,18 +202,12 @@ const LogDetail = () => {
         ]}
         title={t('log.detail.title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-            {loading ? (
-              <div className='router-empty-cell'>{t('common.loading')}</div>
-            ) : (
-              <>
-                <AppDetailSection
-                  className='router-detail-section'
-                  title={t('log.detail.sections.basic')}
-                  titleTag='div'
-                  titleClassName='router-detail-section-title'
-                >
+      <div className='router-entity-detail-page'>
+        {loading ? (
+          <div className='router-empty-cell'>{t('common.loading')}</div>
+        ) : (
+          <>
+            <AppDetailSection title={t('log.detail.sections.basic')} titleTag='div'>
                   <div className='router-detail-grid'>
                     <div className='router-detail-item'>
                       <div className='router-detail-label'>
@@ -391,14 +384,9 @@ const LogDetail = () => {
                       </pre>
                     </div>
                   </div>
-                </AppDetailSection>
+            </AppDetailSection>
 
-                <AppDetailSection
-                  className='router-detail-section'
-                  title={t('log.detail.sections.billing')}
-                  titleTag='div'
-                  titleClassName='router-detail-section-title'
-                >
+            <AppDetailSection title={t('log.detail.sections.billing')} titleTag='div'>
                   <div className='router-detail-grid'>
                     <div className='router-detail-item'>
                       <div className='router-detail-label'>
@@ -576,22 +564,16 @@ const LogDetail = () => {
                       </div>
                     </div>
                   </div>
-                </AppDetailSection>
+            </AppDetailSection>
 
-                <AppDetailSection
-                  className='router-detail-section'
-                  title={t('log.detail.sections.content')}
-                  titleTag='div'
-                  titleClassName='router-detail-section-title'
-                >
+            <AppDetailSection title={t('log.detail.sections.content')} titleTag='div'>
                   <pre className='router-detail-pre'>
                     {renderText(log?.content)}
                   </pre>
-                </AppDetailSection>
-              </>
-            )}
-        </div>
-      </AppSection>
+            </AppDetailSection>
+          </>
+        )}
+      </div>
     </div>
   );
 };

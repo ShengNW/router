@@ -7,7 +7,6 @@ import {
   AppDetailSection,
   AppFilterHeader,
   AppIcon,
-  AppSection,
   AppTag,
 } from '../../router-ui';
 
@@ -142,14 +141,11 @@ const PackageDetail = () => {
         ]}
         title={t('flow.package.title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('flow.package.title')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-            >
+      <div className='router-entity-detail-page'>
+        <AppDetailSection
+          title={t('flow.package.title')}
+          titleTag='div'
+        >
               {loading ? (
                 <div className='router-empty-cell'>{t('common.loading')}</div>
               ) : (
@@ -262,9 +258,8 @@ const PackageDetail = () => {
                   </div>
                 </div>
               )}
-            </AppDetailSection>
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };

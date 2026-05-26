@@ -14,7 +14,6 @@ import {
   AppFilterHeader,
   AppFormRow,
   AppInput,
-  AppSection,
   AppTag,
 } from '../../router-ui';
 
@@ -124,8 +123,7 @@ const renderStructuredContent = (title, value, fields) => {
   const hasObjectContent =
     isJSON && parsed && typeof parsed === 'object' && !Array.isArray(parsed);
   return (
-    <div className='router-detail-section'>
-      <div className='router-detail-section-title'>{title}</div>
+    <AppDetailSection title={title} titleTag='div'>
       {hasObjectContent ? renderDetailFields(parsed, fields) : null}
       <pre className='router-detail-pre'>
         {value && value.toString().trim()
@@ -134,7 +132,7 @@ const renderStructuredContent = (title, value, fields) => {
             : value
           : '-'}
       </pre>
-    </div>
+    </AppDetailSection>
   );
 };
 
@@ -437,57 +435,54 @@ const TaskDetail = () => {
         breadcrumbs={breadcrumbItems}
         title={returnLabel || t('header.task')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('common.basic_info')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-              headerEnd={
+      <div className='router-entity-detail-page'>
+        <AppDetailSection
+          title={t('common.basic_info')}
+          titleTag='div'
+          headerEnd={
+            <>
+              <AppButton
+                className='router-page-button'
+                onClick={loadTask}
+                loading={loading}
+              >
+                {t('task.buttons.refresh')}
+              </AppButton>
+              {isSystemTaskPage ? (
                 <>
                   <AppButton
                     className='router-page-button'
-                    onClick={loadTask}
-                    loading={loading}
+                    disabled={!canRetry}
+                    onClick={handleRetry}
                   >
-                    {t('task.buttons.refresh')}
+                    {t('task.buttons.retry')}
                   </AppButton>
-                  {isSystemTaskPage ? (
-                    <>
-                      <AppButton
-                        className='router-page-button'
-                        disabled={!canRetry}
-                        onClick={handleRetry}
-                      >
-                        {t('task.buttons.retry')}
-                      </AppButton>
-                      <AppButton
-                        className='router-page-button'
-                        disabled={!canCancel}
-                        onClick={handleCancel}
-                      >
-                        {t('task.buttons.cancel')}
-                      </AppButton>
-                    </>
-                  ) : null}
                   <AppButton
                     className='router-page-button'
-                    disabled={!channelDetailPath}
-                    onClick={() =>
-                      navigate(channelDetailPath, {
-                        state: {
-                          from: currentPagePath,
-                        },
-                      })
-                    }
+                    disabled={!canCancel}
+                    onClick={handleCancel}
                   >
-                    {t('task.detail.buttons.channel')}
+                    {t('task.buttons.cancel')}
                   </AppButton>
                 </>
-              }
-              bodyClassName='router-page-stack'
-            >
+              ) : null}
+              <AppButton
+                className='router-page-button'
+                disabled={!channelDetailPath}
+                onClick={() =>
+                  navigate(channelDetailPath, {
+                    state: {
+                      from: currentPagePath,
+                    },
+                  })
+                }
+              >
+                {t('task.detail.buttons.channel')}
+              </AppButton>
+            </>
+          }
+          bodyClassName='router-page-stack'
+        >
                 <AppFormRow>
                   <AppField label={t('task.table.type')} readOnly>
                     <AppInput
@@ -611,31 +606,30 @@ const TaskDetail = () => {
                     </AppField>
                   </AppFormRow>
                 )}
-              </AppDetailSection>
+        </AppDetailSection>
 
-            {isSystemTaskPage
-              ? (
-                <>
-                  {renderStructuredContent(
-                    t('task.detail.payload'),
-                    task?.payload || '',
-                    payloadFields,
-                  )}
-                  {renderStructuredContent(
-                    t('task.detail.result'),
-                    task?.result || '',
-                    resultFields,
-                  )}
-                  {renderStructuredContent(
-                    t('task.detail.error'),
-                    task?.error_message || '',
-                    errorFields,
-                  )}
-                </>
-              )
-              : null}
-        </div>
-      </AppSection>
+        {isSystemTaskPage
+          ? (
+            <>
+              {renderStructuredContent(
+                t('task.detail.payload'),
+                task?.payload || '',
+                payloadFields,
+              )}
+              {renderStructuredContent(
+                t('task.detail.result'),
+                task?.result || '',
+                resultFields,
+              )}
+              {renderStructuredContent(
+                t('task.detail.error'),
+                task?.error_message || '',
+                errorFields,
+              )}
+            </>
+          )
+          : null}
+      </div>
     </div>
   );
 };

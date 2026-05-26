@@ -16,9 +16,9 @@ import {
 } from './shared.jsx';
 import {
   AppButton,
+  AppDetailSection,
   AppDescriptions,
   AppFilterHeader,
-  AppSection,
   AppTooltip,
 } from '../../router-ui';
 
@@ -301,15 +301,15 @@ const TopUpOrderDetailInner = () => {
           </>
         }
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
+      <div className='router-entity-detail-page'>
+        <AppDetailSection title={t('common.basic_info')}>
             {loading ? (
               <div className='router-empty-cell'>{t('common.loading')}</div>
             ) : (
               <AppDescriptions items={detailRows} />
             )}
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };

@@ -7,7 +7,6 @@ import {
   AppDetailSection,
   AppFilterHeader,
   AppIcon,
-  AppSection,
   AppTag,
 } from '../../router-ui';
 
@@ -225,34 +224,31 @@ const TopupReconcileDetail = () => {
         ]}
         title={t('flow.topup_reconcile.title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('flow.topup_reconcile.detail.sections.basic')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-              headerEnd={
-                <>
-                  <AppButton
-                    className='router-page-button'
-                    onClick={loadDetail}
-                    loading={loading}
-                    disabled={loading}
-                  >
-                    {t('task.buttons.refresh')}
-                  </AppButton>
-                  <AppButton
-                    className='router-page-button'
-                    onClick={handleRefresh}
-                    loading={refreshing}
-                    disabled={refreshing}
-                  >
-                    {t('flow.topup_reconcile.actions.refresh')}
-                  </AppButton>
-                </>
-              }
-            >
+      <div className='router-entity-detail-page'>
+        <AppDetailSection
+          title={t('flow.topup_reconcile.detail.sections.basic')}
+          titleTag='div'
+          headerEnd={
+            <>
+              <AppButton
+                className='router-page-button'
+                onClick={loadDetail}
+                loading={loading}
+                disabled={loading}
+              >
+                {t('task.buttons.refresh')}
+              </AppButton>
+              <AppButton
+                className='router-page-button'
+                onClick={handleRefresh}
+                loading={refreshing}
+                disabled={refreshing}
+              >
+                {t('flow.topup_reconcile.actions.refresh')}
+              </AppButton>
+            </>
+          }
+        >
 
               {loading ? (
                 <div className='router-empty-cell'>{t('common.loading')}</div>
@@ -370,20 +366,17 @@ const TopupReconcileDetail = () => {
                   </div>
                 </div>
               )}
-            </AppDetailSection>
+        </AppDetailSection>
 
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('flow.topup_reconcile.detail.sections.message')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-            >
+        <AppDetailSection
+          title={t('flow.topup_reconcile.detail.sections.message')}
+          titleTag='div'
+        >
               <pre className='router-detail-pre'>
                 {readOnlyText(order?.status_message)}
               </pre>
-            </AppDetailSection>
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };

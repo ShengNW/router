@@ -7,7 +7,6 @@ import {
   AppDetailSection,
   AppFilterHeader,
   AppIcon,
-  AppSection,
 } from '../../router-ui';
 
 const readOnlyText = (value) => {
@@ -100,14 +99,11 @@ const RedemptionDetail = () => {
         ]}
         title={t('flow.redemption.title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('flow.redemption.title')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-            >
+      <div className='router-entity-detail-page'>
+        <AppDetailSection
+          title={t('flow.redemption.title')}
+          titleTag='div'
+        >
               {loading ? (
                 <div className='router-empty-cell'>{t('common.loading')}</div>
               ) : (
@@ -184,9 +180,8 @@ const RedemptionDetail = () => {
                   </div>
                 </div>
               )}
-            </AppDetailSection>
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };

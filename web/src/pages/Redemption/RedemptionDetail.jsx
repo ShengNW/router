@@ -24,7 +24,6 @@ import {
   AppFormRow,
   AppInput,
   AppInputNumber,
-  AppSection,
   AppSelect,
   AppTag,
 } from '../../router-ui';
@@ -333,43 +332,42 @@ const RedemptionDetail = () => {
         ]}
         title={t('redemption.detail.title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-            <AppDetailSection
-              title={t('common.basic_info')}
-              headerStart={redemption ? renderStatus(redemption.status, t) : null}
-              headerEnd={
-                isEditing ? (
-                  <>
-                    <AppButton
-                      className='router-page-button'
-                      onClick={handleCancelEdit}
-                      disabled={saving}
-                    >
-                      {t('redemption.edit.buttons.cancel')}
-                    </AppButton>
-                    <AppButton
-                      className='router-page-button'
-                      color='blue'
-                      loading={saving}
-                      disabled={saving}
-                      onClick={submitEdit}
-                    >
-                      {t('redemption.edit.buttons.submit')}
-                    </AppButton>
-                  </>
-                ) : (
-                  <AppButton
-                    className='router-page-button'
-                    color='blue'
-                    onClick={() => setEditMode(true)}
-                  >
-                    {t('redemption.buttons.edit')}
-                  </AppButton>
-                )
-              }
-              bodyClassName='router-page-stack'
-            >
+      <div className='router-entity-detail-page'>
+        <AppDetailSection
+          title={t('common.basic_info')}
+          headerStart={redemption ? renderStatus(redemption.status, t) : null}
+          headerEnd={
+            isEditing ? (
+              <>
+                <AppButton
+                  className='router-page-button'
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                >
+                  {t('redemption.edit.buttons.cancel')}
+                </AppButton>
+                <AppButton
+                  className='router-page-button'
+                  color='blue'
+                  loading={saving}
+                  disabled={saving}
+                  onClick={submitEdit}
+                >
+                  {t('redemption.edit.buttons.submit')}
+                </AppButton>
+              </>
+            ) : (
+              <AppButton
+                className='router-page-button'
+                color='blue'
+                onClick={() => setEditMode(true)}
+              >
+                {t('redemption.buttons.edit')}
+              </AppButton>
+            )
+          }
+          bodyClassName='router-page-stack'
+        >
                 <AppFormRow>
                   {isEditing ? (
                     <AppField label={t('redemption.edit.name')}>
@@ -578,9 +576,8 @@ const RedemptionDetail = () => {
                     />
                   </AppField>
                 </AppFormRow>
-              </AppDetailSection>
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };

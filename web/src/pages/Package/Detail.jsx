@@ -9,12 +9,12 @@ import {
 import { formatDecimalNumber } from '../../helpers/render';
 import UnitDropdown from '../../components/UnitDropdown';
 import {
+  AppDetailSection,
   AppField,
   AppFilterHeader,
   AppFormRow,
   AppIcon,
   AppInput,
-  AppSection,
   AppTextarea,
 } from '../../router-ui';
 
@@ -147,8 +147,8 @@ const PackageDetail = () => {
         ]}
         title={t('package_manage.dialog.detail_title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
+      <div className='router-entity-detail-page'>
+        <AppDetailSection title={t('common.basic_info')} bodyClassName='router-page-stack'>
             {loading ? (
               <div className='router-empty-cell'>{t('common.loading')}</div>
             ) : (
@@ -304,8 +304,8 @@ const PackageDetail = () => {
                 </AppFormRow>
               </>
             )}
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };

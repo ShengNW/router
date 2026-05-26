@@ -6,7 +6,6 @@ import {
   AppDetailSection,
   AppFilterHeader,
   AppIcon,
-  AppSection,
   AppTag,
 } from '../../router-ui';
 
@@ -155,15 +154,11 @@ const TopupDetail = () => {
         ]}
         title={t('flow.topup.title')}
       />
-      <AppSection>
-        <div className='router-entity-detail-page'>
-
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('flow.topup.title')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-            >
+      <div className='router-entity-detail-page'>
+        <AppDetailSection
+          title={t('flow.topup.title')}
+          titleTag='div'
+        >
               {loading ? (
                 <div className='router-empty-cell'>{t('common.loading')}</div>
               ) : (
@@ -266,20 +261,17 @@ const TopupDetail = () => {
                   </div>
                 </div>
               )}
-            </AppDetailSection>
+        </AppDetailSection>
 
-            <AppDetailSection
-              className='router-detail-section'
-              title={t('flow.topup_reconcile.detail.sections.message')}
-              titleTag='div'
-              titleClassName='router-detail-section-title'
-            >
+        <AppDetailSection
+          title={t('flow.topup_reconcile.detail.sections.message')}
+          titleTag='div'
+        >
               <pre className='router-detail-pre'>
                 {readOnlyText(record?.status_message)}
               </pre>
-            </AppDetailSection>
-        </div>
-      </AppSection>
+        </AppDetailSection>
+      </div>
     </div>
   );
 };
