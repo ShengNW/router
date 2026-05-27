@@ -108,6 +108,7 @@ func notificationValue(value string) string {
 
 // DisableChannel disable & notify
 func DisableChannel(channelId string, channelName string, reason string) {
+	_ = model.RecordChannelCircuitBreakerCanceled(channelId, reason)
 	model.UpdateChannelStatusById(channelId, model.ChannelStatusAutoDisabled)
 	logger.SysLog(fmt.Sprintf("channel #%s has been disabled: %s", channelId, reason))
 	subject := fmt.Sprintf("渠道状态变更提醒")
@@ -124,6 +125,7 @@ func DisableChannel(channelId string, channelName string, reason string) {
 }
 
 func DisableChannelForInsufficientBalance(channelId string, channelName string, balance float64) {
+	_ = model.RecordChannelCircuitBreakerCanceled(channelId, "insufficient balance")
 	model.UpdateChannelStatusById(channelId, model.ChannelStatusAutoDisabled)
 	logger.SysLog(fmt.Sprintf("channel #%s has been disabled due to insufficient balance: %.4f", channelId, balance))
 	subject := fmt.Sprintf("渠道余额不足提醒")

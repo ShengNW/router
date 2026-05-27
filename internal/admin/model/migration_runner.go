@@ -1290,6 +1290,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return tx.AutoMigrate(&ChannelModel{}, &ChannelModelEndpoint{})
 			},
 		},
+		{
+			Version:     "202605271130_channel_circuit_breaker_state",
+			Description: "add persisted channel circuit breaker state for metric auto recovery",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&ChannelCircuitBreakerState{})
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }

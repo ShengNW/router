@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/yeying-community/router/common/config"
+	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/admin/model"
 )
@@ -15,6 +16,7 @@ var metricSuccessChan = make(chan string, config.MetricSuccessChanSize)
 var metricFailChan = make(chan string, config.MetricFailChanSize)
 var metricStoreMu sync.Mutex
 var metricRecoverTimers sync.Map
+var metricConsumersOnce sync.Once
 
 func consumeSuccess(channelId string) {
 	metricStoreMu.Lock()
@@ -70,11 +72,15 @@ func metricFailConsumer() {
 	}
 }
 
-func init() {
-	if config.EnableMetric {
+func StartMetricMonitor() {
+	if !config.EnableMetric {
+		return
+	}
+	metricConsumersOnce.Do(func() {
 		go metricSuccessConsumer()
 		go metricFailConsumer()
-	}
+	})
+	resumeMetricChannelRecoveries()
 }
 
 func Emit(channelId string, success bool) {
@@ -91,11 +97,19 @@ func Emit(channelId string, success bool) {
 }
 
 func MetricDisableChannelAndScheduleRecover(channelId string, successRate float64) {
+	normalizedChannelID := strings.TrimSpace(channelId)
+	if normalizedChannelID == "" {
+		return
+	}
 	MetricDisableChannel(channelId, successRate)
-	scheduleMetricChannelRecover(channelId)
+	recoverAfter := helper.GetTimestamp() + int64(config.MetricAutoRecoverAfterSeconds)
+	if err := model.RecordChannelCircuitBreakerOpen(normalizedChannelID, "low_success_rate", successRate, recoverAfter); err != nil {
+		logger.SysError("failed to record metric circuit breaker state: " + err.Error())
+	}
+	scheduleMetricChannelRecoverAt(normalizedChannelID, recoverAfter)
 }
 
-func scheduleMetricChannelRecover(channelId string) {
+func scheduleMetricChannelRecoverAt(channelId string, recoverAfter int64) {
 	normalizedChannelID := strings.TrimSpace(channelId)
 	if normalizedChannelID == "" {
 		return
@@ -109,13 +123,39 @@ func scheduleMetricChannelRecover(channelId string) {
 	if _, loaded := metricRecoverTimers.LoadOrStore(normalizedChannelID, struct{}{}); loaded {
 		return
 	}
-	time.AfterFunc(time.Duration(config.MetricAutoRecoverAfterSeconds)*time.Second, func() {
+	delaySeconds := recoverAfter - helper.GetTimestamp()
+	if delaySeconds < 0 {
+		delaySeconds = 0
+	}
+	time.AfterFunc(time.Duration(delaySeconds)*time.Second, func() {
 		metricRecoverTimers.Delete(normalizedChannelID)
 		recoverMetricDisabledChannel(normalizedChannelID)
 	})
 }
 
+func resumeMetricChannelRecoveries() {
+	if !config.AutomaticEnableChannelEnabled {
+		return
+	}
+	rows, err := model.ListOpenChannelCircuitBreakerStates()
+	if err != nil {
+		logger.SysError("failed to list metric circuit breaker states: " + err.Error())
+		return
+	}
+	for _, row := range rows {
+		scheduleMetricChannelRecoverAt(row.ChannelId, row.RecoverAfter)
+	}
+}
+
 func recoverMetricDisabledChannel(channelId string) {
+	state, err := model.GetChannelCircuitBreakerState(channelId)
+	if err != nil {
+		logger.SysError("failed to load metric circuit breaker state: " + err.Error())
+		return
+	}
+	if state.State != model.ChannelCircuitBreakerStateOpen {
+		return
+	}
 	channel, err := model.GetChannelById(channelId)
 	if err != nil {
 		logger.SysError("failed to load channel for metric auto recover: " + err.Error())
@@ -125,4 +165,7 @@ func recoverMetricDisabledChannel(channelId string) {
 		return
 	}
 	RecoverMetricDisabledChannel(channel.Id, channel.DisplayName())
+	if err := model.RecordChannelCircuitBreakerRecovered(channel.Id); err != nil {
+		logger.SysError("failed to record metric circuit breaker recovery: " + err.Error())
+	}
 }
