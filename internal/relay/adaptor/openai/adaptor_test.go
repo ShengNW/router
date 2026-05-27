@@ -81,6 +81,54 @@ func TestSetupRequestHeaderPreservesAudioAcceptForSpeech(t *testing.T) {
 	}
 }
 
+func TestSetupRequestHeaderUsesAnthropicHeadersForDeepSeekMessages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	req := httptest.NewRequest(http.MethodPost, "https://api.deepseek.com/anthropic/v1/messages", nil)
+	adaptor := &Adaptor{ChannelProtocol: relaychannel.DeepSeek}
+	meta := &meta.Meta{
+		APIKey:          "sk-deepseek",
+		ChannelProtocol: relaychannel.DeepSeek,
+		Mode:            relaymode.Messages,
+		UpstreamMode:    relaymode.Messages,
+	}
+
+	if err := adaptor.SetupRequestHeader(ctx, req, meta); err != nil {
+		t.Fatalf("SetupRequestHeader returned error: %v", err)
+	}
+	if got := req.Header.Get("x-api-key"); got != "sk-deepseek" {
+		t.Fatalf("x-api-key = %q, want %q", got, "sk-deepseek")
+	}
+	if got := req.Header.Get("Authorization"); got != "" {
+		t.Fatalf("Authorization = %q, want empty", got)
+	}
+	if got := req.Header.Get("anthropic-version"); got != "2023-06-01" {
+		t.Fatalf("anthropic-version = %q, want %q", got, "2023-06-01")
+	}
+}
+
+func TestGetRequestURLUsesAnthropicPathForDeepSeekMessages(t *testing.T) {
+	adaptor := &Adaptor{ChannelProtocol: relaychannel.DeepSeek}
+	meta := &meta.Meta{
+		BaseURL:         "https://api.deepseek.com",
+		ChannelProtocol: relaychannel.DeepSeek,
+		Mode:            relaymode.Messages,
+		UpstreamMode:    relaymode.Messages,
+	}
+
+	got, err := adaptor.GetRequestURL(meta)
+	if err != nil {
+		t.Fatalf("GetRequestURL returned error: %v", err)
+	}
+	if want := "https://api.deepseek.com/anthropic/v1/messages"; got != want {
+		t.Fatalf("GetRequestURL = %q, want %q", got, want)
+	}
+}
+
 func TestDoResponseRelaysRawResponseForRealtime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()

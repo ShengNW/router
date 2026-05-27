@@ -18,14 +18,6 @@ type channelProtocolOptionItem struct {
 	Tip         string `json:"tip,omitempty"`
 }
 
-// GetChannelProtocols godoc
-// @Summary Get channel protocol catalog (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/protocols [get]
 func GetChannelProtocols(c *gin.Context) {
 	rows := make([]model.ChannelProtocolCatalog, 0)
 	if err := model.DB.

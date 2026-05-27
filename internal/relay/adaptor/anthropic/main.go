@@ -91,7 +91,7 @@ func ConvertRequest(textRequest model.GeneralOpenAIRequest) *Request {
 		claudeToolChoice := struct {
 			Type string `json:"type"`
 			Name string `json:"name,omitempty"`
-		}{Type: "auto"} // default value https://docs.anthropic.com/en/docs/build-with-claude/tool-use#controlling-claudes-output
+		}{Type: "auto"}
 		if choice, ok := textRequest.ToolChoice.(map[string]any); ok {
 			if function, ok := choice["function"].(map[string]any); ok {
 				functionName := strings.TrimSpace(fmt.Sprint(function["name"]))
@@ -213,7 +213,6 @@ func parseStopSequences(stop any) []string {
 	}
 }
 
-// https://docs.anthropic.com/claude/reference/messages-streaming
 func StreamResponseClaude2OpenAI(claudeResponse *StreamResponse) (*openai.ChatCompletionsStreamResponse, *Response) {
 	var response *Response
 	var responseText string

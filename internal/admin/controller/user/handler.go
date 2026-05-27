@@ -189,15 +189,6 @@ func loadActiveUserPackageSubscriptionPayload(userID string) (activeUserPackageS
 	}, nil
 }
 
-// Login godoc
-// @Summary Password login (session/cookie)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body LoginRequest true "Login payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/login [post]
 func Login(c *gin.Context) {
 	if !config.PasswordLoginEnabled {
 		logger.Loginf(c.Request.Context(), "password login rejected: disabled")
@@ -285,13 +276,6 @@ func SetupLogin(user *model.User, c *gin.Context) {
 	})
 }
 
-// Logout godoc
-// @Summary Logout (session/cookie)
-// @Tags public
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/logout [get]
 func Logout(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
@@ -310,15 +294,6 @@ func Logout(c *gin.Context) {
 	})
 }
 
-// Register godoc
-// @Summary Register user (password)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.UserRegisterRequest true "Register payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/register [post]
 func Register(c *gin.Context) {
 	ctx := c.Request.Context()
 	if !config.RegisterEnabled {
@@ -376,16 +351,6 @@ func Register(c *gin.Context) {
 	return
 }
 
-// GetAllUsers godoc
-// @Summary List users (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param order query string false "Order"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user [get]
 func GetAllUsers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page < 1 {
@@ -433,15 +398,6 @@ func GetAllUsers(c *gin.Context) {
 	})
 }
 
-// SearchUsers godoc
-// @Summary Search users (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param keyword query string false "可按用户名/邮箱/显示名/钱包地址/ID搜索"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/search [get]
 func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	users, err := usersvc.Search(keyword)
@@ -469,15 +425,6 @@ func SearchUsers(c *gin.Context) {
 	return
 }
 
-// GetUser godoc
-// @Summary Get user detail (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path int true "User ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id} [get]
 func GetUser(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -511,15 +458,6 @@ func GetUser(c *gin.Context) {
 	return
 }
 
-// GetUserActivePackageSubscription godoc
-// @Summary Get current active package subscription for user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "User ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id}/package/subscription [get]
 func GetUserActivePackageSubscription(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -559,14 +497,6 @@ func GetUserActivePackageSubscription(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserActivePackageSubscription godoc
-// @Summary Get current active package subscription for current user
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/package/subscription [get]
 func GetCurrentUserActivePackageSubscription(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -591,16 +521,6 @@ func GetCurrentUserActivePackageSubscription(c *gin.Context) {
 	})
 }
 
-// GetUserRecentRedemptions godoc
-// @Summary Get recent redemptions for user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "User ID"
-// @Param limit query int false "Max items"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id}/redemptions [get]
 func GetUserRecentRedemptions(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -643,16 +563,6 @@ func GetUserRecentRedemptions(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserTopupRedemptions godoc
-// @Summary Get current user redemption top-up records
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param page_size query int false "Page size"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/redemptions [get]
 func GetCurrentUserTopupRedemptions(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -720,19 +630,6 @@ func GetCurrentUserTopupRedemptions(c *gin.Context) {
 	})
 }
 
-// GetUserDashboard godoc
-// @Summary User dashboard stats
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param start_timestamp query int false "Start timestamp (unix)"
-// @Param end_timestamp query int false "End timestamp (unix)"
-// @Param granularity query string false "hour|day|week|month|year"
-// @Param models query string false "Comma-separated model list"
-// @Param include_meta query int false "Include meta info (1)"
-// @Success 200 {object} docs.UserDashboardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/dashboard [get]
 func GetUserDashboard(c *gin.Context) {
 	id := c.GetString(ctxkey.Id)
 	granularity := strings.ToLower(strings.TrimSpace(c.DefaultQuery("granularity", "day")))
@@ -870,16 +767,6 @@ func normalizeSpendOverviewPeriod(raw string) string {
 	}
 }
 
-// GetUserSpendOverview godoc
-// @Summary User spend overview
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param period query string false "today|last_7_days|last_30_days|this_month|last_month|this_year|last_year|last_12_months|all_time"
-// @Param models query string false "Comma-separated model list"
-// @Success 200 {object} docs.UserSpendOverviewResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/spend/overview [get]
 func GetUserSpendOverview(c *gin.Context) {
 	userId := c.GetString(ctxkey.Id)
 	period := normalizeSpendOverviewPeriod(c.DefaultQuery("period", "last_30_days"))
@@ -1046,14 +933,6 @@ func GetUserSpendOverview(c *gin.Context) {
 	return
 }
 
-// GenerateAccessToken godoc
-// @Summary Generate access token for current user
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.UserAccessTokenResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/token [get]
 func GenerateAccessToken(c *gin.Context) {
 	id := c.GetString(ctxkey.Id)
 	logger.Loginf(c.Request.Context(), "generate access token request user=%s", id)
@@ -1100,14 +979,6 @@ func GenerateAccessToken(c *gin.Context) {
 	return
 }
 
-// GetAffCode godoc
-// @Summary Get affiliate code
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.UserAffCodeResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/aff [get]
 func GetAffCode(c *gin.Context) {
 	id := c.GetString(ctxkey.Id)
 	user, err := usersvc.GetByID(id, true)
@@ -1136,14 +1007,6 @@ func GetAffCode(c *gin.Context) {
 	return
 }
 
-// GetSelf godoc
-// @Summary Get current user profile
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.UserSelfResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/self [get]
 func GetSelf(c *gin.Context) {
 	id := c.GetString(ctxkey.Id)
 	user, err := usersvc.GetByID(id, false)
@@ -1221,16 +1084,6 @@ func resolveUserDailyQuotaGroupID(user *model.User, requestedGroupRef string) (s
 	return "", fmt.Errorf("当前用户未绑定有效分组")
 }
 
-// GetCurrentUserDailyQuota godoc
-// @Summary Get current user's daily package quota snapshot
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param group_id query string false "Group ID (optional, defaults to user's first bound group)"
-// @Param date query string false "Biz date in YYYY-MM-DD, defaults to today in group timezone"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/quota/daily [get]
 func GetCurrentUserDailyQuota(c *gin.Context) {
 	userID := c.GetString(ctxkey.Id)
 	if strings.TrimSpace(userID) == "" {
@@ -1274,16 +1127,6 @@ func GetCurrentUserDailyQuota(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserQuotaSummary godoc
-// @Summary Get current user's quota summary
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param date query string false "Biz date in YYYY-MM-DD"
-// @Param month query string false "Biz month in YYYY-MM"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/quota/summary [get]
 func GetCurrentUserQuotaSummary(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -1308,17 +1151,6 @@ func GetCurrentUserQuotaSummary(c *gin.Context) {
 	})
 }
 
-// GetUserQuotaSummary godoc
-// @Summary Get user quota summary (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "User ID"
-// @Param date query string false "Biz date in YYYY-MM-DD"
-// @Param month query string false "Biz month in YYYY-MM"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id}/quota/summary [get]
 func GetUserQuotaSummary(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -1358,20 +1190,6 @@ func GetUserQuotaSummary(c *gin.Context) {
 	})
 }
 
-// GetUserTopUpBalanceLots godoc
-// @Summary List user balance lots (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "User ID"
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Param source_type query string false "Source type: topup_order/redemption/legacy_migration"
-// @Param status query string false "Status: active/exhausted/expired"
-// @Param positive_only query bool false "Only lots with remaining balance, default true"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id}/topup/balance/lots [get]
 func GetUserTopUpBalanceLots(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -1427,19 +1245,6 @@ func GetUserTopUpBalanceLots(c *gin.Context) {
 	})
 }
 
-// GetUserTopUpBalanceLotTransactions godoc
-// @Summary List user balance lot transactions (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "User ID"
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Param source_type query string false "Source type: topup_order/redemption/legacy_migration"
-// @Param tx_type query string false "Transaction type: credit/consume/expire"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id}/topup/balance/transactions [get]
 func GetUserTopUpBalanceLotTransactions(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -1495,16 +1300,6 @@ func GetUserTopUpBalanceLotTransactions(c *gin.Context) {
 	})
 }
 
-// GrantUserTopUpPlan godoc
-// @Summary Grant topup plan balance to user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "User ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id}/topup/grant [post]
 func GrantUserTopUpPlan(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -1558,16 +1353,6 @@ func GrantUserTopUpPlan(c *gin.Context) {
 	})
 }
 
-// UpdateUser godoc
-// @Summary Update user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.AdminUserUpdateRequest true "User update payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user [put]
 func UpdateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	var updatedUser model.User
@@ -1692,16 +1477,6 @@ func UpdateUser(c *gin.Context) {
 	return
 }
 
-// UpdateSelf godoc
-// @Summary Update current user
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.UserSelfUpdateRequest true "Profile update payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/self [put]
 func UpdateSelf(c *gin.Context) {
 	var user model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
@@ -1783,15 +1558,6 @@ func UpdateSelf(c *gin.Context) {
 	return
 }
 
-// UpdateSelfPassword godoc
-// @Summary Update current user password with current password verification
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/self/password [post]
 func UpdateSelfPassword(c *gin.Context) {
 	var req updateSelfPasswordRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
@@ -1853,15 +1619,6 @@ func UpdateSelfPassword(c *gin.Context) {
 	})
 }
 
-// DeleteUser godoc
-// @Summary Delete user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path int true "User ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/{id} [delete]
 func DeleteUser(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -1905,14 +1662,6 @@ func DeleteUser(c *gin.Context) {
 	}
 }
 
-// DeleteSelf godoc
-// @Summary Delete current user
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/self [delete]
 func DeleteSelf(c *gin.Context) {
 	id := c.GetString("id")
 	user, _ := usersvc.GetByID(id, false)
@@ -1940,16 +1689,6 @@ func DeleteSelf(c *gin.Context) {
 	return
 }
 
-// CreateUser godoc
-// @Summary Create user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.AdminCreateUserRequest true "Create user payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user [post]
 func CreateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	var user model.User
@@ -2006,16 +1745,6 @@ type ManageRequest struct {
 	Action   string `json:"action"`
 }
 
-// ManageUser godoc
-// @Summary Manage user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.AdminManageUserRequest true "Manage user payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/user/manage [post]
 // ManageUser Only admin user can do this
 func ManageUser(c *gin.Context) {
 	var req ManageRequest
@@ -2388,14 +2117,6 @@ func buildTopUpBalanceSummary(totalBalance int64, topupRemain int64, redeemRemai
 	}
 }
 
-// GetCurrentUserTopUpBalanceSummary godoc
-// @Summary Get current user balance split summary
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/balance/summary [get]
 func GetCurrentUserTopUpBalanceSummary(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -2449,19 +2170,6 @@ func GetCurrentUserTopUpBalanceSummary(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserTopUpBalanceLots godoc
-// @Summary List current user balance lots
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Param source_type query string false "Source type: topup_order/redemption/legacy_migration"
-// @Param status query string false "Status: active/exhausted/expired"
-// @Param positive_only query bool false "Only lots with remaining balance, default true"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/balance/lots [get]
 func GetCurrentUserTopUpBalanceLots(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -2502,18 +2210,6 @@ func GetCurrentUserTopUpBalanceLots(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserTopUpBalanceLotTransactions godoc
-// @Summary List current user balance lot transactions
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Param source_type query string false "Source type: topup_order/redemption/legacy_migration"
-// @Param tx_type query string false "Transaction type: credit/consume/expire"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/balance/transactions [get]
 func GetCurrentUserTopUpBalanceLotTransactions(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -2554,17 +2250,6 @@ func GetCurrentUserTopUpBalanceLotTransactions(c *gin.Context) {
 	})
 }
 
-// GetTopUpOrders godoc
-// @Summary List current user top up orders
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Param business_type query string false "Business type: balance_topup or package_purchase"
-// @Success 200 {object} docs.UserTopUpOrderListResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/orders [get]
 func GetTopUpOrders(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	page, pageSize, businessType, err := parseTopupOrderPageParams(c)
@@ -2595,15 +2280,6 @@ func GetTopUpOrders(c *gin.Context) {
 	})
 }
 
-// PreviewPackagePurchase godoc
-// @Summary Preview current user package purchase/renew/upgrade
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/package/preview [post]
 func PreviewPackagePurchase(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -2642,14 +2318,6 @@ func PreviewPackagePurchase(c *gin.Context) {
 	})
 }
 
-// CreateTopUpOrder godoc
-// @Summary Create user top up order
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.UserCreateTopUpOrderResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/orders [post]
 func CreateTopUpOrder(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	if userID == "" {
@@ -2732,15 +2400,6 @@ func resolveTopUpClientType(rawClientType string, userAgent string) string {
 	return "pc"
 }
 
-// GetTopUpOrder godoc
-// @Summary Get current user top up order detail
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} docs.UserTopUpOrderDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/orders/{id} [get]
 func GetTopUpOrder(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	orderID := strings.TrimSpace(c.Param("id"))
@@ -2759,15 +2418,6 @@ func GetTopUpOrder(c *gin.Context) {
 	})
 }
 
-// RefreshTopUpOrder godoc
-// @Summary Refresh current user top up order status
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} docs.UserTopUpOrderDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/orders/{id}/refresh [post]
 func RefreshTopUpOrder(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	orderID := strings.TrimSpace(c.Param("id"))
@@ -2786,15 +2436,6 @@ func RefreshTopUpOrder(c *gin.Context) {
 	})
 }
 
-// CancelTopUpOrder godoc
-// @Summary Cancel current user top up order
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} docs.UserTopUpOrderDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup/orders/{id}/cancel [post]
 func CancelTopUpOrder(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	orderID := strings.TrimSpace(c.Param("id"))
@@ -2813,16 +2454,6 @@ func CancelTopUpOrder(c *gin.Context) {
 	})
 }
 
-// TopUp godoc
-// @Summary User top up
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.UserTopUpRequest true "Top up payload"
-// @Success 200 {object} docs.UserTopUpResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/topup [post]
 func TopUp(c *gin.Context) {
 	ctx := c.Request.Context()
 	req := topUpRequest{}

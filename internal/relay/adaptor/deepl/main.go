@@ -15,8 +15,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://developers.deepl.com/docs/getting-started/your-first-api-request
-
 func ConvertRequest(textRequest model.GeneralOpenAIRequest) (*Request, string) {
 	var text string
 	if len(textRequest.Messages) != 0 {

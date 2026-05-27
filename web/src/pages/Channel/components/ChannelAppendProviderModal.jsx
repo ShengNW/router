@@ -17,8 +17,7 @@ const ChannelAppendProviderModal = ({
   providerOptions,
   appendProviderForm,
   setAppendProviderForm,
-  channelModelTypeOptions,
-  normalizeChannelModelType,
+  providerModelTagOptions,
   handleAppendModelToProvider,
 }) => {
   return (
@@ -85,15 +84,16 @@ const ChannelAppendProviderModal = ({
               }
             />
           </AppField>
-          <AppField label={t('channel.edit.model_selector.append_dialog.type')}>
+          <AppField label={t('channel.edit.model_selector.append_dialog.tags')}>
             <AppSelect
               className='router-modal-dropdown'
-              options={channelModelTypeOptions}
-              value={appendProviderForm.type}
+              multiple
+              options={providerModelTagOptions}
+              value={appendProviderForm.tags || []}
               onChange={(e, { value }) =>
                 setAppendProviderForm((prev) => ({
                   ...prev,
-                  type: normalizeChannelModelType(value),
+                  tags: Array.isArray(value) ? value : [],
                 }))
               }
             />

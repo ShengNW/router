@@ -40,15 +40,6 @@ func extractTopupCallbackToken(c *gin.Context) string {
 	return ""
 }
 
-// ProcessTopupCallback godoc
-// @Summary Process external top up callback
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.TopupOrderCallbackRequest true "Top up callback payload"
-// @Success 200 {object} docs.UserTopUpOrderDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/topup/callback [post]
 func ProcessTopupCallback(c *gin.Context) {
 	expectedToken := configuredTopupCallbackToken()
 	if expectedToken == "" {

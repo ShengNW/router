@@ -50,12 +50,6 @@ func parsePageParams(c *gin.Context) (int, int) {
 	return page, pageSize
 }
 
-// GetTasks godoc
-// @Summary List async tasks (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/tasks [get]
 func GetTasks(c *gin.Context) {
 	page, pageSize := parsePageParams(c)
 	items, total, err := model.ListAsyncTasksPageWithDB(model.DB, model.AsyncTaskFilter{
@@ -83,12 +77,6 @@ func GetTasks(c *gin.Context) {
 	})
 }
 
-// GetUserTasks godoc
-// @Summary List user tasks (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/user/tasks [get]
 func GetUserTasks(c *gin.Context) {
 	page, pageSize := parsePageParams(c)
 	items, total, err := model.ListUserTasksPageWithDB(model.DB, model.UserTaskFilter{
@@ -118,12 +106,6 @@ func GetUserTasks(c *gin.Context) {
 	})
 }
 
-// GetTask godoc
-// @Summary Get async task by ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/tasks/{id} [get]
 func GetTask(c *gin.Context) {
 	taskID := strings.TrimSpace(c.Param("id"))
 	taskRow, err := model.GetAsyncTaskByIDWithDB(model.DB, taskID)
@@ -141,12 +123,6 @@ func GetTask(c *gin.Context) {
 	})
 }
 
-// GetUserTask godoc
-// @Summary Get user task by task ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/user/tasks/{id} [get]
 func GetUserTask(c *gin.Context) {
 	taskID := strings.TrimSpace(c.Param("id"))
 	taskRow, err := model.GetUserTaskByTaskIDWithDB(model.DB, taskID)
@@ -164,12 +140,6 @@ func GetUserTask(c *gin.Context) {
 	})
 }
 
-// CancelTask godoc
-// @Summary Cancel async task (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/tasks/{id}/cancel [post]
 func CancelTask(c *gin.Context) {
 	taskID := strings.TrimSpace(c.Param("id"))
 	taskRow, err := model.GetAsyncTaskByIDWithDB(model.DB, taskID)
@@ -210,12 +180,6 @@ func CancelTask(c *gin.Context) {
 	})
 }
 
-// RetryTask godoc
-// @Summary Retry async task (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/tasks/{id}/retry [post]
 func RetryTask(c *gin.Context) {
 	taskID := strings.TrimSpace(c.Param("id"))
 	taskRow, reused, err := model.RetryAsyncTaskWithDB(model.DB, taskID)
@@ -237,12 +201,6 @@ func RetryTask(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserTasks godoc
-// @Summary List current user tasks
-// @Tags user
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/public/user/tasks [get]
 func GetCurrentUserTasks(c *gin.Context) {
 	page, pageSize := parsePageParams(c)
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
@@ -272,12 +230,6 @@ func GetCurrentUserTasks(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserTask godoc
-// @Summary Get current user task by task ID
-// @Tags user
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/public/user/tasks/{id} [get]
 func GetCurrentUserTask(c *gin.Context) {
 	taskID := strings.TrimSpace(c.Param("id"))
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))

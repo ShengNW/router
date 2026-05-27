@@ -15,6 +15,17 @@ const (
 	ProviderModelTypeVideo     = "video"
 	ProviderModelTypeEmbedding = "embedding"
 
+	ProviderModelTagText             = ProviderModelTypeText
+	ProviderModelTagImage            = ProviderModelTypeImage
+	ProviderModelTagAudio            = ProviderModelTypeAudio
+	ProviderModelTagVideo            = ProviderModelTypeVideo
+	ProviderModelTagEmbedding        = ProviderModelTypeEmbedding
+	ProviderModelTagToolCalling      = "tool_calling"
+	ProviderModelTagReasoning        = "reasoning"
+	ProviderModelTagVision           = "vision"
+	ProviderModelTagRealtime         = "realtime"
+	ProviderModelTagStructuredOutput = "structured_output"
+
 	ProviderPriceUnitPer1KTokens = "per_1k_tokens"
 	ProviderPriceUnitPer1KChars  = "per_1k_chars"
 	ProviderPriceUnitPerImage    = "per_image"
@@ -50,7 +61,8 @@ type ProviderModelPriceComponentDetail struct {
 
 type ProviderModelDetail struct {
 	Model              string                              `json:"model"`
-	Type               string                              `json:"type,omitempty"`
+	Type               string                              `json:"-"`
+	Tags               []string                            `json:"tags,omitempty"`
 	Status             string                              `json:"status,omitempty"`
 	Description        string                              `json:"description,omitempty"`
 	IsDeleted          bool                                `json:"is_deleted,omitempty"`
@@ -81,7 +93,15 @@ func NormalizeProviderModelDetails(details []ProviderModelDetail) []ProviderMode
 		if modelName == "" {
 			continue
 		}
-		t := normalizeModelType(detail.Type, modelName)
+		tagInput := detail.Tags
+		if strings.TrimSpace(detail.Type) != "" {
+			tagInput = append([]string{detail.Type}, detail.Tags...)
+		}
+		tags := NormalizeProviderModelTags(tagInput)
+		t := ProviderModelTypeFromTags(tags)
+		if t == "" {
+			t = normalizeModelType(detail.Type, modelName)
+		}
 		priceUnit := strings.TrimSpace(strings.ToLower(detail.PriceUnit))
 		if priceUnit == "" {
 			priceUnit = defaultPriceUnitByType(t, modelName)
@@ -106,10 +126,11 @@ func NormalizeProviderModelDetails(details []ProviderModelDetail) []ProviderMode
 		entry := ProviderModelDetail{
 			Model:              modelName,
 			Type:               t,
+			Tags:               tags,
 			Status:             status,
 			Description:        strings.TrimSpace(detail.Description),
 			IsDeleted:          detail.IsDeleted,
-			SupportedEndpoints: NormalizeProviderModelSupportedEndpoints(t, detail.SupportedEndpoints),
+			SupportedEndpoints: NormalizeProviderModelSupportedEndpointsForModel(t, modelName, detail.SupportedEndpoints),
 			InputPrice:         inputPrice,
 			OutputPrice:        outputPrice,
 			PriceUnit:          priceUnit,
@@ -122,6 +143,10 @@ func NormalizeProviderModelDetails(details []ProviderModelDetail) []ProviderMode
 			existing := normalized[idx]
 			if existing.Type == "" {
 				existing.Type = entry.Type
+			}
+			existing.Tags = NormalizeProviderModelTags(append(existing.Tags, entry.Tags...))
+			if t := ProviderModelTypeFromTags(existing.Tags); t != "" {
+				existing.Type = t
 			}
 			if existing.Status == "" {
 				existing.Status = entry.Status
@@ -144,13 +169,11 @@ func NormalizeProviderModelDetails(details []ProviderModelDetail) []ProviderMode
 			if existing.OutputPrice <= 0 && entry.OutputPrice > 0 {
 				existing.OutputPrice = entry.OutputPrice
 			}
-			if entry.Source != "default" {
-				existing.Source = entry.Source
-			}
+			existing.Source = entry.Source
 			if entry.UpdatedAt > existing.UpdatedAt {
 				existing.UpdatedAt = entry.UpdatedAt
 			}
-			existing.SupportedEndpoints = NormalizeProviderModelSupportedEndpoints(existing.Type, append(existing.SupportedEndpoints, entry.SupportedEndpoints...))
+			existing.SupportedEndpoints = NormalizeProviderModelSupportedEndpointsForModel(existing.Type, existing.Model, append(existing.SupportedEndpoints, entry.SupportedEndpoints...))
 			existing.PriceComponents = NormalizeProviderModelPriceComponents(append(existing.PriceComponents, entry.PriceComponents...))
 			normalized[idx] = existing
 			continue
@@ -162,6 +185,89 @@ func NormalizeProviderModelDetails(details []ProviderModelDetail) []ProviderMode
 		return normalized[i].Model < normalized[j].Model
 	})
 	return normalized
+}
+
+func NormalizeProviderModelTags(tags []string) []string {
+	result := make([]string, 0, len(tags)+1)
+	seen := make(map[string]struct{}, len(tags)+1)
+	appendTag := func(raw string) {
+		tag := strings.TrimSpace(strings.ToLower(raw))
+		if tag == "" {
+			return
+		}
+		if !isValidProviderModelTag(tag) {
+			return
+		}
+		if _, ok := seen[tag]; ok {
+			return
+		}
+		seen[tag] = struct{}{}
+		result = append(result, tag)
+	}
+	for _, tag := range tags {
+		appendTag(tag)
+	}
+	tagOrder := map[string]int{
+		ProviderModelTagText:             10,
+		ProviderModelTagImage:            20,
+		ProviderModelTagAudio:            30,
+		ProviderModelTagVideo:            40,
+		ProviderModelTagEmbedding:        50,
+		ProviderModelTagToolCalling:      60,
+		ProviderModelTagReasoning:        70,
+		ProviderModelTagVision:           80,
+		ProviderModelTagRealtime:         90,
+		ProviderModelTagStructuredOutput: 100,
+	}
+	sort.Slice(result, func(i, j int) bool {
+		leftOrder := tagOrder[result[i]]
+		if leftOrder == 0 {
+			leftOrder = 1000
+		}
+		rightOrder := tagOrder[result[j]]
+		if rightOrder == 0 {
+			rightOrder = 1000
+		}
+		if leftOrder != rightOrder {
+			return leftOrder < rightOrder
+		}
+		return result[i] < result[j]
+	})
+	return result
+}
+
+func isValidProviderModelTag(tag string) bool {
+	if tag == "" {
+		return false
+	}
+	for _, r := range tag {
+		if r >= 'a' && r <= 'z' {
+			continue
+		}
+		if r >= '0' && r <= '9' {
+			continue
+		}
+		if r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func ProviderModelTypeFromTags(tags []string) string {
+	normalizedTags := NormalizeProviderModelTags(tags)
+	for _, tag := range normalizedTags {
+		switch tag {
+		case ProviderModelTagText,
+			ProviderModelTagImage,
+			ProviderModelTagAudio,
+			ProviderModelTagVideo,
+			ProviderModelTagEmbedding:
+			return tag
+		}
+	}
+	return ""
 }
 
 func FilterActiveProviderModelDetails(details []ProviderModelDetail) []ProviderModelDetail {
@@ -238,9 +344,7 @@ func NormalizeProviderModelPriceComponents(details []ProviderModelPriceComponent
 			if existing.Currency == "" {
 				existing.Currency = entry.Currency
 			}
-			if existing.Source == "" || existing.Source == "default" {
-				existing.Source = entry.Source
-			}
+			existing.Source = entry.Source
 			if existing.SourceURL == "" {
 				existing.SourceURL = entry.SourceURL
 			}
@@ -275,12 +379,16 @@ func NormalizeProviderModelPriceComponents(details []ProviderModelPriceComponent
 }
 
 func NormalizeProviderModelSupportedEndpoints(modelType string, endpoints []string) []string {
+	return NormalizeProviderModelSupportedEndpointsForModel(modelType, "", endpoints)
+}
+
+func NormalizeProviderModelSupportedEndpointsForModel(modelType string, modelName string, endpoints []string) []string {
 	normalizedType := normalizeModelType(modelType, "")
 	seen := make(map[string]struct{}, len(endpoints))
 	result := make([]string, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		normalizedEndpoint := NormalizeRequestedChannelModelEndpoint(endpoint)
-		if normalizedEndpoint == "" || !IsChannelModelEndpointAllowedForType(normalizedType, normalizedEndpoint) {
+		if normalizedEndpoint == "" || !IsChannelModelEndpointAllowedForModel(normalizedType, modelName, normalizedEndpoint) {
 			continue
 		}
 		if _, exists := seen[normalizedEndpoint]; exists {
@@ -296,8 +404,23 @@ func NormalizeProviderModelSupportedEndpoints(modelType string, endpoints []stri
 }
 
 func IsChannelModelEndpointAllowedForType(modelType string, endpoint string) bool {
+	return IsChannelModelEndpointAllowedForModel(modelType, "", endpoint)
+}
+
+func IsChannelModelEndpointAllowedForModel(modelType string, modelName string, endpoint string) bool {
 	normalizedEndpoint := NormalizeRequestedChannelModelEndpoint(endpoint)
 	if normalizedEndpoint == "" {
+		return false
+	}
+	lowerModelName := strings.ToLower(strings.TrimSpace(modelName))
+	switch {
+	case strings.HasPrefix(lowerModelName, "qwen-vl"),
+		strings.HasPrefix(lowerModelName, "qvq-"),
+		strings.Contains(lowerModelName, "omni"),
+		strings.Contains(lowerModelName, "asr"):
+		return normalizedEndpoint == ChannelModelEndpointChat ||
+			normalizedEndpoint == ChannelModelEndpointRealtime
+	case strings.Contains(lowerModelName, "tts"):
 		return false
 	}
 	switch normalizeModelType(modelType, "") {
@@ -414,6 +537,7 @@ func normalizeModelType(raw string, modelName string) string {
 	}
 	switch {
 	case strings.HasPrefix(lower, "veo"),
+		strings.HasPrefix(lower, "sora"),
 		strings.Contains(lower, "text-to-video"),
 		strings.Contains(lower, "video-generation"),
 		strings.Contains(lower, "video_generation"),
@@ -426,10 +550,21 @@ func normalizeModelType(raw string, modelName string) string {
 	switch {
 	case strings.Contains(lower, "whisper"),
 		strings.HasPrefix(lower, "tts-"),
+		strings.Contains(lower, "-tts"),
+		strings.Contains(lower, "realtime"),
+		strings.Contains(lower, "speech"),
+		strings.Contains(lower, "voice"),
 		strings.Contains(lower, "audio"):
 		return ProviderModelTypeAudio
 	case strings.HasPrefix(lower, "dall-e"),
+		strings.HasPrefix(lower, "gpt-image"),
+		strings.HasPrefix(lower, "qwen-image"),
+		strings.HasPrefix(lower, "pixtral"),
 		strings.HasPrefix(lower, "cogview"),
+		strings.Contains(lower, "image"),
+		strings.Contains(lower, "-vl"),
+		strings.Contains(lower, "-4v"),
+		strings.Contains(lower, "vision"),
 		strings.Contains(lower, "stable-diffusion"),
 		strings.HasPrefix(lower, "wanx"),
 		strings.HasPrefix(lower, "step-1x"),

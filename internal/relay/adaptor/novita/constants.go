@@ -1,7 +1,5 @@
 package novita
 
-// https://novita.ai/llm-api
-
 var ModelList = []string{
 	"meta-llama/llama-3-8b-instruct",
 	"meta-llama/llama-3-70b-instruct",

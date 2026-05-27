@@ -80,6 +80,7 @@ func Run() {
 	if config.IsMasterNode {
 		task.StartAsyncTaskWorkers()
 		billingsvc.StartFXAutoSyncWorker()
+		billingsvc.StartChannelBillingAutoRefreshWorker()
 		topupsvc.StartTopupReconcileWorker()
 	}
 	openai.InitTokenEncoders()

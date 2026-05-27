@@ -64,6 +64,10 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		logger.Errorf(ctx, "getAndValidateTextRequest failed: %s", err.Error())
 		return openai.ErrorWrapper(err, "invalid_text_request", http.StatusBadRequest)
 	}
+	if err := validateProviderSpecificTextRequest(meta, textRequest, validatedRawBody); err != nil {
+		logger.Errorf(ctx, "validateProviderSpecificTextRequest failed: %s", err.Error())
+		return openai.ErrorWrapper(err, "invalid_text_request", http.StatusBadRequest)
+	}
 	meta.IsStream = textRequest.Stream
 	logTextStreamAcceptConflict(c, meta)
 

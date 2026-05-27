@@ -32,6 +32,7 @@
     "chat": "Chat",
     "admin_workspace": "Admin Workspace",
     "user_workspace": "User Workspace",
+    "get_started": "Activate Service",
     "login": "Login",
     "logout": "Logout",
     "register": "Register"
@@ -41,6 +42,7 @@
     "display_currency": "Display",
     "mine": {
       "balance": "Balance",
+      "billing": "Billing",
       "package": "Package"
     },
     "record_nav": {
@@ -139,7 +141,9 @@
         "credited_amount": "Credited Amount",
         "enabled": "Status",
         "public_visible": "Public Visible",
-        "validity_days": "Validity (Days)"
+        "validity_days": "Validity (Days)",
+        "created_at": "Created At",
+        "updated_at": "Updated At"
       },
       "visibility": {
         "visible": "Visible",
@@ -369,6 +373,7 @@
       "updated_at": "Updated At",
       "response_time": "Response Time",
       "capabilities": "Capabilities",
+      "billing": "Billing",
       "balance": "Balance",
       "priority": "Priority",
       "actions": "Actions",
@@ -383,7 +388,7 @@
       "not_tested": "Not Tested",
       "priority_tip": "Channel selection priority, higher is preferred",
       "click_to_update": "Click to update",
-      "balance_not_supported": "-"
+      "billing_not_available": "-"
     },
     "buttons": {
       "test": "Test",
@@ -410,12 +415,12 @@
       "batch_disable_done": "Batch disable finished: {{success}} succeeded, {{failed}} failed.",
       "batch_delete_select_required": "Please select at least one channel to delete.",
       "batch_delete_done": "Batch deletion finished: {{success}} succeeded, {{failed}} failed.",
-      "balance_update_success": "Channel {{name}} balance updated successfully!",
-      "balance_update_submitted": "Balance refresh task submitted for channel {{name}}.",
-      "balance_update_reused": "An active balance refresh task already exists for channel {{name}}.",
-      "balance_update_failed": "Failed to refresh balance for channel {{name}}.",
-      "balance_update_submit_failed": "Failed to submit balance refresh task.",
-      "all_balance_updated": "All enabled channel balances have been updated!",
+      "billing_update_success": "Channel {{name}} billing updated successfully!",
+      "billing_update_submitted": "Billing refresh task submitted for channel {{name}}.",
+      "billing_update_reused": "An active billing refresh task already exists for channel {{name}}.",
+      "billing_update_failed": "Failed to refresh billing for channel {{name}}.",
+      "billing_update_submit_failed": "Failed to submit billing refresh task.",
+      "all_billing_updated": "All enabled channel billing snapshots have been updated!",
       "operation_success": "Operation completed successfully!",
       "disable_blocked_title": "This channel cannot be disabled yet",
       "disable_blocked_description": "This channel is still used by the following groups. Remove the related group channel bindings or model mappings first, then disable it.",
@@ -469,6 +474,7 @@
         "status": "Status",
         "description": "Description",
         "type": "Type",
+        "tags": "Tags",
         "supported_endpoints": "Supported Endpoints",
         "price": "Price",
         "price_compact": "Input | Output",
@@ -575,7 +581,125 @@
         "overview": "Overview",
         "models": "Models",
         "endpoints": "Endpoints",
-        "tests": "Tests"
+        "tests": "Tests",
+        "billing": "Billing"
+      },
+      "billing": {
+        "title": "Billing",
+        "hint": "This section shows standardized channel billing entitlements, not upstream-specific raw fields. The system tracks quotas, balances, credits, and plan validity as structured entitlement items, and uses those normalized fields for refresh, alerts, and future automation.",
+        "load_failed": "Failed to load channel billing data",
+        "profile_title": "Billing Profile",
+        "profile_enabled": "Billing Enabled",
+        "billing_api_base_url": "Billing API Base URL",
+        "profile_update_success": "Billing profile updated",
+        "profile_update_failed": "Failed to update billing profile",
+        "refresh_now": "Refresh",
+        "current_quotas_title": "Entitlement Status",
+        "billing_mode": "Billing Mode",
+        "updated_at": "Updated At",
+        "portal": "Billing Portal",
+        "activate_title": "Activate",
+        "activate_input": "Activation Credential",
+        "cdk": "CDK",
+        "cdk_required": "Please enter a CDK first",
+        "open_activate_page": "Open Activate Page",
+        "open_activate_success": "Activate page link generated",
+        "open_activate_failed": "Failed to generate activate page link",
+        "manual_update_title": "Add Purchase Record",
+        "manual_snapshot_invalid": "Please provide at least one valid entitlement item",
+        "manual_snapshot_success": "Purchase record saved",
+        "manual_snapshot_failed": "Failed to save purchase record",
+        "confirm_manual_snapshot": "Save",
+        "add_purchase_record": "Add",
+        "manual_resource_type": "Entitlement Type",
+        "manual_quota_type": "Quota Type",
+        "manual_quota_label": "Quota Name",
+        "manual_quota_amount": "Quota Amount",
+        "manual_quota_expires_at": "Expires At",
+        "add_quota_item": "Add Quota",
+        "remove_quota_item": "Remove",
+        "row_action": "Action",
+        "currency": "Currency",
+        "message": "Message",
+        "snapshots_title": "Purchase Records",
+        "alerts_title": "Alert History",
+        "actions_title": "Action History",
+        "no_capabilities": "No billing capabilities",
+        "no_quota_items": "No billing quota items",
+        "no_expire": "No expiration",
+        "capabilities": {
+          "refresh_billing": "Supports billing refresh",
+          "open_activate_page": "Supports activate page",
+          "manual_update_snapshot": "Supports manual billing snapshot entry",
+          "open_billing_portal": "Supports billing portal"
+        },
+        "modes": {
+          "unsupported": "Unsupported",
+          "manual": "Manual",
+          "builtin_openai": "Built-in OpenAI billing API",
+          "builtin_closeai": "Built-in CloseAI billing API",
+          "builtin_openai_sb": "Built-in OpenAI-SB billing API",
+          "builtin_aiproxy": "Built-in AIProxy billing API",
+          "builtin_api2gpt": "Built-in API2GPT billing API",
+          "builtin_aigc2d": "Built-in AIGC2D billing API",
+          "builtin_siliconflow": "Built-in SiliconFlow billing API",
+          "builtin_deepseek": "Built-in DeepSeek billing API",
+          "builtin_openrouter": "Built-in OpenRouter billing API",
+          "builtin_cdk": "Built-in CDK billing API"
+        },
+        "quota_types": {
+          "daily": "Daily Quota",
+          "weekly": "Weekly Quota",
+          "monthly": "Monthly Quota",
+          "total": "Total Quota",
+          "custom": "Custom"
+        },
+        "resource_types": {
+          "quota": "Quota",
+          "balance": "Balance",
+          "credit": "Credit",
+          "plan": "Plan"
+        },
+        "quota_table": {
+          "resource_type": "Entitlement Type",
+          "quota_label": "Quota Item",
+          "amount": "Remaining / Limit",
+          "remaining_ratio": "Remaining Ratio",
+          "reset_at": "Reset At",
+          "expires_at": "Expires At",
+          "status": "Status",
+          "status_active": "Active",
+          "status_low": "Low",
+          "status_depleted": "Depleted",
+          "status_expired": "Expired"
+        },
+        "snapshot_table": {
+          "created_at": "Time",
+          "source_type": "Source",
+          "quota_items": "Quota Items",
+          "message": "Message"
+        },
+        "action_table": {
+          "created_at": "Time",
+          "action_type": "Action",
+          "status": "Status",
+          "message": "Result"
+        },
+        "alert_table": {
+          "created_at": "Time",
+          "event_type": "Alert Type",
+          "quota_label": "Quota Item",
+          "amount": "Remaining / Limit",
+          "remaining_ratio": "Remaining Ratio",
+          "expires_at": "Expires At",
+          "status": "Delivery Status",
+          "title": "Title",
+          "empty": "No alert records",
+          "event_expiring_soon": "Expiring Soon",
+          "event_low_remaining": "Low Remaining",
+          "status_sent": "Sent",
+          "status_failed": "Failed"
+        }
       },
       "endpoint_capabilities": {
         "title": "Endpoints",
@@ -661,10 +785,11 @@
       "base_url": "Address",
       "base_url_placeholder": "The address required by the OpenAPI SDK",
       "api_base_url": "API Base URL",
-      "api_base_url_placeholder": "Leave empty to use the protocol default address; existing legacy channel addresses remain compatible",
-      "account_base_url": "Account Base URL",
-      "account_base_url_placeholder": "Used for balance, billing, recharge, and other account-side pages; falls back to API routing or legacy compatible settings when empty",
-      "address_routing_hint": "Request forwarding uses API Base URL by default. If a channel endpoint has its own address configured, that endpoint address takes precedence. Account-side requests use Account Base URL.",
+      "api_base_url_placeholder": "Leave empty to use the protocol address",
+      "billing_api_base_url": "Billing API Base URL",
+      "account_base_url": "Account Portal URL",
+      "account_base_url_placeholder": "Used for billing portals, recharge pages, activate pages, and other account-side pages",
+      "address_routing_hint": "Request forwarding uses API Base URL by default. If a channel endpoint has its own address configured, that endpoint address takes precedence. Account-side page entry uses Account Portal URL.",
       "key": "Secret Key",
       "key_placeholder": "Please enter key",
       "buttons": {
@@ -711,7 +836,8 @@
         "filters": {
           "all": "All Models",
           "enabled": "Enabled",
-          "disabled": "Disabled"
+          "disabled": "Disabled",
+          "provider_all": "All Providers"
         },
         "enable_hint": "Only models already in the provider model list can be enabled. Models not in that list stay unselectable until you add them and sync again.",
         "auto_assign": "Auto Import",
@@ -745,6 +871,7 @@
           "provider_placeholder": "Select a provider",
           "model": "Model",
           "type": "Type",
+          "tags": "Tags",
           "cancel": "Cancel",
           "confirm": "Add"
         },
@@ -798,6 +925,10 @@
         "settings_title": "Test Settings",
         "settings_stream": "Stream Test",
         "settings_audio_language": "Speech Test Language",
+        "image_edit_source_url": "Image edit test source URL",
+        "image_edit_upload": "Upload image edit test source",
+        "image_edit_uploaded": "Image uploaded",
+        "image_edit_file_failed": "Failed to read image",
         "single": "Test",
         "task_created": "{{count}} test tasks submitted, {{reused}} active tasks reused.",
         "group_count": "{{count}} models",
@@ -869,8 +1000,6 @@
       "spark_version_placeholder": "Please enter Spark model version from API URL, e.g.: v2.1",
       "knowledge_id": "Knowledge Base ID",
       "knowledge_id_placeholder": "Please enter knowledge base ID, e.g.: 123456",
-      "plugin_param": "Plugin Parameter",
-      "plugin_param_placeholder": "Please enter plugin parameter (X-DashScope-Plugin header value)",
       "coze_notice": "For Coze, model name is the Bot ID. You can add prefix `bot-`, e.g.: `bot-123456`.",
       "douban_notice": "For Douban, you need to go to",
       "douban_notice_link": "Model Inference Page",
@@ -963,7 +1092,8 @@
       "delete_title": "Confirm Delete Group",
       "delete_confirm": "Are you sure you want to delete group {{id}}?",
       "model_delete_confirm": "Are you sure you want to delete model {{model}}?",
-      "bind_channels_title": "Configure Channels for Group {{id}}"
+      "bind_channels_title": "Configure Channels for Group {{id}}",
+      "add_model_selected": "{{count}} models selected"
     },
     "detail_tabs": {
       "overview": "Overview",
@@ -1038,6 +1168,7 @@
       "package_emergency_quota_limit": "Emergency Amount",
       "duration_days": "Duration (Days)",
       "status": "Status",
+      "public_visible": "Public Visible",
       "created_at": "Created At",
       "updated_at": "Updated At",
       "actions": "Actions",
@@ -1061,6 +1192,11 @@
       "description": "Description",
       "group": "Group",
       "group_placeholder": "Select group",
+      "visibility_scope": "Visibility",
+      "visibility_scope_all": "Visible to All",
+      "visibility_scope_partial_users": "Visible to Selected Users",
+      "visible_users": "Visible Users",
+      "visible_users_placeholder": "Search and select users",
       "sale_price": "Sale Price",
       "sale_currency": "Sale Currency",
       "daily_quota_limit": "Daily Amount",
@@ -1094,6 +1230,8 @@
       "id_required": "Package ID is required",
       "name_required": "Package name is required",
       "group_required": "Group is required",
+      "visible_users_required": "Please select visible users for partial visibility",
+      "visible_users_required_for_toggle": "Edit the package and select visible users before switching to selected-user visibility",
       "quota_invalid": "Amount values must be greater than or equal to 0",
       "duration_invalid": "Duration must be greater than 0",
       "user_required": "Please select a user",
@@ -1202,12 +1340,6 @@
       "copy_success": "Copied to clipboard!",
       "copy_failed": "Unable to copy to clipboard, please copy manually. Token has been filled in the search box.",
       "operation_success": "Operation completed successfully!"
-    },
-    "sort": {
-      "placeholder": "Sort By",
-      "default": "Default Order",
-      "by_remain": "Sort by Remaining YYC",
-      "by_used": "Sort by Used YYC"
     }
   },
   "common": {
@@ -1446,7 +1578,7 @@
       "video": "Video Task",
       "channel_model_test": "Model Test",
       "channel_refresh_models": "Refresh Models",
-      "channel_refresh_balance": "Refresh Balance"
+      "channel_refresh_billing": "Refresh Billing"
     },
     "status": {
       "pending": "Pending",
@@ -1499,6 +1631,37 @@
       "cancel_failed": "Failed to cancel task",
       "download_failed": "Failed to download task artifact",
       "download_unavailable": "No downloadable artifact is available for this task"
+    }
+  },
+  "workspace_start": {
+    "title": "Activate Service",
+    "actions": {
+      "view_pricing": "View pricing",
+      "view_guide": "Usage guide",
+      "create_token": "Create token",
+      "open_chat": "Open Chat"
+    },
+    "steps": {
+      "pricing": {
+        "title": "Get quota first",
+        "description": "Packages fit stable usage, while balance fits trial-first usage. All purchase actions happen on the pricing page."
+      },
+      "token": {
+        "title": "Create a token next",
+        "description": "Once quota is ready, create a token and connect Router to your app, scripts, or client."
+      },
+      "call": {
+        "title": "Send the first request",
+        "description": "You can either enter the Chat Web app directly or connect Router to a terminal tool or your own client by following the guide.",
+        "chat": {
+          "title": "Chat Web App",
+          "description": "Open the Chat page and start using it directly."
+        },
+        "terminal": {
+          "title": "Terminal Tool",
+          "description": "Follow the usage guide, choose a model, and send the first request from a terminal tool or client."
+        }
+      }
     }
   },
   "user": {
@@ -1646,14 +1809,7 @@
         "activated": "Activated",
         "banned": "Banned",
         "unknown": "Unknown Status"
-      },
-      "sort": {
-        "default": "Default Order",
-        "by_quota": "Sort by Remaining YYC",
-        "by_used_quota": "Sort by Used YYC",
-        "by_request_count": "Sort by Request Count"
-      },
-      "sort_by": "Sort By"
+      }
     },
     "buttons": {
       "add": "Add User",
@@ -1703,6 +1859,67 @@
       }
     },
     "spending": {
+      "workspace": {
+        "title": "Workspace Status",
+        "status": {
+          "acquire_quota": "No quota configured",
+          "create_token": "Token can be created",
+          "first_call": "Ready to send requests",
+          "active": "In use"
+        },
+        "hero": {
+          "acquire_quota": {
+            "title": "There is no available quota yet"
+          },
+          "create_token": {
+            "title": "Quota is ready. Create a token"
+          },
+          "first_call": {
+            "title": "Token is ready. Send a request"
+          },
+          "active": {
+            "title": "Workspace is running normally"
+          }
+        },
+        "actions": {
+          "view_pricing": "View pricing",
+          "create_token": "Create token",
+          "view_tokens": "View tokens",
+          "view_guide": "Usage guide",
+          "view_logs": "View logs",
+          "copy_example": "Copy example request"
+        },
+        "stats": {
+          "package": "Current package",
+          "package_active": "Active",
+          "package_empty": "None"
+        },
+        "steps": {
+          "quota": {
+            "title": "Quota"
+          },
+          "token": {
+            "title": "Token"
+          },
+          "request": {
+            "title": "Request"
+          }
+        },
+        "checklist": {
+          "done": "Done",
+          "pending": "Pending"
+        },
+        "access": {
+          "title": "Access info",
+          "base_url": "Base URL",
+          "available_models": "Available models",
+          "example_request": "Chat request example"
+        },
+        "messages": {
+          "copy_success": "Copied",
+          "copy_failed": "Copy failed"
+        }
+      },
       "overview": {
         "title": "Spending Overview",
         "today_cost": "Today's Cost (USD)",
@@ -1786,7 +2003,10 @@
     "admin": {
       "title": "Admin Overview",
       "nav": {
-        "overview": "Business Overview"
+        "spending": "Spending",
+        "channels": "Channels",
+        "users": "Users",
+        "models": "Models"
       },
       "period": {
         "label": "Period"
@@ -1841,9 +2061,90 @@
         "tasks_failed": "Failed Tasks"
       },
       "sections": {
-        "trend": "Trend Analysis",
-        "channels": "Channel Health",
-        "tasks": "Recent System Tasks"
+        "spending": "Spending",
+        "channels": "Channels",
+        "users": "Users",
+        "models": "Models"
+      },
+      "channels": {
+        "insights": {
+          "retest": "Channels Pending Retest",
+          "retest_hint": "Channels whose selected models are not fully covered by tests, or whose pass rate or coverage has not reached 100%.",
+          "risk": "Risky Channels",
+          "risk_hint": "Channels already in critical health, or whose current test pass rate is below 80%.",
+          "latency": "High-Latency Channels",
+          "latency_hint": "Channels whose current average latency is 8 seconds or higher."
+        }
+      },
+      "spending": {
+        "insights": {
+          "net_positive": "Positive Net Inflow",
+          "net_positive_hint": "Top-up exceeds spend in the selected period, keeping cashflow positive.",
+          "net_negative": "Negative Net Inflow",
+          "net_negative_hint": "Spend exceeds top-up in the selected period; balance and recharge follow-up need attention.",
+          "peak_spend": "Peak Spend",
+          "peak_topup": "Peak Top-up",
+          "peak_active_users": "Peak Active Users",
+          "trend_hint": "Switch the trend view across spend, top-up, requests, and active users."
+        }
+      },
+      "users": {
+        "summary": {
+          "user_count": "Matched Users",
+          "request_count": "Matched Requests",
+          "total_tokens": "Matched Tokens",
+          "total_spend": "Matched Spend (USD)"
+        },
+        "insights": {
+          "title": "Matched Rank Observations",
+          "high_spend": "High-Spend Users",
+          "high_spend_hint": "Users whose spend share reaches 10% or more within the current rank.",
+          "active": "Highly Active Users",
+          "active_hint": "Users whose request count is above the current rank average.",
+          "long_tail": "Long-Tail Users",
+          "long_tail_hint": "Users whose spend share is below 3% and token usage does not exceed the current average.",
+          "footnote": "These segments are derived only from the matched ranking sample under the current filters, not the full-site user population."
+        },
+        "share_chart": {
+          "title": "Spend Share in Rank"
+        }
+      },
+      "models": {
+        "title": "Model Overview",
+        "description": "Aggregate model requests, spend, and test health for the selected period.",
+        "summary": {
+          "selected_model_count": "Selected Models",
+          "tested_model_count": "Tested Models",
+          "healthy_model_count": "Healthy Models",
+          "warning_model_count": "Warning Models",
+          "critical_model_count": "Critical Models",
+          "request_count": "Requests",
+          "total_tokens": "Tokens",
+          "total_spend": "Spend (USD)",
+          "avg_pass_rate": "Average Pass Rate",
+          "avg_latency": "Average Latency"
+        },
+        "sort": {
+          "spend": "By Spend",
+          "requests": "By Requests",
+          "health": "By Health",
+          "latency": "By Latency"
+        },
+        "chart": {
+          "leaderboard": "Model Leaderboard",
+          "distribution": "Health Distribution",
+          "distribution_hint": "Health distribution is computed from channel coverage, test pass rate, and average latency in the selected period."
+        },
+        "card": {
+          "requests": "Requests",
+          "tokens": "Tokens",
+          "spend": "Spend",
+          "channels": "Channels",
+          "supported_endpoints": "Endpoints",
+          "pass_rate": "Pass Rate",
+          "avg_latency": "Average Latency",
+          "last_tested": "Last Tested"
+        }
       },
       "trend": {
         "metrics": {
@@ -1883,7 +2184,7 @@
       "task_type": {
         "channel_model_test": "Model Test",
         "channel_refresh_models": "Model Refresh",
-        "channel_refresh_balance": "Balance Refresh",
+        "channel_refresh_billing": "Billing Refresh",
         "default": "Other"
       },
       "capabilities": {
@@ -1923,7 +2224,8 @@
         "trend": "No trend data",
         "channels": "No channel data",
         "tasks": "No task data",
-        "usage_rank": "No user usage data in the current period"
+        "usage_rank": "No user usage data in the current period",
+        "models": "No model data in the current period"
       }
     }
   },
@@ -2191,6 +2493,12 @@
         "chat_link_placeholder": "e.g.: ChatGPT Next Web deployment address",
         "quota_per_unit": "USD -> YYC Conversion Rate",
         "quota_per_unit_placeholder": "How many YYC 1 USD converts to",
+        "channel_billing_auto_refresh": {
+          "enabled": "Enable channel billing auto refresh",
+          "interval_seconds": "Refresh interval (seconds)",
+          "last_run": "Last run time",
+          "interval_invalid": "Refresh interval must be greater than or equal to 60 seconds"
+        },
         "buttons": {
           "save": "Save General Settings"
         }

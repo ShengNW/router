@@ -163,8 +163,6 @@ func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
 func CountTokenMessages(messages []model.Message, model string) int {
 	tokenEncoder := getTokenEncoder(model)
 	// Reference:
-	// https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
-	// https://github.com/pkoukk/tiktoken-go/issues/6
 	//
 	// Every message follows <|start|>{role/name}\n{content}<|end|>\n
 	var tokensPerMessage int
@@ -230,12 +228,9 @@ const (
 	gpt4oMiniAdditionalCost = 2833
 )
 
-// https://platform.openai.com/docs/guides/vision/calculating-costs
-// https://github.com/openai/openai-cookbook/blob/05e3f9be4c7a2ae7ecf029a7c32065b024730ebe/examples/How_to_count_tokens_with_tiktoken.ipynb
 func countImageTokens(url string, detail string, model string) (_ int, err error) {
 	var fetchSize = true
 	var width, height int
-	// Reference: https://platform.openai.com/docs/guides/vision/low-or-high-fidelity-image-understanding
 	// detail == "auto" is undocumented on how it works, it just said the model will use the auto setting which will look at the image input size and decide if it should use the low or high setting.
 	// According to the official guide, "low" disable the high-res model,
 	// and only receive low-res 512px x 512px version of the image, indicating
@@ -259,7 +254,6 @@ func countImageTokens(url string, detail string, model string) (_ int, err error
 	// However, in my test, it seems to be always the same as "high".
 	// The following image, which is 125x50, is still treated as high-res, taken
 	// 255 tokens in the response of non-stream chat completion api.
-	// https://upload.wikimedia.org/wikipedia/commons/1/10/18_Infantry_Division_Messina.jpg
 	if detail == "" || detail == "auto" {
 		// assume by test, not sure if this is correct
 		detail = "high"

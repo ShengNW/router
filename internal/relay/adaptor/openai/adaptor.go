@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/yeying-community/router/internal/relay/adaptor"
-	"github.com/yeying-community/router/internal/relay/adaptor/alibailian"
 	"github.com/yeying-community/router/internal/relay/adaptor/baiduv2"
 	"github.com/yeying-community/router/internal/relay/adaptor/doubao"
 	"github.com/yeying-community/router/internal/relay/adaptor/geminiv2"
@@ -36,6 +35,10 @@ func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
 	if meta.UpstreamMode != 0 {
 		upstreamMode = meta.UpstreamMode
 	}
+	if meta.ChannelProtocol == relaychannel.DeepSeek && upstreamMode == relaymode.Messages {
+		baseURL := strings.TrimRight(strings.TrimSpace(meta.BaseURL), "/")
+		return baseURL + "/anthropic/v1/messages", nil
+	}
 	requestURLPath := meta.RequestURLPath
 	if strings.TrimSpace(meta.UpstreamRequestPath) != "" {
 		requestURLPath = meta.UpstreamRequestPath
@@ -43,19 +46,15 @@ func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
 	switch meta.ChannelProtocol {
 	case relaychannel.Azure:
 		if upstreamMode == relaymode.ImagesGenerations {
-			// https://learn.microsoft.com/en-us/azure/ai-services/openai/dall-e-quickstart?tabs=dalle3%2Ccommand-line&pivots=rest-api
-			// https://{resource_name}.openai.azure.com/openai/deployments/dall-e-3/images/generations?api-version=2024-03-01-preview
 			fullRequestURL := fmt.Sprintf("%s/openai/deployments/%s/images/generations?api-version=%s", meta.BaseURL, meta.ActualModelName, meta.Config.APIVersion)
 			return fullRequestURL, nil
 		}
 
-		// https://learn.microsoft.com/en-us/azure/cognitive-services/openai/chatgpt-quickstart?pivots=rest-api&tabs=command-line#rest-api
 		requestURL := strings.Split(requestURLPath, "?")[0]
 		requestURL = fmt.Sprintf("%s?api-version=%s", requestURL, meta.Config.APIVersion)
 		task := strings.TrimPrefix(requestURL, "/v1/")
 		model_ := meta.ActualModelName
 		model_ = strings.Replace(model_, ".", "", -1)
-		//https://github.com/yeying-community/router/issues/1191
 		// {your endpoint}/openai/deployments/{your azure_model}/chat/completions?api-version={api_version}
 		requestURL = fmt.Sprintf("/openai/deployments/%s/%s", model_, task)
 		return GetFullRequestURL(meta.BaseURL, requestURL, meta.ChannelProtocol), nil
@@ -67,8 +66,6 @@ func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
 		return novita.GetRequestURL(meta)
 	case relaychannel.BaiduV2:
 		return baiduv2.GetRequestURL(meta)
-	case relaychannel.AliBailian:
-		return alibailian.GetRequestURL(meta)
 	case relaychannel.GeminiOpenAICompatible:
 		return geminiv2.GetRequestURL(meta)
 	default:
@@ -86,6 +83,12 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Request, meta *me
 		req.Header.Set("Accept", "text/event-stream")
 	} else {
 		req.Header.Set("Accept", "application/json")
+	}
+	if meta.ChannelProtocol == relaychannel.DeepSeek && meta != nil && meta.UpstreamMode == relaymode.Messages {
+		req.Header.Del("Authorization")
+		req.Header.Set("x-api-key", meta.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		return nil
 	}
 	if meta.ChannelProtocol == relaychannel.Azure {
 		req.Header.Set("api-key", meta.APIKey)

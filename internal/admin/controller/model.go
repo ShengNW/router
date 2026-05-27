@@ -55,8 +55,6 @@ func filterModelsByProvider(models []string, provider string) []string {
 	return filtered
 }
 
-// https://platform.openai.com/docs/api-reference/models/list
-
 type OpenAIModelPermission struct {
 	Id                 string  `json:"id"`
 	Object             string  `json:"object"`
@@ -77,13 +75,13 @@ type OpenAIModels struct {
 	Object             string                  `json:"object"`
 	Created            int                     `json:"created"`
 	OwnedBy            string                  `json:"owned_by"`
+	Tags               []string                `json:"tags"`
 	SupportedEndpoints []string                `json:"supported_endpoints"`
 	Permission         []OpenAIModelPermission `json:"permission"`
 	Root               string                  `json:"root"`
 	Parent             *string                 `json:"parent"`
 }
 
-var channelId2Models map[int][]string
 var defaultModelPermissions = []OpenAIModelPermission{
 	{
 		Id:                 "modelperm-LwHkVFn8AcMItP432fKKDIKJ",
@@ -101,23 +99,10 @@ var defaultModelPermissions = []OpenAIModelPermission{
 	},
 }
 
-func init() {
-	channelId2Models = make(map[int][]string)
-	for i := 1; i < relaychannel.Dummy; i++ {
-		if i == relaychannel.OpenAICompatible {
-			continue
-		}
-		adaptor := relay.GetAdaptor(relaychannel.ToAPIType(i))
-		meta := &meta.Meta{
-			ChannelProtocol: i,
-		}
-		adaptor.Init(meta)
-		channelId2Models[i] = adaptor.GetModelList()
-	}
-}
-
 var loadGroupModelProvidersFn = model.ListGroupModelProviderMapByModels
 var loadGroupModelSupportedEndpointsFn = listGroupModelSupportedEndpoints
+var loadProviderModelTagsFn = model.LoadProviderModelTagMapByModelsWithDB
+var loadProviderProtocolModelsFn = loadDashboardProtocolModels
 
 var endpointSortOrder = map[string]int{
 	model.ChannelModelEndpointChat:      10,
@@ -221,6 +206,46 @@ func resolveOwnedByFromProvider(provider string) (string, error) {
 	return normalizedProvider, nil
 }
 
+func resolveProviderForDashboardProtocol(channelProtocol int) string {
+	if channelProtocol <= 0 || channelProtocol >= len(relaychannel.ChannelProtocolNames) {
+		return ""
+	}
+	switch relaychannel.NormalizeProtocolName(relaychannel.ChannelProtocolNames[channelProtocol]) {
+	case "openai", "anthropic", "zhipu", "ali", "gemini", "moonshot", "baichuan", "minimax", "mistral", "groq", "lingyiwanwu", "stepfun", "cohere", "deepseek", "togetherai", "doubao", "novita", "siliconflow", "xai", "baidu-v2", "gemini-openai-compatible":
+		return commonutils.NormalizeProvider(relaychannel.ChannelProtocolNames[channelProtocol])
+	default:
+		return ""
+	}
+}
+
+func loadDashboardProtocolModels(channelProtocol int) ([]string, error) {
+	provider := resolveProviderForDashboardProtocol(channelProtocol)
+	if provider != "" {
+		return model.ListActiveProviderModelsWithDB(model.DB, provider)
+	}
+	adaptor := relay.GetAdaptor(relaychannel.ToAPIType(channelProtocol))
+	meta := &meta.Meta{
+		ChannelProtocol: channelProtocol,
+	}
+	adaptor.Init(meta)
+	return adaptor.GetModelList(), nil
+}
+
+func buildDashboardChannelModelMap() map[int][]string {
+	result := make(map[int][]string)
+	for i := 1; i < relaychannel.Dummy; i++ {
+		if i == relaychannel.OpenAICompatible {
+			continue
+		}
+		models, err := loadProviderProtocolModelsFn(i)
+		if err != nil {
+			models = []string{}
+		}
+		result[i] = models
+	}
+	return result
+}
+
 func resolveRequestAvailableModels(c *gin.Context) ([]string, string, error) {
 	userID := strings.TrimSpace(c.GetString(ctxkey.Id))
 	availableModelsRaw := strings.TrimSpace(c.GetString(ctxkey.AvailableModels))
@@ -262,6 +287,10 @@ func buildOpenAIModelsForRequest(c *gin.Context) ([]OpenAIModels, map[string]Ope
 	if err != nil {
 		return nil, nil, err
 	}
+	tagsByModel, err := loadProviderModelTagsFn(model.DB, providerByModel, modelNames)
+	if err != nil {
+		return nil, nil, err
+	}
 	items := make([]OpenAIModels, 0, len(modelNames))
 	itemMap := make(map[string]OpenAIModels, len(modelNames))
 	missingProviderModels := make([]string, 0)
@@ -276,6 +305,7 @@ func buildOpenAIModelsForRequest(c *gin.Context) ([]OpenAIModels, map[string]Ope
 			Object:             "model",
 			Created:            1626777600,
 			OwnedBy:            ownedBy,
+			Tags:               tagsByModel[modelName],
 			SupportedEndpoints: sortModelEndpoints(endpointsByModel[modelName]),
 			Permission:         cloneDefaultModelPermissions(),
 			Root:               modelName,
@@ -290,26 +320,16 @@ func buildOpenAIModelsForRequest(c *gin.Context) ([]OpenAIModels, map[string]Ope
 	return items, itemMap, nil
 }
 
-// DashboardListModels godoc
-// @Summary List channel models for UI
-// @Description When channel is specified, the response shape becomes docs.ChannelModelsProviderResponse (data is string[] and meta is an object). provider filters by model naming rules.
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param channel query string false "Channel name"
-// @Param provider query string false "Provider filter (gpt/gemini/claude/deepseek/qwen)"
-// @Success 200 {object} docs.ChannelModelsResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/channel/models [get]
 func DashboardListModels(c *gin.Context) {
 	// optional filter: channel name, case-insensitive
 	channelFilter := strings.ToLower(strings.TrimSpace(c.Query("channel")))
 	providerFilter := commonutils.NormalizeProvider(c.Query("provider"))
+	channelModelMap := buildDashboardChannelModelMap()
 
 	// Keep the established map-shaped payload and include metadata for the admin UI.
-	metaList := make([]gin.H, 0, len(channelId2Models))
-	filteredMap := make(map[int][]string, len(channelId2Models))
-	for id, models := range channelId2Models {
+	metaList := make([]gin.H, 0, len(channelModelMap))
+	filteredMap := make(map[int][]string, len(channelModelMap))
+	for id, models := range channelModelMap {
 		name := ""
 		if id >= 0 && id < len(relaychannel.ChannelProtocolNames) {
 			name = relaychannel.ChannelProtocolNames[id]
@@ -356,14 +376,6 @@ func DashboardListModels(c *gin.Context) {
 	})
 }
 
-// ListModels godoc
-// @Summary List available OpenAI-compatible models
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.OpenAIModelListResponse
-// @Failure 401 {object} docs.OpenAIErrorResponse
-// @Router /api/v1/public/models [get]
 func ListModels(c *gin.Context) {
 	availableOpenAIModels, _, err := buildOpenAIModelsForRequest(c)
 	if err != nil {
@@ -384,15 +396,6 @@ func ListModels(c *gin.Context) {
 	})
 }
 
-// RetrieveModel godoc
-// @Summary Retrieve model detail (OpenAI compatible)
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param model path string true "Model ID"
-// @Success 200 {object} docs.OpenAIModel
-// @Failure 404 {object} docs.OpenAIErrorResponse
-// @Router /api/v1/public/models/{model} [get]
 func RetrieveModel(c *gin.Context) {
 	modelId := c.Param("model")
 	_, modelMap, err := buildOpenAIModelsForRequest(c)
@@ -423,15 +426,6 @@ func RetrieveModel(c *gin.Context) {
 	})
 }
 
-// GetUserAvailableModels godoc
-// @Summary List available models for current user
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param provider query string false "Provider name"
-// @Success 200 {object} docs.UserAvailableModelsResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/available_models [get]
 func GetUserAvailableModels(c *gin.Context) {
 	ctx := c.Request.Context()
 	id := c.GetString(ctxkey.Id)

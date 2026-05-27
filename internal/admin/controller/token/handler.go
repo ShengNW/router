@@ -16,16 +16,6 @@ import (
 	tokensvc "github.com/yeying-community/router/internal/admin/service/token"
 )
 
-// GetAllTokens godoc
-// @Summary List tokens
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param order query string false "Order"
-// @Success 200 {object} docs.TokenListResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/token [get]
 func GetAllTokens(c *gin.Context) {
 	userId := c.GetString(ctxkey.Id)
 	page, _ := strconv.Atoi(c.Query("page"))
@@ -64,15 +54,6 @@ func GetAllTokens(c *gin.Context) {
 	return
 }
 
-// SearchTokens godoc
-// @Summary Search tokens
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param keyword query string false "Keyword"
-// @Success 200 {object} docs.TokenListResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/token/search [get]
 func SearchTokens(c *gin.Context) {
 	userId := c.GetString(ctxkey.Id)
 	keyword := c.Query("keyword")
@@ -92,15 +73,6 @@ func SearchTokens(c *gin.Context) {
 	return
 }
 
-// GetToken godoc
-// @Summary Get token by ID
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param id path int true "Token ID"
-// @Success 200 {object} docs.TokenDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/token/{id} [get]
 func GetToken(c *gin.Context) {
 	id := c.Param("id")
 	userId := c.GetString(ctxkey.Id)
@@ -164,16 +136,6 @@ func validateToken(c *gin.Context, token model.Token) error {
 	return nil
 }
 
-// AddToken godoc
-// @Summary Create token
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.TokenCreateRequest true "Token payload"
-// @Success 200 {object} docs.TokenDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/token [post]
 func AddToken(c *gin.Context) {
 	token := model.Token{}
 	err := c.ShouldBindJSON(&token)
@@ -221,15 +183,6 @@ func AddToken(c *gin.Context) {
 	return
 }
 
-// DeleteToken godoc
-// @Summary Delete token
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Param id path int true "Token ID"
-// @Success 200 {object} docs.TokenDeleteResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/token/{id} [delete]
 func DeleteToken(c *gin.Context) {
 	id := c.Param("id")
 	userId := c.GetString(ctxkey.Id)
@@ -248,17 +201,6 @@ func DeleteToken(c *gin.Context) {
 	return
 }
 
-// UpdateToken godoc
-// @Summary Update token
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.TokenUpdateRequest true "Token update payload"
-// @Param status_only query string false "Update status only if set"
-// @Success 200 {object} docs.TokenDetailResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/token [put]
 func UpdateToken(c *gin.Context) {
 	userId := c.GetString(ctxkey.Id)
 	statusOnly := c.Query("status_only")

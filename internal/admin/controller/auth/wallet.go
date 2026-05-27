@@ -36,15 +36,6 @@ type walletLoginRequest struct {
 
 const walletRefreshCookieName = "refresh_token"
 
-// WalletNonce godoc
-// @Summary Get wallet nonce
-// @Tags public
-// @Produce json
-// @Param address query string true "Wallet address"
-// @Param chain_id query string false "Chain ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/oauth/wallet/nonce [get]
 // WalletNonce issues a nonce & message to sign
 func WalletNonce(c *gin.Context) {
 	var req walletNonceRequest
@@ -71,15 +62,6 @@ func WalletNonce(c *gin.Context) {
 	})
 }
 
-// WalletLogin godoc
-// @Summary Wallet login (returns JWT)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.WalletLoginRequest true "Wallet login payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/oauth/wallet/login [post]
 // WalletLogin verifies signature and logs user in
 func WalletLogin(c *gin.Context) {
 	var req walletLoginRequest
@@ -141,16 +123,6 @@ func WalletLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// WalletBind godoc
-// @Summary Bind wallet to current user
-// @Tags public
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.WalletLoginRequest true "Wallet bind payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/oauth/wallet/bind [post]
 // WalletBind binds a wallet to logged-in user
 func WalletBind(c *gin.Context) {
 	var req walletLoginRequest
@@ -363,15 +335,6 @@ func recoverAddress(message, signature string) (string, error) {
 
 // --- proto-aligned handlers ---
 
-// WalletChallengeProto godoc
-// @Summary Wallet challenge (proto)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.WalletChallengeRequest true "Challenge payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/common/auth/challenge [post]
 // WalletChallengeProto implements /api/v1/public/common/auth/challenge
 func WalletChallengeProto(c *gin.Context) {
 	var req walletNonceRequest
@@ -402,15 +365,6 @@ func WalletChallengeProto(c *gin.Context) {
 	})
 }
 
-// WalletVerifyProto godoc
-// @Summary Wallet verify (proto)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.WalletLoginRequest true "Verify payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/common/auth/verify [post]
 // WalletVerifyProto implements /api/v1/public/common/auth/verify
 func WalletVerifyProto(c *gin.Context) {
 	var req walletLoginRequest
@@ -461,14 +415,6 @@ func WalletVerifyProto(c *gin.Context) {
 	})
 }
 
-// WalletRefreshToken godoc
-// @Summary Refresh token (proto)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/common/auth/refreshToken [post]
 // WalletRefreshToken implements /api/v1/public/common/auth/refreshToken
 func WalletRefreshToken(c *gin.Context) {
 	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
@@ -541,15 +487,6 @@ func writeProtoError(c *gin.Context, code int, message string) {
 
 // --- web3 README-aligned handlers ---
 
-// WalletChallengeWeb3 godoc
-// @Summary Wallet challenge (web3)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.WalletChallengeRequest true "Challenge payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/auth/challenge [post]
 // WalletChallengeWeb3 implements /api/v1/public/auth/challenge
 func WalletChallengeWeb3(c *gin.Context) {
 	var req walletNonceRequest
@@ -577,15 +514,6 @@ func WalletChallengeWeb3(c *gin.Context) {
 	})
 }
 
-// WalletVerifyWeb3 godoc
-// @Summary Wallet verify (web3)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Param body body docs.WalletLoginRequest true "Verify payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/auth/verify [post]
 // WalletVerifyWeb3 implements /api/v1/public/auth/verify
 func WalletVerifyWeb3(c *gin.Context) {
 	var req walletLoginRequest
@@ -631,14 +559,6 @@ func WalletVerifyWeb3(c *gin.Context) {
 	})
 }
 
-// WalletRefreshWeb3 godoc
-// @Summary Refresh token (web3)
-// @Tags public
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 400 {object} docs.ErrorResponse
-// @Router /api/v1/public/auth/refresh [post]
 // WalletRefreshWeb3 implements /api/v1/public/auth/refresh
 func WalletRefreshWeb3(c *gin.Context) {
 	refreshToken, err := c.Cookie(walletRefreshCookieName)
@@ -701,14 +621,6 @@ func WalletRefreshWeb3(c *gin.Context) {
 	})
 }
 
-// WalletLogoutWeb3 godoc
-// @Summary Logout (web3)
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/auth/logout [post]
 // WalletLogoutWeb3 implements /api/v1/public/auth/logout
 func WalletLogoutWeb3(c *gin.Context) {
 	session := sessions.Default(c)

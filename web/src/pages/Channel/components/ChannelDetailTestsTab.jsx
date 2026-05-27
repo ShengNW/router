@@ -4,7 +4,9 @@ import {
   AppButton,
   AppDetailSection,
   AppFilterHeader,
+  AppInput,
   AppPopover,
+  resolvePopupContainer,
   AppSelect,
   AppSwitch,
   AppTable,
@@ -42,6 +44,13 @@ const ChannelDetailTestsTab = ({
   normalizeChannelModelType,
   audioTestLanguage,
   setAudioTestLanguage,
+  imageEditTestURL,
+  setImageEditTestURL,
+  imageEditTestFileName,
+  imageEditTestData,
+  setImageEditTestData,
+  setImageEditTestFileName,
+  handleImageEditTestFileChange,
 }) => {
   const [providerFilter, setProviderFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -314,8 +323,6 @@ const ChannelDetailTestsTab = ({
         />
         <AppFilterHeader
           className='router-toolbar-compact'
-          startClassName='router-block-gap-sm'
-          endClassName='router-block-gap-sm'
           picker={
             <>
             <AppSelect
@@ -393,12 +400,55 @@ const ChannelDetailTestsTab = ({
                     </label>
                     <AppSelect
                       className='router-section-dropdown router-dropdown-min-170'
+                      getPopupContainer={resolvePopupContainer}
                       options={audioLanguageOptions}
                       value={audioTestLanguage || 'zh-CN'}
                       onChange={(e, { value }) =>
                         setAudioTestLanguage((value || 'zh-CN').toString())
                       }
                     />
+                  </div>
+                  <div className='router-block-gap-xs'>
+                    <label>
+                      {t('channel.edit.model_tester.image_edit_source_url')}
+                    </label>
+                    <AppInput
+                      fluid
+                      value={imageEditTestURL || ''}
+                      placeholder={t(
+                        'channel.edit.model_tester.image_edit_source_url',
+                      )}
+                      onChange={(e, { value }) =>
+                        setImageEditTestURL((value || '').toString())
+                      }
+                    />
+                  </div>
+                  <div className='router-block-gap-xs'>
+                    <label>
+                      {t('channel.edit.model_tester.image_edit_upload')}
+                    </label>
+                    <input
+                      type='file'
+                      accept='image/*'
+                      onChange={handleImageEditTestFileChange}
+                    />
+                    {imageEditTestData ? (
+                      <div className='router-muted-text'>
+                        {imageEditTestFileName ||
+                          t('channel.edit.model_tester.image_edit_uploaded')}
+                        <AppButton
+                          type='button'
+                          size='small'
+                          className='router-inline-button'
+                          onClick={() => {
+                            setImageEditTestData('');
+                            setImageEditTestFileName('');
+                          }}
+                        >
+                          {t('common.clear')}
+                        </AppButton>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               }

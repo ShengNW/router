@@ -18,7 +18,6 @@ func init() {
 		Update:                       Update,
 		UpdateModels:                 UpdateModels,
 		UpdateResponseTime:           UpdateResponseTime,
-		UpdateBalance:                UpdateBalance,
 		Delete:                       Delete,
 		UpdateChannelStatusById:      UpdateStatusByID,
 		UpdateChannelUsedQuota:       UpdateUsedQuota,
@@ -146,6 +145,9 @@ func prepareChannelForCreate(channel *model.Channel) error {
 		return err
 	}
 	channel.NormalizeProtocol()
+	if err := channel.ValidateProtocolConfiguration(); err != nil {
+		return err
+	}
 	channel.NormalizeChannelModelState()
 	if channel.CreatedTime == 0 {
 		channel.CreatedTime = helper.GetTimestamp()
@@ -229,7 +231,19 @@ func Update(channel *model.Channel) error {
 		if !channel.NameProvided || strings.TrimSpace(channel.Name) == "" {
 			channel.Name = existing.Name
 		}
+		if channel.Protocol == "" {
+			channel.Protocol = existing.Protocol
+		}
+		if channel.BaseURL == nil {
+			channel.BaseURL = existing.BaseURL
+		}
+		if strings.TrimSpace(channel.Config) == "" {
+			channel.Config = existing.Config
+		}
 		if err := channel.ValidateIdentifier(); err != nil {
+			return err
+		}
+		if err := channel.ValidateProtocolConfiguration(); err != nil {
 			return err
 		}
 		if err := ensureChannelIdentifierUniqueWithDB(tx, channel); err != nil {
@@ -254,7 +268,7 @@ func Update(channel *model.Channel) error {
 			if err := model.ValidateChannelModelDisableTransitionsWithDB(tx, channel.Id, existing.GetChannelModels(), nextRows); err != nil {
 				return err
 			}
-			if err := model.ValidateManualChannelModelsWithDB(tx, channel.Id, nextRows); err != nil {
+			if err := model.ValidateManualChannelModelChangesWithDB(tx, channel.Id, existing.GetChannelModels(), nextRows); err != nil {
 				return err
 			}
 			if err := model.ReplaceChannelModelsWithDB(tx, channel.Id, nextRows); err != nil {
@@ -268,7 +282,7 @@ func Update(channel *model.Channel) error {
 			if err := model.ValidateChannelModelDisableTransitionsWithDB(tx, channel.Id, existing.GetChannelModels(), nextRows); err != nil {
 				return err
 			}
-			if err := model.ValidateManualChannelModelsWithDB(tx, channel.Id, nextRows); err != nil {
+			if err := model.ValidateManualChannelModelChangesWithDB(tx, channel.Id, existing.GetChannelModels(), nextRows); err != nil {
 				return err
 			}
 			if err := model.ReplaceChannelSelectedModelsWithDB(tx, channel.Id, channel.SelectedModelIDs()); err != nil {
@@ -315,7 +329,7 @@ func UpdateModels(channelID string, rows []model.ChannelModel) error {
 		if err := model.ValidateChannelModelDisableTransitionsWithDB(tx, normalizedChannelID, currentRows, nextRows); err != nil {
 			return err
 		}
-		if err := model.ValidateManualChannelModelsWithDB(tx, normalizedChannelID, nextRows); err != nil {
+		if err := model.ValidateManualChannelModelChangesWithDB(tx, normalizedChannelID, currentRows, nextRows); err != nil {
 			return err
 		}
 		if err := model.ReplaceChannelModelsWithDB(tx, normalizedChannelID, nextRows); err != nil {
@@ -378,16 +392,6 @@ func UpdateResponseTime(channel *model.Channel, responseTime int64) {
 	}).Error
 	if err != nil {
 		logger.SysError("failed to update response time: " + err.Error())
-	}
-}
-
-func UpdateBalance(channel *model.Channel, balance float64) {
-	err := model.DB.Model(channel).Select("balance_updated_time", "balance").Updates(model.Channel{
-		BalanceUpdatedTime: helper.GetTimestamp(),
-		Balance:            balance,
-	}).Error
-	if err != nil {
-		logger.SysError("failed to update balance: " + err.Error())
 	}
 }
 

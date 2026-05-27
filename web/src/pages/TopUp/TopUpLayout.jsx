@@ -72,16 +72,23 @@ const TopUpLayout = () => {
     if (activeKey === 'records') {
       switch (activeRecord) {
         case 'package':
-          return t('topup.records.package_title', '套餐订单');
+          return t('topup.record_nav.package');
         case 'redeem':
-          return t('topup.redemption_records.title', '兑换记录');
+          return t('topup.record_nav.redeem');
         case 'topup':
         default:
-          return t('topup.records.title', '充值订单');
+          return t('topup.record_nav.topup');
       }
     }
     return t('topup.mine.balance');
   }, [activeKey, activeRecord, t]);
+
+  const breadcrumbParent = useMemo(() => {
+    if (activeKey === 'records') {
+      return { key: 'records', label: t('header.records') };
+    }
+    return { key: 'mine', label: t('header.mine') };
+  }, [activeKey, t]);
 
   return (
     <TopUpWorkspaceProvider>
@@ -89,7 +96,7 @@ const TopUpLayout = () => {
         <AppFilterHeader
           breadcrumbs={[
             { key: 'workspace', label: t('header.user_workspace') },
-            { key: 'mine', label: t('header.mine') },
+            breadcrumbParent,
             { key: 'topup', label: activeTitle, active: true },
           ]}
           title={activeTitle}

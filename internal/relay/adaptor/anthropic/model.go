@@ -1,7 +1,5 @@
 package anthropic
 
-// https://docs.anthropic.com/claude/reference/messages_post
-
 type Metadata struct {
 	UserId string `json:"user_id"`
 }

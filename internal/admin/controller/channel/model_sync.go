@@ -44,8 +44,18 @@ type channelModelFetchTrace struct {
 	ResponsePayload string
 }
 
-func resolveModelsURL(baseURL string) string {
+func resolveModelsURL(baseURL string, protocol string) string {
 	resolvedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	switch relaychannel.NormalizeProtocolName(protocol) {
+	case "ali":
+		lower := strings.ToLower(resolvedBaseURL)
+		if strings.HasSuffix(lower, "/compatible-mode/v1") {
+			return resolvedBaseURL + "/models"
+		}
+		return resolvedBaseURL + "/compatible-mode/v1/models"
+	case "deepseek":
+		return resolvedBaseURL + "/models"
+	}
 	lower := strings.ToLower(resolvedBaseURL)
 	if strings.HasSuffix(lower, "/v1") ||
 		strings.HasSuffix(lower, "/openai") ||
@@ -164,7 +174,7 @@ func fetchChannelModelsDetailed(protocol, key, baseURL, providerFilter string) (
 		return nil, trace, fmt.Errorf("请先填写 Base URL")
 	}
 
-	modelsURL := resolveModelsURL(trimmedBaseURL)
+	modelsURL := resolveModelsURL(trimmedBaseURL, protocol)
 	trace.ModelsURL = modelsURL
 	httpReq, err := http.NewRequest(http.MethodGet, modelsURL, nil)
 	if err != nil {

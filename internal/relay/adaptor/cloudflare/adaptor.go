@@ -30,8 +30,6 @@ func (a *Adaptor) Init(meta *meta.Meta) {
 }
 
 // WorkerAI cannot be used across accounts with AIGateWay
-// https://developers.cloudflare.com/ai-gateway/providers/workersai/#openai-compatible-endpoints
-// https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/workers-ai
 func (a *Adaptor) isAIGateWay(baseURL string) bool {
 	return strings.HasPrefix(baseURL, "https://gateway.ai.cloudflare.com") && strings.HasSuffix(baseURL, "/workers-ai")
 }

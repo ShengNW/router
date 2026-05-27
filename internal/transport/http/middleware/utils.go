@@ -55,6 +55,11 @@ func getRequestModel(c *gin.Context) (string, error) {
 			modelRequest.Model = "dall-e-2"
 		}
 	}
+	if strings.HasPrefix(path, "/v1/images/edits") && modelRequest.Model == "" {
+		if modelValue := strings.TrimSpace(c.PostForm("model")); modelValue != "" {
+			modelRequest.Model = modelValue
+		}
+	}
 	if strings.HasPrefix(path, "/v1/audio/transcriptions") || strings.HasPrefix(path, "/v1/audio/translations") {
 		if modelRequest.Model == "" {
 			modelRequest.Model = "whisper-1"

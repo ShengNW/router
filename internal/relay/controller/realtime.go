@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/common/ctxkey"
+	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/relay"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"

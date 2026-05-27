@@ -1,8 +1,6 @@
 package aws
 
-// Request is the request to AWS Llama3
-//
-// https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-meta.html
+// Request is the request to AWS Llama3.
 type Request struct {
 	Prompt      string   `json:"prompt"`
 	MaxGenLen   int      `json:"max_gen_len,omitempty"`
@@ -10,9 +8,7 @@ type Request struct {
 	TopP        *float64 `json:"top_p,omitempty"`
 }
 
-// Response is the response from AWS Llama3
-//
-// https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-meta.html
+// Response is the response from AWS Llama3.
 type Response struct {
 	Generation           string `json:"generation"`
 	PromptTokenCount     int    `json:"prompt_token_count"`

@@ -25,6 +25,7 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay"
+	aliadaptor "github.com/yeying-community/router/internal/relay/adaptor/ali"
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	"github.com/yeying-community/router/internal/relay/billing"
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"
@@ -55,8 +56,11 @@ const (
 	imageEstimateSourceGPTImage2Examples      = "gpt_image_2_examples_local"
 	imageEstimateSourceGPTImage2Edits         = "gpt_image_2_edits_local"
 	imageEstimateSourceImageCountRatio        = "image_count_ratio"
+	imageUsageSourceProviderResponse          = "provider_response"
+	imageEstimateSourceQwenImageOutputCount   = "qwen_image_output_count"
 	imageSettlementModeEstimateOnly           = "estimate_only"
 	imageSettlementModeLocalEstimateFinal     = "local_estimate_final"
+	imageSettlementModeProviderUsageFinal     = "provider_usage_final"
 )
 
 func validateImageBillingPricing(pricing adminmodel.ResolvedModelPricing) error {
@@ -628,12 +632,25 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 
 	var requestBody io.Reader
 	if relayMode == relaymode.ImagesEdits {
-		requestBodyBuffer, contentType, buildErr := buildMultipartImageEditBody(form, imageRequest)
-		if buildErr != nil {
-			return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+		if meta.ChannelProtocol == relaychannel.Ali && aliadaptor.IsQwenImageModel(imageRequest.Model) {
+			finalRequest, buildErr := aliadaptor.ConvertQwenImageEditRequest(*imageRequest, form)
+			if buildErr != nil {
+				return openai.ErrorWrapper(buildErr, "convert_image_request_failed", http.StatusInternalServerError)
+			}
+			jsonStr, buildErr := json.Marshal(finalRequest)
+			if buildErr != nil {
+				return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+			}
+			c.Request.Header.Set("Content-Type", "application/json")
+			requestBody = bytes.NewBuffer(jsonStr)
+		} else {
+			requestBodyBuffer, contentType, buildErr := buildMultipartImageEditBody(form, imageRequest)
+			if buildErr != nil {
+				return openai.ErrorWrapper(buildErr, "marshal_image_request_failed", http.StatusInternalServerError)
+			}
+			c.Request.Header.Set("Content-Type", contentType)
+			requestBody = bytes.NewBuffer(requestBodyBuffer.Bytes())
 		}
-		c.Request.Header.Set("Content-Type", contentType)
-		requestBody = bytes.NewBuffer(requestBodyBuffer.Bytes())
 	} else if isModelMapped || meta.ChannelProtocol == relaychannel.Azure { // make Azure channel request body
 		jsonStr, err := json.Marshal(imageRequest)
 		if err != nil {
@@ -898,11 +915,23 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}(c.Request.Context())
 	groupQuotaSettled = true
 
-	// do response
 	_, respErr := adaptor.DoResponse(c, resp, meta)
 	if respErr != nil {
 		logger.Errorf(ctx, "image relay response failed user_id=%s group=%s channel_id=%s model=%s endpoint=%s err=%+v", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), c.Request.URL.Path, respErr)
 		return respErr
+	}
+	if outputCount, ok := aliadaptor.QwenImageOutputCount(c); ok && billing.ResolveImageBillingMode(pricing) == billing.ImageBillingModePerImage {
+		finalSnapshot, snapshotErr := billing.ComputeImageBillingSnapshot(outputCount, 1, pricing, groupRatio)
+		if snapshotErr != nil {
+			logger.Errorf(ctx, "qwen image final billing snapshot failed user_id=%s group=%s channel_id=%s model=%s output_count=%d err=%q", strings.TrimSpace(meta.UserId), strings.TrimSpace(meta.Group), strings.TrimSpace(meta.ChannelId), strings.TrimSpace(imageRequest.Model), outputCount, snapshotErr.Error())
+			return openai.ErrorWrapper(snapshotErr, "calculate_image_quota_failed", http.StatusInternalServerError)
+		}
+		finalSnapshot.PricingSource = strings.TrimSpace(pricing.Source)
+		finalSnapshot.UsageSource = imageUsageSourceProviderResponse
+		finalSnapshot.EstimateSource = imageEstimateSourceQwenImageOutputCount
+		finalSnapshot.SettlementMode = imageSettlementModeProviderUsageFinal
+		billingSnapshot = finalSnapshot
+		quota = billingSnapshot.YYCAmount
 	}
 
 	return nil

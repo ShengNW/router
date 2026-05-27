@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API, timestamp2string, showError, showSuccess } from '../../helpers';
-import { TOPUP_RECORD_COLUMN_WIDTHS } from '../../constants/tableWidthPresets';
+import {
+  TOPUP_RECORD_COLUMN_WIDTHS,
+  TOPUP_RECORD_TABLE_MIN_WIDTH,
+  TOPUP_REDEMPTION_RECORD_TABLE_MIN_WIDTH,
+} from '../../constants/tableWidthPresets';
 import {
   AppButton,
   AppPagination,
@@ -480,15 +484,18 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
       >
         {isRedemptionRecord ? (
             <>
-              <AppTable
-                className='router-list-table router-table-fit-page'
-                rowKey={(log) => log.id || log.trace_id || `${log.created_at}-${log.content}`}
-                pagination={false}
-                loading={loadingRedemptionRecords}
-                locale={{ emptyText: t('topup.redemption_records.empty') }}
-                dataSource={redemptionRecords}
-                columns={redemptionColumns}
-              />
+              <div className='router-table-scroll-x'>
+                <AppTable
+                  className='router-list-table router-table-fit-page'
+                  rowKey={(log) => log.id || log.trace_id || `${log.created_at}-${log.content}`}
+                  pagination={false}
+                  scroll={{ x: TOPUP_REDEMPTION_RECORD_TABLE_MIN_WIDTH }}
+                  loading={loadingRedemptionRecords}
+                  locale={{ emptyText: t('topup.redemption_records.empty') }}
+                  dataSource={redemptionRecords}
+                  columns={redemptionColumns}
+                />
+              </div>
               {redemptionTotalPages > 1 ? (
                 <div className='router-pagination-wrap-md'>
                   <AppPagination
@@ -504,19 +511,22 @@ const TopUpRecordsPage = ({ recordKey = 'topup' }) => {
             </>
         ) : (
             <>
-              <AppTable
-                className='router-list-table router-table-fit-page'
-                rowKey='id'
-                pagination={false}
-                loading={loadingOrders}
-                locale={{ emptyText: t('topup.records.order_empty') }}
-                dataSource={orders}
-                columns={orderColumns}
-                onRow={(order) => ({
-                  onClick: () => openOrderDetailPage(order),
-                  style: { cursor: 'pointer' },
-                })}
-              />
+              <div className='router-table-scroll-x'>
+                <AppTable
+                  className='router-list-table router-table-fit-page'
+                  rowKey='id'
+                  pagination={false}
+                  scroll={{ x: TOPUP_RECORD_TABLE_MIN_WIDTH }}
+                  loading={loadingOrders}
+                  locale={{ emptyText: t('topup.records.order_empty') }}
+                  dataSource={orders}
+                  columns={orderColumns}
+                  onRow={(order) => ({
+                    onClick: () => openOrderDetailPage(order),
+                    style: { cursor: 'pointer' },
+                  })}
+                />
+              </div>
               {ordersTotalPages > 1 ? (
                 <div className='router-pagination-wrap-md'>
                   <AppPagination

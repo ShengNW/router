@@ -10,7 +10,7 @@ import (
 type providerModelValidationRow struct {
 	Provider           string `gorm:"column:provider"`
 	Model              string `gorm:"column:model"`
-	Type               string `gorm:"column:type"`
+	Tags               string `gorm:"column:tags"`
 	Status             string `gorm:"column:status"`
 	SupportedEndpoints string `gorm:"column:supported_endpoints"`
 }
@@ -37,6 +37,60 @@ func ValidateManualChannelModelsWithDB(db *gorm.DB, channelID string, rows []Cha
 		}
 	}
 	return nil
+}
+
+func ValidateManualChannelModelChangesWithDB(db *gorm.DB, channelID string, currentRows []ChannelModel, nextRows []ChannelModel) error {
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	normalizedChannelID := strings.TrimSpace(channelID)
+	normalizedRows := NormalizeChannelModelsPreserveOrder(nextRows)
+	if normalizedChannelID == "" || len(normalizedRows) == 0 {
+		return nil
+	}
+	currentByModel := make(map[string]ChannelModel)
+	for _, row := range NormalizeChannelModelsPreserveOrder(currentRows) {
+		modelName := strings.TrimSpace(row.Model)
+		if modelName == "" {
+			continue
+		}
+		currentByModel[modelName] = row
+	}
+	for _, row := range normalizedRows {
+		if !shouldValidateManualChannelModelChange(currentByModel[row.Model], row) {
+			continue
+		}
+		reason, err := ExplainManualChannelModelEnableBlockWithDB(db, normalizedChannelID, row)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(reason) != "" {
+			return fmt.Errorf("%s", reason)
+		}
+	}
+	return nil
+}
+
+func shouldValidateManualChannelModelChange(current ChannelModel, next ChannelModel) bool {
+	if next.Inactive || !next.Selected {
+		return false
+	}
+	if strings.TrimSpace(current.Model) == "" {
+		return true
+	}
+	if current.Inactive || !current.Selected {
+		return true
+	}
+	if strings.TrimSpace(current.UpstreamModel) != strings.TrimSpace(next.UpstreamModel) {
+		return true
+	}
+	if strings.TrimSpace(strings.ToLower(current.Provider)) != strings.TrimSpace(strings.ToLower(next.Provider)) {
+		return true
+	}
+	if normalizeExplicitChannelModelType(current.Type) != normalizeExplicitChannelModelType(next.Type) {
+		return true
+	}
+	return false
 }
 
 func ValidateManualChannelEndpointEnableWithDB(db *gorm.DB, channelID string, row ChannelModel, endpoint string) error {
@@ -69,14 +123,18 @@ func ExplainManualChannelEndpointEnableBlockWithDB(db *gorm.DB, channelID string
 	if normalizeManualValidationProviderModelStatus(official.Status) != ProviderModelStatusActive {
 		return fmt.Sprintf("模型 %s 当前官方状态不是 active，不能启用端点 %s", displayOfficialModelName(row, official.Model), normalizedEndpoint), nil
 	}
+	officialType := ProviderModelTypeFromTags(splitProviderModelTags(official.Tags))
+	if officialType == "" {
+		return fmt.Sprintf("模型 %s 缺少供应商官方 tags，不能启用端点 %s", displayOfficialModelName(row, official.Model), normalizedEndpoint), nil
+	}
 	officialEndpoints := NormalizeProviderModelSupportedEndpoints(
-		normalizeModelType(official.Type, official.Model),
+		officialType,
 		splitProviderModelSupportedEndpoints(official.SupportedEndpoints),
 	)
 	if len(officialEndpoints) == 0 {
 		officialEndpoints = DefaultProviderModelSupportedEndpoints(
 			official.Provider,
-			normalizeModelType(official.Type, official.Model),
+			officialType,
 			official.Model,
 		)
 	}
@@ -123,7 +181,7 @@ func loadProviderModelValidationRowWithDB(db *gorm.DB, provider string, candidat
 		return nil, nil
 	}
 	query := db.Model(&ProviderModel{}).
-		Select("provider", "model", "type", "status", "supported_endpoints").
+		Select("provider", "model", "tags", "status", "supported_endpoints").
 		Where("is_deleted = ?", false)
 	if normalizedProvider := NormalizeGroupModelProviderValue(provider); normalizedProvider != "" {
 		query = query.Where("provider = ?", normalizedProvider)

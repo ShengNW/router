@@ -1,7 +1,5 @@
 package groq
 
-// https://console.groq.com/docs/models
-
 var ModelList = []string{
 	"gemma2-9b-it",
 	"llama-3.1-70b-versatile",

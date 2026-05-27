@@ -23,17 +23,6 @@ type updateChannelEndpointPolicyRequest struct {
 	LastVerifiedAt int64  `json:"last_verified_at"`
 }
 
-// GetChannelEndpointPolicies godoc
-// @Summary List channel endpoint policies (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Param model query string false "Model"
-// @Param endpoint query string false "Endpoint"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/policies [get]
 func GetChannelEndpointPolicies(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {
@@ -64,17 +53,6 @@ func GetChannelEndpointPolicies(c *gin.Context) {
 	})
 }
 
-// UpdateChannelEndpointPolicy godoc
-// @Summary Upsert channel endpoint policy (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Param body body docs.StandardResponse true "Endpoint policy payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/policies [put]
 func UpdateChannelEndpointPolicy(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {

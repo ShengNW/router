@@ -151,18 +151,6 @@ func buildChannelTestListData(channelID string) (channelTestListData, error) {
 	}, nil
 }
 
-// GetChannelModels godoc
-// @Summary List channel models (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Param page query int false "Page (1-based)"
-// @Param page_size query int false "Page size"
-// @Param keyword query string false "Keyword"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/models [get]
 func GetChannelModels(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {
@@ -179,16 +167,6 @@ func GetChannelModels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": data})
 }
 
-// UpdateChannelModels godoc
-// @Summary Update channel models (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/models [put]
 func UpdateChannelModels(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {
@@ -216,15 +194,6 @@ func UpdateChannelModels(c *gin.Context) {
 	})
 }
 
-// GetChannelTests godoc
-// @Summary List latest channel tests (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/tests [get]
 func GetChannelTests(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {

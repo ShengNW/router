@@ -194,12 +194,6 @@ func buildUserTaskFilterOptions(userID string, includeUsers bool) (taskFilterOpt
 	return options, nil
 }
 
-// GetTaskFilterOptions godoc
-// @Summary List async task filter options (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/tasks/options [get]
 func GetTaskFilterOptions(c *gin.Context) {
 	options, err := buildAdminTaskFilterOptions()
 	if err != nil {
@@ -216,12 +210,6 @@ func GetTaskFilterOptions(c *gin.Context) {
 	})
 }
 
-// GetAdminUserTaskFilterOptions godoc
-// @Summary List user task filter options (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/admin/user/tasks/options [get]
 func GetAdminUserTaskFilterOptions(c *gin.Context) {
 	options, err := buildUserTaskFilterOptions("", true)
 	if err != nil {
@@ -238,12 +226,6 @@ func GetAdminUserTaskFilterOptions(c *gin.Context) {
 	})
 }
 
-// GetCurrentUserTaskFilterOptions godoc
-// @Summary List current user task filter options
-// @Tags user
-// @Security BearerAuth
-// @Produce json
-// @Router /api/v1/public/user/tasks/options [get]
 func GetCurrentUserTaskFilterOptions(c *gin.Context) {
 	options, err := buildUserTaskFilterOptions(c.GetString(ctxkey.Id), false)
 	if err != nil {

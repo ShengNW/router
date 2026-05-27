@@ -48,6 +48,40 @@ type ImageRequest struct {
 	ResponseFormat string `json:"response_format,omitempty"`
 }
 
+type QwenImageContent struct {
+	Text  string `json:"text,omitempty"`
+	Image string `json:"image,omitempty"`
+}
+
+type QwenImageMessage struct {
+	Role    string             `json:"role"`
+	Content []QwenImageContent `json:"content"`
+}
+
+type QwenImageRequest struct {
+	Model string `json:"model"`
+	Input struct {
+		Messages []QwenImageMessage `json:"messages"`
+	} `json:"input"`
+	Parameters struct {
+		Size string `json:"size,omitempty"`
+	} `json:"parameters,omitempty"`
+	ResponseFormat string `json:"response_format,omitempty"`
+}
+
+type QwenImageResponse struct {
+	RequestId string `json:"request_id,omitempty"`
+	Code      string `json:"code,omitempty"`
+	Message   string `json:"message,omitempty"`
+	Output    struct {
+		Choices []struct {
+			Message struct {
+				Content []QwenImageContent `json:"content,omitempty"`
+			} `json:"message,omitempty"`
+		} `json:"choices,omitempty"`
+	} `json:"output,omitempty"`
+}
+
 type TaskResponse struct {
 	StatusCode int    `json:"status_code,omitempty"`
 	RequestId  string `json:"request_id,omitempty"`

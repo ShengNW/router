@@ -7,15 +7,11 @@ import (
 )
 
 // DrawImageRequest draw image by fluxpro
-//
-// https://replicate.com/black-forest-labs/flux-pro?prediction=kg1krwsdf9rg80ch1sgsrgq7h8&output=json
 type DrawImageRequest struct {
 	Input ImageInput `json:"input"`
 }
 
 // ImageInput is input of DrawImageByFluxProRequest
-//
-// https://replicate.com/black-forest-labs/flux-1.1-pro/api/schema
 type ImageInput struct {
 	Steps           int    `json:"steps" binding:"required,min=1"`
 	Prompt          string `json:"prompt" binding:"required,min=5"`
@@ -31,15 +27,11 @@ type ImageInput struct {
 }
 
 // InpaintingImageByFlusReplicateRequest is request to inpainting image by flux pro
-//
-// https://replicate.com/black-forest-labs/flux-fill-pro/api/schema
 type InpaintingImageByFlusReplicateRequest struct {
 	Input FluxInpaintingInput `json:"input"`
 }
 
 // FluxInpaintingInput is input of DrawImageByFluxProRequest
-//
-// https://replicate.com/black-forest-labs/flux-fill-pro/api/schema
 type FluxInpaintingInput struct {
 	Mask             string `json:"mask" binding:"required"`
 	Image            string `json:"image" binding:"required"`
@@ -53,8 +45,6 @@ type FluxInpaintingInput struct {
 }
 
 // ImageResponse is response of DrawImageByFluxProRequest
-//
-// https://replicate.com/black-forest-labs/flux-pro?prediction=kg1krwsdf9rg80ch1sgsrgq7h8&output=json
 type ImageResponse struct {
 	CompletedAt time.Time        `json:"completed_at"`
 	CreatedAt   time.Time        `json:"created_at"`
@@ -115,8 +105,6 @@ type ReplicateChatRequest struct {
 }
 
 // ChatInput is input of ChatByReplicateRequest
-//
-// https://replicate.com/meta/meta-llama-3.1-405b-instruct/api/schema
 type ChatInput struct {
 	TopK             int     `json:"top_k"`
 	TopP             float64 `json:"top_p"`
@@ -132,8 +120,6 @@ type ChatInput struct {
 }
 
 // ChatResponse is response of ChatByReplicateRequest
-//
-// https://replicate.com/meta/meta-llama-3.1-405b-instruct/examples?input=http&output=json
 type ChatResponse struct {
 	CompletedAt time.Time   `json:"completed_at"`
 	CreatedAt   time.Time   `json:"created_at"`

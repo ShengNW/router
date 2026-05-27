@@ -13,15 +13,6 @@ import (
 	"github.com/yeying-community/router/internal/admin/presenter"
 )
 
-// GetAllRedemptions godoc
-// @Summary List redemptions (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/redemption [get]
 func GetAllRedemptions(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page < 1 {
@@ -56,15 +47,6 @@ func GetAllRedemptions(c *gin.Context) {
 	return
 }
 
-// SearchRedemptions godoc
-// @Summary Search redemptions (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param keyword query string false "Keyword"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/redemption/search [get]
 func SearchRedemptions(c *gin.Context) {
 	keyword := c.Query("keyword")
 	redemptions, err := model.SearchRedemptions(keyword)
@@ -83,15 +65,6 @@ func SearchRedemptions(c *gin.Context) {
 	return
 }
 
-// GetRedemption godoc
-// @Summary Get redemption by ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Redemption ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/redemption/{id} [get]
 func GetRedemption(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -118,16 +91,6 @@ func GetRedemption(c *gin.Context) {
 	return
 }
 
-// AddRedemption godoc
-// @Summary Create redemption codes (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.RedemptionCreateRequest true "Redemption payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/redemption [post]
 func AddRedemption(c *gin.Context) {
 	redemption := model.Redemption{}
 	err := c.ShouldBindJSON(&redemption)
@@ -228,15 +191,6 @@ func AddRedemption(c *gin.Context) {
 	return
 }
 
-// DeleteRedemption godoc
-// @Summary Delete redemption (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Redemption ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/redemption/{id} [delete]
 func DeleteRedemption(c *gin.Context) {
 	id := c.Param("id")
 	err := model.DeleteRedemptionById(id)
@@ -254,17 +208,6 @@ func DeleteRedemption(c *gin.Context) {
 	return
 }
 
-// UpdateRedemption godoc
-// @Summary Update redemption (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.RedemptionUpdateRequest true "Redemption update payload"
-// @Param status_only query string false "Update status only if set"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/redemption [put]
 func UpdateRedemption(c *gin.Context) {
 	statusOnly := c.Query("status_only")
 	redemption := model.Redemption{}

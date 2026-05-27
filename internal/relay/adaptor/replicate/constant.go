@@ -1,8 +1,6 @@
 package replicate
 
 // ModelList is a list of models that can be used with Replicate.
-//
-// https://replicate.com/pricing
 var ModelList = []string{
 	// -------------------------------------
 	// image model

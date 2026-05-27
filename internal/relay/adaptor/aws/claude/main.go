@@ -24,7 +24,6 @@ import (
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
 var AwsModelIDMap = map[string]string{
 	"claude-instant-1.2":         "anthropic.claude-instant-v1",
 	"claude-2.0":                 "anthropic.claude-v2",

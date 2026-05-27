@@ -17,8 +17,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/relaymode"
 )
 
-// https://cloud.tencent.com/document/api/1729/101837
-
 type Adaptor struct {
 	Sign      string
 	Action    string

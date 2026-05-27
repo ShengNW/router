@@ -85,7 +85,7 @@ func TestBuildProviderModelRows_CanonicalizeAndMergeDuplicates(t *testing.T) {
 			OutputPrice: 0,
 			PriceUnit:   ProviderPriceUnitPer1KTokens,
 			Currency:    ProviderPriceCurrencyUSD,
-			Source:      "default",
+			Source:      "migration",
 			UpdatedAt:   200,
 		},
 	}, 300)
@@ -128,7 +128,7 @@ func TestBuildProviderModelStoreRows_IncludesPriceComponents(t *testing.T) {
 					InputPrice: 0.04,
 					PriceUnit:  ProviderPriceUnitPerImage,
 					Currency:   ProviderPriceCurrencyUSD,
-					Source:     "default",
+					Source:     "migration",
 					SourceURL:  "https://platform.openai.com/docs/pricing",
 					SortOrder:  10,
 				},
@@ -144,5 +144,46 @@ func TestBuildProviderModelStoreRows_IncludesPriceComponents(t *testing.T) {
 	}
 	if store.PriceComponents[0].Component != ProviderModelPriceComponentImageGeneration {
 		t.Fatalf("unexpected component %q", store.PriceComponents[0].Component)
+	}
+}
+
+func TestNormalizeProviderModelDetails_UsesTagsAsCapabilityShape(t *testing.T) {
+	details := NormalizeProviderModelDetails([]ProviderModelDetail{
+		{
+			Model: "gpt-5.5",
+			Tags:  []string{ProviderModelTagText, ProviderModelTagReasoning, ProviderModelTagToolCalling},
+		},
+	})
+	if len(details) != 1 {
+		t.Fatalf("expected 1 detail, got %d", len(details))
+	}
+	if details[0].Type != ProviderModelTypeText {
+		t.Fatalf("internal type = %q, want %q", details[0].Type, ProviderModelTypeText)
+	}
+	want := []string{ProviderModelTagText, ProviderModelTagToolCalling, ProviderModelTagReasoning}
+	if len(details[0].Tags) != len(want) {
+		t.Fatalf("tags = %#v, want %#v", details[0].Tags, want)
+	}
+	for i := range want {
+		if details[0].Tags[i] != want[i] {
+			t.Fatalf("tags = %#v, want %#v", details[0].Tags, want)
+		}
+	}
+	rows := BuildProviderModelStoreRows("openai", details, 300)
+	if len(rows.Models) != 1 {
+		t.Fatalf("expected 1 model row, got %d", len(rows.Models))
+	}
+	if rows.Models[0].Tags != "text,tool_calling,reasoning" {
+		t.Fatalf("stored tags = %q, want text,tool_calling,reasoning", rows.Models[0].Tags)
+	}
+}
+
+func TestNormalizeProviderModelTags_DoesNotInventModelShape(t *testing.T) {
+	tags := NormalizeProviderModelTags([]string{ProviderModelTagReasoning})
+	if len(tags) != 1 || tags[0] != ProviderModelTagReasoning {
+		t.Fatalf("tags = %#v, want [reasoning]", tags)
+	}
+	if got := ProviderModelTypeFromTags(tags); got != "" {
+		t.Fatalf("ProviderModelTypeFromTags = %q, want empty", got)
 	}
 }

@@ -23,6 +23,23 @@ const priceUnitOptions = [
   { key: 'per_task', value: 'per_task', text: 'per_task' },
 ];
 
+const CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS = {
+  component: 140,
+  condition: 132,
+  inputPrice: 120,
+  outputPrice: 120,
+  priceUnit: 220,
+  currency: 120,
+};
+
+const CHANNEL_MODEL_EDITOR_PRICING_TABLE_MIN_WIDTH =
+  CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.component +
+  CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.condition +
+  CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.inputPrice +
+  CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.outputPrice +
+  CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.priceUnit +
+  CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.currency;
+
 const ChannelModelEditorModal = ({
   t,
   open,
@@ -270,7 +287,7 @@ const ChannelModelEditorModal = ({
                 <AppTable
                   className='router-detail-table router-channel-model-editor-pricing-table'
                   pagination={false}
-                  scroll={{ x: 820 }}
+                  scroll={{ x: CHANNEL_MODEL_EDITOR_PRICING_TABLE_MIN_WIDTH }}
                   rowKey={(component) =>
                     [
                       component?.component || 'component',
@@ -285,21 +302,21 @@ const ChannelModelEditorModal = ({
                       title: t('channel.edit.model_selector.pricing_detail_table.component'),
                       dataIndex: 'component',
                       key: 'component',
-                      width: '17%',
+                      width: CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.component,
                       render: (value) => value || '-',
                     },
                     {
                       title: t('channel.edit.model_selector.pricing_detail_table.condition'),
                       dataIndex: 'condition',
                       key: 'condition',
-                      width: '16%',
+                      width: CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.condition,
                       render: (value) => value || '-',
                     },
                     {
                       title: t('channel.edit.model_selector.table.input_price'),
                       dataIndex: 'input_price',
                       key: 'input_price',
-                      width: '13%',
+                      width: CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.inputPrice,
                       render: (value, _record, index) => (
                         <AppInputNumber
                           className='router-modal-input'
@@ -318,7 +335,7 @@ const ChannelModelEditorModal = ({
                       title: t('channel.edit.model_selector.table.output_price'),
                       dataIndex: 'output_price',
                       key: 'output_price',
-                      width: '13%',
+                      width: CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.outputPrice,
                       render: (value, _record, index) => (
                         <AppInputNumber
                           className='router-modal-input'
@@ -337,7 +354,7 @@ const ChannelModelEditorModal = ({
                       title: t('channel.edit.model_selector.table.price_unit'),
                       dataIndex: 'price_unit',
                       key: 'price_unit',
-                      width: '27%',
+                      width: CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.priceUnit,
                       render: (value, _record, index) => (
                         <AppSelect
                           className='router-modal-dropdown'
@@ -357,7 +374,7 @@ const ChannelModelEditorModal = ({
                       title: t('channel.edit.model_selector.pricing_detail_table.currency'),
                       dataIndex: 'currency',
                       key: 'currency',
-                      width: '14%',
+                      width: CHANNEL_MODEL_EDITOR_PRICING_COLUMN_WIDTHS.currency,
                       render: (value, _record, index) => (
                         <AppInput
                           className='router-modal-input'

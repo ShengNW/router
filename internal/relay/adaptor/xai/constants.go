@@ -1,7 +1,5 @@
 package xai
 
-//https://console.x.ai/
-
 var ModelList = []string{
 	"grok-2",
 	"grok-vision-beta",

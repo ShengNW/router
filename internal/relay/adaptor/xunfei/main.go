@@ -26,9 +26,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://console.xfyun.cn/services/cbm
-// https://www.xfyun.cn/doc/spark/Web.html
-
 func requestOpenAI2Xunfei(request model.GeneralOpenAIRequest, xunfeiAppId string, domain string) *ChatRequest {
 	messages := make([]Message, 0, len(request.Messages))
 	for _, message := range request.Messages {

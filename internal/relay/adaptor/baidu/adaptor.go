@@ -23,7 +23,6 @@ func (a *Adaptor) Init(meta *meta.Meta) {
 }
 
 func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
-	// https://cloud.baidu.com/doc/WENXINWORKSHOP/s/clntwmv7t
 	suffix := "chat/"
 	if strings.HasPrefix(meta.ActualModelName, "Embedding") {
 		suffix = "embeddings/"

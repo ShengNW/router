@@ -2,13 +2,17 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API, showError, showSuccess, timestamp2string } from '../../helpers';
-import { TASK_LIST_COLUMN_WIDTHS } from '../../constants/tableWidthPresets';
+import {
+  TASK_LIST_COLUMN_WIDTHS,
+  TASK_LIST_TABLE_MIN_WIDTH,
+} from '../../constants/tableWidthPresets';
 import {
   AppButton,
   AppFilterHeader,
   AppFormActions,
   AppPagination,
   AppPopover,
+  resolvePopupContainer,
   AppSelect,
   AppTable,
   AppTag,
@@ -148,9 +152,9 @@ const getTaskTypeOptions = (t, scope) => {
       text: t('task.types.channel_refresh_models'),
     },
     {
-      key: 'channel_refresh_balance',
-      value: 'channel_refresh_balance',
-      text: t('task.types.channel_refresh_balance'),
+      key: 'channel_refresh_billing',
+      value: 'channel_refresh_billing',
+      text: t('task.types.channel_refresh_billing'),
     },
   );
   return common;
@@ -831,6 +835,25 @@ const Task = () => {
     [filterOptions.channels, filterOptions.models, filterOptions.users],
   );
 
+  const rootBreadcrumbs = isSystemTaskPage
+    ? [
+        { key: 'workspace', label: t('header.admin_workspace') },
+        { key: 'resource', label: t('header.resource') },
+        { key: 'channel', label: t('header.channel') },
+        { key: 'task', label: pageTitle, active: true },
+      ]
+    : isAdminPage
+      ? [
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'operation', label: t('header.platform_operation') },
+          { key: 'task', label: pageTitle, active: true },
+        ]
+      : [
+          { key: 'workspace', label: t('header.user_workspace') },
+          { key: 'service', label: t('header.service') },
+          { key: 'task', label: pageTitle, active: true },
+        ];
+
   return (
     <div className='dashboard-container'>
       {returnPath !== '' ? (
@@ -882,6 +905,7 @@ const Task = () => {
         />
       ) : null}
       <AppFilterHeader
+            breadcrumbs={returnPath === '' ? rootBreadcrumbs : undefined}
             title={returnPath === '' ? pageTitle : undefined}
             titleClassName='router-ui-section-title'
             picker={
@@ -926,6 +950,7 @@ const Task = () => {
                             fluid
                             search
                             clearable
+                            getPopupContainer={resolvePopupContainer}
                             options={
                               conditionalFilterConfig.find(
                                 (item) => item.key === draftFilterKey,
@@ -1039,30 +1064,32 @@ const Task = () => {
             endClassName='router-log-query-wrap'
       />
 
-      <AppTable
-            className='router-list-table router-table-fit-page'
-            pagination={false}
-            rowKey={(item) => getTaskId(item)}
-            dataSource={items}
-            locale={{ emptyText: loading ? t('common.loading') : t('task.empty') }}
-            onRow={(item) => {
-              const taskId = getTaskId(item);
-              return {
-                className: 'router-row-clickable',
-                onClick: () =>
-                  navigate(`${detailBasePath}/${taskId}`, {
-                    state: {
-                      from: currentPagePath,
-                      fromLabel: pageTitle,
-                      contextType,
-                      contextLabel,
-                      originPath: returnPath,
-                      originLabel: contextLabel || returnLabel,
-                    },
-                  }),
-              };
-            }}
-            columns={[
+      <div className='router-table-scroll-x'>
+        <AppTable
+              className='router-list-table router-table-fit-page'
+              pagination={false}
+              scroll={{ x: TASK_LIST_TABLE_MIN_WIDTH }}
+              rowKey={(item) => getTaskId(item)}
+              dataSource={items}
+              locale={{ emptyText: loading ? t('common.loading') : t('task.empty') }}
+              onRow={(item) => {
+                const taskId = getTaskId(item);
+                return {
+                  className: 'router-row-clickable',
+                  onClick: () =>
+                    navigate(`${detailBasePath}/${taskId}`, {
+                      state: {
+                        from: currentPagePath,
+                        fromLabel: pageTitle,
+                        contextType,
+                        contextLabel,
+                        originPath: returnPath,
+                        originLabel: contextLabel || returnLabel,
+                      },
+                    }),
+                };
+              }}
+              columns={[
               {
                 title: t('task.table.type'),
                 dataIndex: 'type',
@@ -1226,31 +1253,32 @@ const Task = () => {
                 },
               },
             ]}
-            footer={() => (
-              <AppToolbar
-                className='router-task-footer-toolbar'
-                start={
-                  <span className='router-toolbar-meta'>
-                    {t('task.summary', { total })}
-                  </span>
-                }
-                end={
-                  <AppPagination
-                    className='router-page-pagination'
-                    activePage={page}
-                    totalPages={totalPages}
-                    siblingRange={1}
-                    boundaryRange={0}
-                    onPageChange={(e, { activePage }) => {
-                      const nextPage = Number(activePage || 1);
-                      setPage(nextPage);
-                      loadTasks(nextPage).then();
-                    }}
-                  />
-                }
-              />
-            )}
-          />
+              footer={() => (
+                <AppToolbar
+                  className='router-task-footer-toolbar'
+                  start={
+                    <span className='router-toolbar-meta'>
+                      {t('task.summary', { total })}
+                    </span>
+                  }
+                  end={
+                    <AppPagination
+                      className='router-page-pagination'
+                      activePage={page}
+                      totalPages={totalPages}
+                      siblingRange={1}
+                      boundaryRange={0}
+                      onPageChange={(e, { activePage }) => {
+                        const nextPage = Number(activePage || 1);
+                        setPage(nextPage);
+                        loadTasks(nextPage).then();
+                      }}
+                    />
+                  }
+                />
+              )}
+            />
+      </div>
     </div>
   );
 };

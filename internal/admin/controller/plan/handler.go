@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/yeying-community/router/common/config"
+	"github.com/yeying-community/router/common/ctxkey"
 	"github.com/yeying-community/router/internal/admin/model"
 	plansvc "github.com/yeying-community/router/internal/admin/service/plan"
 	"gorm.io/gorm"
@@ -23,19 +24,21 @@ type packageListPageData struct {
 }
 
 type upsertServicePackageRequest struct {
-	Id                         string  `json:"id"`
-	Name                       *string `json:"name"`
-	Description                *string `json:"description"`
-	GroupID                    *string `json:"group_id"`
+	Id                         string   `json:"id"`
+	Name                       *string  `json:"name"`
+	Description                *string  `json:"description"`
+	GroupID                    *string  `json:"group_id"`
+	VisibilityScope            *string  `json:"visibility_scope"`
+	VisibleUserIDs             []string `json:"visible_user_ids"`
 	SalePrice                  *float64 `json:"sale_price"`
-	SaleCurrency               *string `json:"sale_currency"`
-	DailyQuotaLimit            *int64  `json:"daily_quota_limit"`
-	PackageEmergencyQuotaLimit *int64  `json:"package_emergency_quota_limit"`
-	DurationDays               *int    `json:"duration_days"`
-	QuotaResetTimezone         *string `json:"quota_reset_timezone"`
-	Enabled                    *bool   `json:"enabled"`
-	SortOrder                  *int    `json:"sort_order"`
-	Source                     *string `json:"source"`
+	SaleCurrency               *string  `json:"sale_currency"`
+	DailyQuotaLimit            *int64   `json:"daily_quota_limit"`
+	PackageEmergencyQuotaLimit *int64   `json:"package_emergency_quota_limit"`
+	DurationDays               *int     `json:"duration_days"`
+	QuotaResetTimezone         *string  `json:"quota_reset_timezone"`
+	Enabled                    *bool    `json:"enabled"`
+	SortOrder                  *int     `json:"sort_order"`
+	Source                     *string  `json:"source"`
 }
 
 type assignServicePackageRequest struct {
@@ -98,17 +101,6 @@ func optionalFloat64Value(ptr *float64, fallback float64) float64 {
 	return *ptr
 }
 
-// GetPackages godoc
-// @Summary List packages with pagination (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param page_size query int false "Page size"
-// @Param keyword query string false "Keyword"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/packages [get]
 func GetPackages(c *gin.Context) {
 	page, pageSize, keyword := parsePackageListPageParams(c)
 	rows, total, err := plansvc.ListPage(page, pageSize, keyword)
@@ -131,16 +123,8 @@ func GetPackages(c *gin.Context) {
 	})
 }
 
-// GetPublicPackages godoc
-// @Summary List enabled packages (public)
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/user/packages [get]
 func GetPublicPackages(c *gin.Context) {
-	rows, err := model.ListEnabledServicePackages()
+	rows, err := model.ListEnabledServicePackagesForUser(strings.TrimSpace(c.GetString(ctxkey.Id)))
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -151,19 +135,10 @@ func GetPublicPackages(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data": rows,
+		"data":    rows,
 	})
 }
 
-// GetPackage godoc
-// @Summary Get package detail by ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Package ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/package/{id} [get]
 func GetPackage(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -192,15 +167,6 @@ func GetPackage(c *gin.Context) {
 	})
 }
 
-// CreatePackage godoc
-// @Summary Create package (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/package [post]
 func CreatePackage(c *gin.Context) {
 	req := upsertServicePackageRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -215,6 +181,8 @@ func CreatePackage(c *gin.Context) {
 		Name:                       optionalStringValue(req.Name, ""),
 		Description:                optionalStringValue(req.Description, ""),
 		GroupID:                    optionalStringValue(req.GroupID, ""),
+		VisibilityScope:            optionalStringValue(req.VisibilityScope, model.ServicePackageVisibilityScopeAll),
+		VisibleUserIDs:             req.VisibleUserIDs,
 		SalePrice:                  optionalFloat64Value(req.SalePrice, 0),
 		SaleCurrency:               optionalStringValue(req.SaleCurrency, model.BillingCurrencyCodeCNY),
 		DailyQuotaLimit:            optionalInt64Value(req.DailyQuotaLimit, 0),
@@ -240,15 +208,6 @@ func CreatePackage(c *gin.Context) {
 	})
 }
 
-// UpdatePackage godoc
-// @Summary Update package (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/package [put]
 func UpdatePackage(c *gin.Context) {
 	req := upsertServicePackageRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -283,6 +242,8 @@ func UpdatePackage(c *gin.Context) {
 		Name:                       optionalStringValue(req.Name, current.Name),
 		Description:                optionalStringValue(req.Description, current.Description),
 		GroupID:                    optionalStringValue(req.GroupID, current.GroupID),
+		VisibilityScope:            optionalStringValue(req.VisibilityScope, current.VisibilityScope),
+		VisibleUserIDs:             req.VisibleUserIDs,
 		SalePrice:                  optionalFloat64Value(req.SalePrice, current.SalePrice),
 		SaleCurrency:               optionalStringValue(req.SaleCurrency, current.SaleCurrency),
 		DailyQuotaLimit:            optionalInt64Value(req.DailyQuotaLimit, current.DailyQuotaLimit),
@@ -292,6 +253,9 @@ func UpdatePackage(c *gin.Context) {
 		Enabled:                    optionalBoolValue(req.Enabled, current.Enabled),
 		SortOrder:                  optionalIntValue(req.SortOrder, current.SortOrder),
 		Source:                     optionalStringValue(req.Source, current.Source),
+	}
+	if req.VisibleUserIDs == nil {
+		item.VisibleUserIDs = current.VisibleUserIDs
 	}
 	row, err := plansvc.Update(item)
 	if err != nil {
@@ -308,15 +272,6 @@ func UpdatePackage(c *gin.Context) {
 	})
 }
 
-// DeletePackage godoc
-// @Summary Delete package by ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Package ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/package/{id} [delete]
 func DeletePackage(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -343,16 +298,6 @@ func DeletePackage(c *gin.Context) {
 	})
 }
 
-// AssignPackageToUser godoc
-// @Summary Assign package to user (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Package ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/package/{id}/assign [post]
 func AssignPackageToUser(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {

@@ -6,6 +6,7 @@ import (
 
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay/apitype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 	"github.com/yeying-community/router/internal/relay/relaymode"
@@ -195,6 +196,12 @@ func TestResolveChannelTextUpstreamNoModelConfigsOpenAIMessagesRejected(t *testi
 	_, _, err := resolveChannelTextUpstream(meta, "gpt-5.4", "gpt-5.4")
 	if err == nil {
 		t.Fatalf("resolveChannelTextUpstream returned nil error, want unsupported messages error")
+	}
+}
+
+func TestSupportsMessagesUpstreamDeepSeek(t *testing.T) {
+	if !supportsMessagesUpstream(&meta.Meta{ChannelProtocol: relaychannel.DeepSeek, APIType: apitype.OpenAI}) {
+		t.Fatal("supportsMessagesUpstream returned false for deepseek, want true")
 	}
 }
 

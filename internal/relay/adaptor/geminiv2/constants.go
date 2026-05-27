@@ -1,7 +1,5 @@
 package geminiv2
 
-// https://ai.google.dev/models/gemini
-
 var ModelList = []string{
 	"gemini-pro", "gemini-1.0-pro",
 	// "gemma-2-2b-it", "gemma-2-9b-it", "gemma-2-27b-it",

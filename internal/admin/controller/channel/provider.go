@@ -42,7 +42,7 @@ type providerListData struct {
 
 type publicProviderModelDetail struct {
 	Model              string   `json:"model"`
-	Type               string   `json:"type,omitempty"`
+	Tags               []string `json:"tags,omitempty"`
 	Status             string   `json:"status,omitempty"`
 	Description        string   `json:"description,omitempty"`
 	SupportedEndpoints []string `json:"supported_endpoints,omitempty"`
@@ -58,7 +58,7 @@ type publicProviderModelItem struct {
 
 type appendProviderModelRequest struct {
 	Model              string   `json:"model"`
-	Type               string   `json:"type,omitempty"`
+	Tags               []string `json:"tags,omitempty"`
 	Status             string   `json:"status,omitempty"`
 	Description        string   `json:"description,omitempty"`
 	IsDeleted          bool     `json:"is_deleted,omitempty"`
@@ -125,6 +125,31 @@ func applyProviderModelEndpointDefaults(provider string, details []model.Provide
 		)
 	}
 	return model.NormalizeProviderModelDetails(normalizedDetails)
+}
+
+func validateProviderModelTags(details []model.ProviderModelDetail) error {
+	required := make(map[string]bool, len(details))
+	valid := make(map[string]bool, len(details))
+	for _, detail := range details {
+		if detail.IsDeleted {
+			continue
+		}
+		modelName := strings.TrimSpace(detail.Model)
+		if modelName == "" {
+			continue
+		}
+		required[modelName] = true
+		tags := model.NormalizeProviderModelTags(detail.Tags)
+		if len(tags) > 0 && model.ProviderModelTypeFromTags(tags) != "" {
+			valid[modelName] = true
+		}
+	}
+	for modelName := range required {
+		if !valid[modelName] {
+			return fmt.Errorf("模型 %s 的 tags 必须包含 text、image、audio、video、embedding 之一", modelName)
+		}
+	}
+	return nil
 }
 
 func mergeMissingProviderDetailsAsDeleted(current []model.ProviderModelDetail, existing []model.ProviderModelDetail) []model.ProviderModelDetail {
@@ -423,7 +448,7 @@ func listPublicProviderModels() ([]publicProviderModelItem, error) {
 		for _, detail := range item.ModelDetails {
 			details = append(details, publicProviderModelDetail{
 				Model:              strings.TrimSpace(detail.Model),
-				Type:               strings.TrimSpace(detail.Type),
+				Tags:               detail.Tags,
 				Status:             strings.TrimSpace(detail.Status),
 				Description:        strings.TrimSpace(detail.Description),
 				SupportedEndpoints: detail.SupportedEndpoints,
@@ -515,6 +540,9 @@ func normalizeProviderUpsertItem(db *gorm.DB, providerID string, item providerIt
 	detailInput = append(detailInput, item.ModelDetails...)
 	for _, modelName := range item.Models {
 		detailInput = append(detailInput, model.ProviderModelDetail{Model: strings.TrimSpace(modelName)})
+	}
+	if err := validateProviderModelTags(detailInput); err != nil {
+		return providerItem{}, err
 	}
 
 	details := mergeProviderDetailInputs(detailInput, item.Models, now)
@@ -707,7 +735,7 @@ func appendModelToProviderItem(id string, req appendProviderModelRequest) (provi
 	now := helper.GetTimestamp()
 	detail := model.ProviderModelDetail{
 		Model:              strings.TrimSpace(req.Model),
-		Type:               strings.TrimSpace(strings.ToLower(req.Type)),
+		Tags:               req.Tags,
 		Status:             req.Status,
 		Description:        strings.TrimSpace(req.Description),
 		IsDeleted:          req.IsDeleted,
@@ -722,6 +750,9 @@ func appendModelToProviderItem(id string, req appendProviderModelRequest) (provi
 	if detail.Model == "" {
 		return providerItem{}, errors.New("模型名称不能为空")
 	}
+	if err := validateProviderModelTags([]model.ProviderModelDetail{detail}); err != nil {
+		return providerItem{}, err
+	}
 	if detail.Source == "" {
 		detail.Source = "manual"
 	}
@@ -731,14 +762,6 @@ func appendModelToProviderItem(id string, req appendProviderModelRequest) (provi
 	return saveProviderItem(existing, false)
 }
 
-// GetPublicProviderModels godoc
-// @Summary Get provider model list for clients
-// @Tags public
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/public/providers/models [get]
 func GetPublicProviderModels(c *gin.Context) {
 	items, err := listPublicProviderModels()
 	if err != nil {
@@ -755,17 +778,6 @@ func GetPublicProviderModels(c *gin.Context) {
 	})
 }
 
-// GetProviders godoc
-// @Summary Get paged provider list (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param page_size query int false "Page size"
-// @Param keyword query string false "Keyword"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/providers [get]
 func GetProviders(c *gin.Context) {
 	page, pageSize := parseProviderPageParams(c)
 	data, err := listProvidersPage(page, pageSize, c.Query("keyword"))
@@ -783,15 +795,6 @@ func GetProviders(c *gin.Context) {
 	})
 }
 
-// GetProvider godoc
-// @Summary Get provider detail (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Provider ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/providers/{id} [get]
 func GetProvider(c *gin.Context) {
 	item, err := getProviderItemByID(c.Param("id"))
 	if err != nil {
@@ -812,15 +815,6 @@ func GetProvider(c *gin.Context) {
 	})
 }
 
-// CreateProvider godoc
-// @Summary Create provider (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/providers [post]
 func CreateProvider(c *gin.Context) {
 	req := providerItem{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -845,16 +839,6 @@ func CreateProvider(c *gin.Context) {
 	})
 }
 
-// UpdateProvider godoc
-// @Summary Update provider (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Provider ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/providers/{id} [put]
 func UpdateProvider(c *gin.Context) {
 	req := providerItem{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -884,16 +868,6 @@ func UpdateProvider(c *gin.Context) {
 	})
 }
 
-// AppendProviderModel godoc
-// @Summary Append one model detail into provider list (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Provider ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/providers/{id}/model [post]
 func AppendProviderModel(c *gin.Context) {
 	req := appendProviderModelRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -924,15 +898,6 @@ func AppendProviderModel(c *gin.Context) {
 	})
 }
 
-// DeleteProvider godoc
-// @Summary Delete provider (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Provider ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/providers/{id} [delete]
 func DeleteProvider(c *gin.Context) {
 	if err := deleteProviderItem(c.Param("id")); err != nil {
 		message := "删除供应商失败: " + err.Error()

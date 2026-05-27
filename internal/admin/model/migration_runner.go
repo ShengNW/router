@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,27 @@ import (
 const (
 	migrationScopeMain = "main"
 	migrationScopeLog  = "log"
+)
+
+var (
+	allProviderMigrationCatalogProviders = []string{
+		"anthropic",
+		"baidu",
+		"cohere",
+		"deepseek",
+		"google",
+		"hunyuan",
+		"minimax",
+		"mistral",
+		"openai",
+		"qwen",
+		"stepfun",
+		"volcengine",
+		"xai",
+		"zhipu",
+	}
+	openAIAndXAIProviderMigrationCatalogProviders  = []string{"openai", "xai"}
+	googleAndQwenProviderMigrationCatalogProviders = []string{"google", "qwen"}
 )
 
 // SchemaMigration records Flyway-style versioned migrations.
@@ -44,9 +66,9 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 		},
 		{
 			Version:     "202603131030_openai_gpt51_provider_catalog",
-			Description: "sync default provider data to add openai gpt-5.1 and gpt-5.1-codex pricing rows",
+			Description: "upsert openai provider migration rows for gpt-5.1 and gpt-5.1-codex pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
@@ -365,6 +387,22 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			},
 		},
 		{
+			Version:     "202605191030_service_package_visibility",
+			Description: "add package visibility scope and visible user mapping",
+			Up: func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&ServicePackage{}, &ServicePackageVisibleUser{}); err != nil {
+					return err
+				}
+				if err := tx.Exec(
+					"UPDATE service_packages SET visibility_scope = ? WHERE COALESCE(visibility_scope, '') = ''",
+					ServicePackageVisibilityScopeAll,
+				).Error; err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		{
 			Version:     "202604031130_user_created_updated_at",
 			Description: "add created_at and updated_at columns to users and backfill existing rows",
 			Up: func(tx *gorm.DB) error {
@@ -460,23 +498,23 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 		},
 		{
 			Version:     "202604071030_anthropic_claude46_provider_catalog",
-			Description: "sync default provider data to add anthropic claude 4.6/4.5/3.5 pricing rows",
+			Description: "upsert anthropic provider migration rows for claude 4.6/4.5/3.5 pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "anthropic")
 			},
 		},
 		{
 			Version:     "202604301100_anthropic_claude47_provider_catalog",
-			Description: "sync default provider data to add anthropic claude opus 4.7 pricing row",
+			Description: "upsert anthropic provider migration rows for claude opus 4.7 pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "anthropic")
 			},
 		},
 		{
 			Version:     "202604301230_openai_gpt54mini_provider_catalog",
-			Description: "sync default provider data to add openai gpt-5.4-mini pricing row",
+			Description: "upsert openai provider migration rows for gpt-5.4-mini pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
@@ -587,30 +625,30 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 		},
 		{
 			Version:     "202604251130_openai_gpt55_provider_catalog",
-			Description: "sync default provider data to add openai gpt-5.5 pricing rows",
+			Description: "upsert openai provider migration rows for gpt-5.5 pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
 			Version:     "202605051230_openai_gpt_image_2_provider_catalog",
-			Description: "sync default provider data to add openai gpt-image-2 pricing rows",
+			Description: "upsert openai provider migration rows for gpt-image-2 pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
 			Version:     "202605091200_openai_realtime_2_provider_catalog",
-			Description: "sync default provider data to add openai gpt-realtime-2 and gpt-realtime-1.5 pricing rows",
+			Description: "upsert openai provider migration rows for gpt-realtime-2 and gpt-realtime-1.5 pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
 			Version:     "202605091330_openai_realtime_endpoint_candidates",
-			Description: "sync default provider data to expose openai realtime models with /v1/realtime endpoint candidates",
+			Description: "upsert openai realtime provider endpoint candidates",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
@@ -631,7 +669,7 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			Version:     "202605041030_provider_model_supported_endpoints",
 			Description: "add provider model supported endpoints as channel endpoint candidates",
 			Up: func(tx *gorm.DB) error {
-				if err := syncDefaultProvidersWithDB(tx); err != nil {
+				if err := upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...); err != nil {
 					return err
 				}
 				channelIDs := make([]string, 0)
@@ -654,7 +692,7 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 			Version:     "202605051030_openai_text_model_endpoint_candidates",
 			Description: "backfill openai text provider models with responses and chat completion endpoint candidates",
 			Up: func(tx *gorm.DB) error {
-				if err := syncDefaultProvidersWithDB(tx); err != nil {
+				if err := upsertProviderMigrationProvidersWithDB(tx, "openai"); err != nil {
 					return err
 				}
 				return backfillOpenAITextProviderModelEndpointCandidatesWithDB(tx)
@@ -861,128 +899,128 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 		},
 		{
 			Version:     "202605102100_provider_model_descriptions",
-			Description: "add provider model descriptions and resync default provider data",
+			Description: "upsert provider model descriptions from migration data",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605111030_refresh_provider_model_descriptions_and_defaults",
-			Description: "refresh provider model descriptions from official model catalogs and add newly tracked default models",
+			Description: "refresh provider model descriptions from official model catalogs and add newly tracked migration models",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605111130_refresh_openai_and_xai_official_models",
 			Description: "refresh openai and xai official model descriptions and add newly tracked openai video models",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, openAIAndXAIProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605111210_refresh_retired_anthropic_model_descriptions",
 			Description: "clear descriptions for retired anthropic models while keeping catalog rows for backward compatibility",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "anthropic")
 			},
 		},
 		{
 			Version:     "202605111330_refresh_retired_google_and_qwen_model_descriptions",
 			Description: "clear descriptions for retired or stopped-updating google and qwen models while keeping catalog rows for backward compatibility",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, googleAndQwenProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605111430_provider_model_soft_delete_flag",
-			Description: "add provider model soft delete flag and mark upstream-retired default models",
+			Description: "add provider model soft delete flag and mark upstream-retired migration models",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605111530_provider_model_official_status",
-			Description: "add provider model official status and mark deprecated default models",
+			Description: "add provider model official status and mark deprecated migration models",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605141130_refresh_default_provider_model_pricing",
-			Description: "refresh default provider data pricing for newly priced official models",
+			Description: "upsert provider migration pricing for newly priced official models",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605141330_refresh_component_based_provider_model_pricing",
-			Description: "refresh default provider data to add component-based pricing for complex official models",
+			Description: "upsert component-based provider migration pricing for complex official models",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605141430_refresh_tiered_provider_model_pricing",
-			Description: "refresh default provider data to record tiered official pricing details",
+			Description: "upsert tiered provider migration pricing details",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, allProviderMigrationCatalogProviders...)
 			},
 		},
 		{
 			Version:     "202605141530_refresh_google_multimodal_provider_model_pricing",
-			Description: "refresh default provider data to add google multimodal pricing components",
+			Description: "upsert google multimodal provider migration pricing components",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "google")
 			},
 		},
 		{
 			Version:     "202605141630_refresh_minimax_provider_model_pricing",
-			Description: "refresh default provider data to add newly verified minimax pricing",
+			Description: "upsert minimax provider migration pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "minimax")
 			},
 		},
 		{
 			Version:     "202605141730_refresh_zhipu_provider_model_pricing",
-			Description: "refresh default provider data to add newly verified zhipu pricing",
+			Description: "upsert zhipu provider migration pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "zhipu")
 			},
 		},
 		{
 			Version:     "202605141830_refresh_hunyuan_provider_model_pricing",
-			Description: "refresh default provider data to add newly verified hunyuan pricing",
+			Description: "upsert hunyuan provider migration pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "hunyuan")
 			},
 		},
 		{
 			Version:     "202605142030_add_volcengine_doubao_provider_catalog",
-			Description: "refresh default provider data to add volcengine doubao provider models and pricing",
+			Description: "upsert volcengine doubao provider migration models and pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "volcengine")
 			},
 		},
 		{
 			Version:     "202605142130_refresh_volcengine_doubao_thinking_pricing",
-			Description: "refresh default provider data to add volcengine doubao thinking pricing rows",
+			Description: "upsert volcengine doubao thinking provider migration pricing",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "volcengine")
 			},
 		},
 		{
 			Version:     "202605142230_add_embedding_model_type_and_volcengine_seed_embedding",
-			Description: "refresh default provider data to add embedding model type support and volcengine seed embedding model",
+			Description: "upsert embedding model type support and volcengine seed embedding model",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "volcengine")
 			},
 		},
 		{
 			Version:     "202605151030_refresh_gpt_image2_endpoint_candidates",
-			Description: "refresh default provider data to expose openai gpt-image-2 image endpoints",
+			Description: "upsert openai gpt-image-2 provider endpoint candidates",
 			Up: func(tx *gorm.DB) error {
-				return syncDefaultProvidersWithDB(tx)
+				return upsertProviderMigrationProvidersWithDB(tx, "openai")
 			},
 		},
 		{
@@ -1014,8 +1052,283 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return BackfillChannelModelEndpointTestResultsFromChannelTestsWithDB(tx)
 			},
 		},
+		{
+			Version:     "202605191030_channel_billing_resources",
+			Description: "add channel billing profile, snapshot, and action tables",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&ChannelBillingProfile{}, &ChannelBillingSnapshot{}, &ChannelBillingAction{})
+			},
+		},
+		{
+			Version:     "202605191230_channel_billing_snapshot_items",
+			Description: "add channel billing snapshot item table and backfill explicit billing profiles",
+			Up: func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&ChannelBillingSnapshotItem{}); err != nil {
+					return err
+				}
+				rows := make([]Channel, 0)
+				if err := tx.Find(&rows).Error; err != nil {
+					return err
+				}
+				for _, row := range rows {
+					if _, err := GetChannelBillingProfileByChannelIDWithDB(tx, row.Id); err == nil {
+						continue
+					} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+						return err
+					}
+					profile, ok := BuildChannelBillingProfileFromChannelConfig(&row)
+					if !ok {
+						continue
+					}
+					if _, err := SaveChannelBillingProfileWithDB(tx, profile); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Version:     "202605191430_channel_billing_fetch_config_api_base_url",
+			Description: "backfill billing fetch api base url from legacy account base url config",
+			Up: func(tx *gorm.DB) error {
+				rows := make([]Channel, 0)
+				if err := tx.Find(&rows).Error; err != nil {
+					return err
+				}
+				for _, row := range rows {
+					profile, err := GetChannelBillingProfileByChannelIDWithDB(tx, row.Id)
+					if err != nil {
+						if errors.Is(err, gorm.ErrRecordNotFound) {
+							continue
+						}
+						return err
+					}
+					if strings.TrimSpace(profile.BillingConfig) != "" {
+						continue
+					}
+					if strings.TrimSpace(profile.BillingMode) == ChannelBillingModeManual {
+						continue
+					}
+					cfg, configErr := row.LoadConfig()
+					if configErr != nil {
+						continue
+					}
+					accountBaseURL := cfg.GetAccountBaseURL()
+					if accountBaseURL == "" || deriveChannelActivateURLTemplate(accountBaseURL) != "" {
+						continue
+					}
+					profile.BillingConfig = marshalJSONString(channelBillingConfig{
+						APIBaseURL: accountBaseURL,
+					})
+					if _, err := SaveChannelBillingProfileWithDB(tx, profile); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Version:     "202605200930_drop_channel_balance_columns",
+			Description: "drop legacy channel balance columns",
+			Up: func(tx *gorm.DB) error {
+				if tx.Migrator().HasColumn(&Channel{}, "balance_updated_time") {
+					if err := tx.Migrator().DropColumn(&Channel{}, "balance_updated_time"); err != nil {
+						return err
+					}
+				}
+				if tx.Migrator().HasColumn(&Channel{}, "balance") {
+					if err := tx.Migrator().DropColumn(&Channel{}, "balance"); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Version:     "202605201030_rename_channel_billing_task_and_capabilities",
+			Description: "rename channel billing task type and billing capability values",
+			Up: func(tx *gorm.DB) error {
+				if err := tx.Model(&AsyncTask{}).
+					Where("type = ?", "channel_refresh_balance").
+					Update("type", AsyncTaskTypeChannelRefreshBilling).Error; err != nil {
+					return err
+				}
+				if err := tx.Exec(
+					"UPDATE "+AdminTasksTableName+
+						" SET dedupe_key = REPLACE(dedupe_key, ?, ?), result = REPLACE(result, ?, ?)"+
+						" WHERE dedupe_key LIKE ? OR result LIKE ?",
+					"channel_refresh_balance:",
+					AsyncTaskTypeChannelRefreshBilling+":",
+					"\"balance_urls\":",
+					"\"billing_request_urls\":",
+					"channel_refresh_balance:%",
+					"%\"balance_urls\":%",
+				).Error; err != nil {
+					return err
+				}
+				if err := tx.Exec(
+					"UPDATE "+ChannelBillingProfilesTableName+
+						" SET action_capabilities = REPLACE(REPLACE(action_capabilities, ?, ?), ?, ?)"+
+						" WHERE action_capabilities LIKE ? OR action_capabilities LIKE ?",
+					"refresh_balance",
+					ChannelBillingCapabilityRefreshBilling,
+					"manual_update_balance",
+					ChannelBillingCapabilityManualUpdateSnapshot,
+					"%refresh_balance%",
+					"%manual_update_balance%",
+				).Error; err != nil {
+					return err
+				}
+				if err := tx.Model(&ChannelBillingAction{}).
+					Where("action_type = ?", "manual_update_balance").
+					Update("action_type", ChannelBillingActionTypeManualUpdateSnapshot).Error; err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		{
+			Version:     "202605201130_rename_channel_billing_profile_columns",
+			Description: "rename channel billing profile mode and config columns",
+			Up: func(tx *gorm.DB) error {
+				if tx.Migrator().HasColumn(&ChannelBillingProfile{}, "balance_fetch_mode") &&
+					!tx.Migrator().HasColumn(&ChannelBillingProfile{}, "billing_mode") {
+					if err := tx.Migrator().RenameColumn(&ChannelBillingProfile{}, "balance_fetch_mode", "billing_mode"); err != nil {
+						return err
+					}
+				}
+				if tx.Migrator().HasColumn(&ChannelBillingProfile{}, "balance_fetch_config") &&
+					!tx.Migrator().HasColumn(&ChannelBillingProfile{}, "billing_config") {
+					if err := tx.Migrator().RenameColumn(&ChannelBillingProfile{}, "balance_fetch_config", "billing_config"); err != nil {
+						return err
+					}
+				}
+				return tx.AutoMigrate(&ChannelBillingProfile{})
+			},
+		},
+		{
+			Version:     "202605231230_provider_migration_owned_qwen_data",
+			Description: "normalize provider migration sources and upsert current qwen provider data",
+			Up: func(tx *gorm.DB) error {
+				if err := normalizeProviderMigrationLegacySourcesWithDB(tx); err != nil {
+					return err
+				}
+				if err := normalizeProviderPricingLegacySourcesWithDB(tx); err != nil {
+					return err
+				}
+				if err := upsertProviderMigrationProvidersWithDB(tx, "qwen"); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		{
+			Version:     "202605231330_qwen_provider_response_and_image_endpoints",
+			Description: "upsert qwen provider response and image endpoint support",
+			Up: func(tx *gorm.DB) error {
+				return upsertProviderMigrationProvidersWithDB(tx, "qwen")
+			},
+		},
+		{
+			Version:     "202605231430_qwen_provider_image_edit_endpoint",
+			Description: "upsert qwen provider image edit endpoint support",
+			Up: func(tx *gorm.DB) error {
+				return upsertProviderMigrationProvidersWithDB(tx, "qwen")
+			},
+		},
+		{
+			Version:     "202605231500_qwen_image_provider_pricing",
+			Description: "upsert qwen image provider per-image pricing",
+			Up: func(tx *gorm.DB) error {
+				return upsertProviderMigrationProvidersWithDB(tx, "qwen")
+			},
+		},
+		{
+			Version:     "202605231620_provider_model_tags",
+			Description: "add provider model tags and backfill from existing model classification",
+			Up: func(tx *gorm.DB) error {
+				return backfillProviderModelTagsWithDB(tx)
+			},
+		},
+		{
+			Version:     "202605251930_channel_protocol_ali_label",
+			Description: "rename ali channel protocol label to Ali",
+			Up: func(tx *gorm.DB) error {
+				return tx.Model(&ChannelProtocolCatalog{}).
+					Where("name = ?", "ali").
+					Updates(map[string]any{
+						"label":      "Ali",
+						"updated_at": helper.GetTimestamp(),
+					}).Error
+			},
+		},
+		{
+			Version:     "202605261030_channel_billing_entitlement_framework",
+			Description: "upgrade channel billing items to standard entitlement fields and add alert events",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&ChannelBillingSnapshotItem{}, &ChannelBillingAlertEvent{})
+			},
+		},
+		{
+			Version:     "202605261230_refresh_deepseek_provider_catalog",
+			Description: "upsert deepseek provider migration rows for v4 models and current aliases",
+			Up: func(tx *gorm.DB) error {
+				return upsertProviderMigrationProvidersWithDB(tx, "deepseek")
+			},
+		},
+		{
+			Version:     "202605261700_deepseek_messages_endpoint_support",
+			Description: "refresh deepseek provider migration rows to expose chat and messages endpoints",
+			Up: func(tx *gorm.DB) error {
+				return upsertProviderMigrationProvidersWithDB(tx, "deepseek")
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
+}
+
+func backfillProviderModelTagsWithDB(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	if err := db.AutoMigrate(&ProviderModel{}); err != nil {
+		return err
+	}
+	type providerModelTagBackfillRow struct {
+		Provider string `gorm:"column:provider"`
+		Model    string `gorm:"column:model"`
+		Type     string `gorm:"column:type"`
+		Tags     string `gorm:"column:tags"`
+	}
+	rows := make([]providerModelTagBackfillRow, 0)
+	query := db.Table(ProviderModelsTableName).Select("provider", "model", "tags")
+	if db.Migrator().HasColumn(ProviderModelsTableName, "type") {
+		query = db.Table(ProviderModelsTableName).Select("provider", "model", "type", "tags")
+	}
+	if err := query.Find(&rows).Error; err != nil {
+		return err
+	}
+	now := helper.GetTimestamp()
+	for _, row := range rows {
+		nextTags := joinProviderModelTags(row.Model, append([]string{row.Type}, splitProviderModelTags(row.Tags)...))
+		if strings.TrimSpace(row.Tags) == nextTags {
+			continue
+		}
+		if err := db.Model(&ProviderModel{}).
+			Where("provider = ? AND model = ?", row.Provider, row.Model).
+			Updates(map[string]interface{}{
+				"tags":       nextTags,
+				"updated_at": now,
+			}).Error; err != nil {
+			return err
+		}
+	}
+	if db.Migrator().HasColumn(ProviderModelsTableName, "type") {
+		if err := db.Migrator().DropColumn(ProviderModelsTableName, "type"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func backfillOpenAITextProviderModelEndpointCandidatesWithDB(db *gorm.DB) error {
@@ -1033,7 +1346,7 @@ func backfillOpenAITextProviderModelEndpointCandidatesWithDB(db *gorm.DB) error 
 	}
 	now := helper.GetTimestamp()
 	for _, row := range rows {
-		if normalizeModelType(row.Type, row.Model) != ProviderModelTypeText {
+		if ProviderModelTypeFromTags(splitProviderModelTags(row.Tags)) != ProviderModelTypeText {
 			continue
 		}
 		nextEndpoints := openAITextProviderModelEndpointCandidates(row.SupportedEndpoints)
@@ -1100,6 +1413,13 @@ func runLogVersionedMigrations(db *gorm.DB) error {
 			Description: "add billing observability fields to consume logs",
 			Up: func(tx *gorm.DB) error {
 				return tx.AutoMigrate(&Log{})
+			},
+		},
+		{
+			Version:     "202605231130_log_normalize_provider_pricing_sources",
+			Description: "rewrite legacy provider pricing source provider_default rows to provider_migration in log database",
+			Up: func(tx *gorm.DB) error {
+				return normalizeProviderPricingLegacySourcesWithDB(tx)
 			},
 		},
 	}

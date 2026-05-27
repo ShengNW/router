@@ -3,10 +3,13 @@ package channel
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/yeying-community/router/common/config"
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestBuildResponsesTextModelTestRequestBody_Stream_NoStreamOptions(t *testing.T) {
@@ -160,6 +163,95 @@ func TestResolveChannelModelTestEndpointForRow_AllowsRealtimeForAudioModel(t *te
 	}
 	if endpoint != adminmodel.ChannelModelEndpointRealtime {
 		t.Fatalf("endpoint = %q, want %q", endpoint, adminmodel.ChannelModelEndpointRealtime)
+	}
+}
+
+func TestValidateChannelModelTestEndpointAgainstProviderRejectsOutsideProviderRange(t *testing.T) {
+	previousDB := adminmodel.DB
+	t.Cleanup(func() {
+		adminmodel.DB = previousDB
+	})
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=private"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	adminmodel.DB = db
+	if err := db.AutoMigrate(&adminmodel.ProviderModel{}); err != nil {
+		t.Fatalf("AutoMigrate: %v", err)
+	}
+	if err := db.Create(&adminmodel.ProviderModel{
+		Provider:           "qwen",
+		Model:              "qwen3.7-max",
+		Tags:               adminmodel.ProviderModelTypeText,
+		Status:             adminmodel.ProviderModelStatusActive,
+		SupportedEndpoints: adminmodel.ChannelModelEndpointChat,
+	}).Error; err != nil {
+		t.Fatalf("create provider model: %v", err)
+	}
+
+	err = validateChannelModelTestEndpointAgainstProvider(adminmodel.ChannelModel{
+		Model:         "qwen3.7-max",
+		UpstreamModel: "qwen3.7-max",
+		Provider:      "qwen",
+		Type:          adminmodel.ProviderModelTypeText,
+		Endpoint:      adminmodel.ChannelModelEndpointResponses,
+		Endpoints: []string{
+			adminmodel.ChannelModelEndpointChat,
+			adminmodel.ChannelModelEndpointResponses,
+		},
+	}, adminmodel.ChannelModelEndpointResponses)
+	if err == nil || !strings.Contains(err.Error(), "供应商官方端点范围不包含") {
+		t.Fatalf("validateChannelModelTestEndpointAgainstProvider error=%v, want provider endpoint rejection", err)
+	}
+}
+
+func TestValidateChannelModelTestEndpointAgainstProviderAllowsProviderEndpoint(t *testing.T) {
+	previousDB := adminmodel.DB
+	t.Cleanup(func() {
+		adminmodel.DB = previousDB
+	})
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=private"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	adminmodel.DB = db
+	if err := db.AutoMigrate(&adminmodel.ProviderModel{}); err != nil {
+		t.Fatalf("AutoMigrate: %v", err)
+	}
+	if err := db.Create(&adminmodel.ProviderModel{
+		Provider:           "qwen",
+		Model:              "qwen3.7-max",
+		Tags:               adminmodel.ProviderModelTypeText,
+		Status:             adminmodel.ProviderModelStatusActive,
+		SupportedEndpoints: adminmodel.ChannelModelEndpointChat,
+	}).Error; err != nil {
+		t.Fatalf("create provider model: %v", err)
+	}
+
+	if err := validateChannelModelTestEndpointAgainstProvider(adminmodel.ChannelModel{
+		Model:         "qwen3.7-max",
+		UpstreamModel: "qwen3.7-max",
+		Provider:      "qwen",
+		Type:          adminmodel.ProviderModelTypeText,
+		Endpoint:      adminmodel.ChannelModelEndpointChat,
+		Endpoints: []string{
+			adminmodel.ChannelModelEndpointChat,
+			adminmodel.ChannelModelEndpointResponses,
+		},
+	}, adminmodel.ChannelModelEndpointChat); err != nil {
+		t.Fatalf("validateChannelModelTestEndpointAgainstProvider returned error: %v", err)
+	}
+}
+
+func TestResolveChannelModelTestKind_UsesEndpointBeforeQwenModelType(t *testing.T) {
+	if got := resolveChannelModelTestKind(adminmodel.ProviderModelTypeImage, adminmodel.ChannelModelEndpointChat); got != channelModelTestKindText {
+		t.Fatalf("image+chat test kind = %q, want %q", got, channelModelTestKindText)
+	}
+	if got := resolveChannelModelTestKind(adminmodel.ProviderModelTypeAudio, adminmodel.ChannelModelEndpointChat); got != channelModelTestKindText {
+		t.Fatalf("audio+chat test kind = %q, want %q", got, channelModelTestKindText)
+	}
+	if got := resolveChannelModelTestKind(adminmodel.ProviderModelTypeImage, adminmodel.ChannelModelEndpointResponses); got != channelModelTestKindImageResponses {
+		t.Fatalf("image+responses test kind = %q, want %q", got, channelModelTestKindImageResponses)
 	}
 }
 

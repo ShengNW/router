@@ -16,14 +16,12 @@ import (
 	"github.com/yeying-community/router/common/helper"
 	"github.com/yeying-community/router/common/logger"
 	"github.com/yeying-community/router/internal/admin/model"
-	"github.com/yeying-community/router/internal/admin/monitor"
 	channelsvc "github.com/yeying-community/router/internal/admin/service/channel"
 	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
-
-// https://github.com/yeying-community/router/issues/79
 
 type OpenAISubscriptionResponse struct {
 	Object             string  `json:"object"`
@@ -123,11 +121,78 @@ type OpenRouterResponse struct {
 	} `json:"data"`
 }
 
+type CDKUsageStatsResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		Consumed        float64 `json:"consumed"`
+		Remaining       float64 `json:"remaining"`
+		Requests        int     `json:"requests"`
+		ActiveSessions  int     `json:"activeSessions"`
+		QuotaScope      string  `json:"quotaScope"`
+		ResetAt         string  `json:"resetAt"`
+		WeeklyConsumed  float64 `json:"weeklyConsumed"`
+		WeeklyRemaining float64 `json:"weeklyRemaining"`
+		WeeklyLimit     float64 `json:"weeklyLimit"`
+		WeeklyResetAt   string  `json:"weeklyResetAt"`
+		WeeklyResetMode string  `json:"weeklyResetMode"`
+		TotalConsumed   float64 `json:"totalConsumed"`
+		TotalRemaining  float64 `json:"totalRemaining"`
+		TotalLimit      float64 `json:"totalLimit"`
+	} `json:"data"`
+}
+
+type CDKCardInfoResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		OK                             bool    `json:"ok"`
+		Status                         string  `json:"status"`
+		CanRenew                       bool    `json:"canRenew"`
+		MaskedCDK                      string  `json:"maskedCdk"`
+		ProductName                    string  `json:"productName"`
+		CategoryName                   string  `json:"categoryName"`
+		CategoryPool                   string  `json:"categoryPool"`
+		BillingMode                    string  `json:"billingMode"`
+		ExpiresAt                      string  `json:"expiresAt"`
+		ExpireTime                     string  `json:"expireTime"`
+		ExpireDays                     int     `json:"expireDays"`
+		DailyQuota                     float64 `json:"dailyQuota"`
+		AllowRefundRequest             bool    `json:"allowRefundRequest"`
+		AllowDailyLimitReset           bool    `json:"allowDailyLimitReset"`
+		CanResetDailyLimit             bool    `json:"canResetDailyLimit"`
+		DailyLimitResetMaxTimes        int     `json:"dailyLimitResetMaxTimes"`
+		DailyLimitResetRemainingTimes  int     `json:"dailyLimitResetRemainingTimes"`
+		DailyLimitResetCostDays        int     `json:"dailyLimitResetCostDays"`
+		AllowWeeklyLimitReset          bool    `json:"allowWeeklyLimitReset"`
+		CanResetWeeklyLimit            bool    `json:"canResetWeeklyLimit"`
+		WeeklyLimitResetMaxTimes       int     `json:"weeklyLimitResetMaxTimes"`
+		WeeklyLimitResetRemainingTimes int     `json:"weeklyLimitResetRemainingTimes"`
+		WeeklyLimitResetCostDays       int     `json:"weeklyLimitResetCostDays"`
+		LimitConcurrentSessions        int     `json:"limitConcurrentSessions"`
+		Key                            string  `json:"key"`
+		Nickname                       string  `json:"nickname"`
+		UpstreamUserName               string  `json:"upstreamUserName"`
+		CanConvertToUsage              bool    `json:"canConvertToUsage"`
+		CanPlanConvert                 bool    `json:"canPlanConvert"`
+	} `json:"data"`
+}
+
 // buildBearerAuthHeader get auth header
 func buildBearerAuthHeader(token string) http.Header {
 	h := http.Header{}
 	h.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 	return h
+}
+
+func resolveChannelBillingAPIBaseURL(channel *model.Channel, profile model.ChannelBillingProfile) string {
+	if channel == nil {
+		return ""
+	}
+	if apiBaseURL := strings.TrimSpace(profile.ParseBillingConfig().APIBaseURL); apiBaseURL != "" {
+		return strings.TrimRight(apiBaseURL, "/")
+	}
+	return strings.TrimRight(channel.ResolveAPIBaseURL(""), "/")
 }
 
 func fetchChannelBillingResponseBody(method, url string, channel *model.Channel, headers http.Header) ([]byte, error) {
@@ -177,8 +242,12 @@ func fetchChannelBillingResponseBody(method, url string, channel *model.Channel,
 	return body, nil
 }
 
-func updateChannelCloseAIBalance(channel *model.Channel) (float64, error) {
-	url := fmt.Sprintf("%s/dashboard/billing/credit_grants", channel.ResolveAccountBaseURL())
+func fetchChannelCloseAIBillingAmount(channel *model.Channel, profile model.ChannelBillingProfile) (float64, error) {
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
+	if baseURL == "" {
+		return 0, errors.New("渠道账务未配置账务 API 地址")
+	}
+	url := fmt.Sprintf("%s/dashboard/billing/credit_grants", baseURL)
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 
 	if err != nil {
@@ -189,11 +258,10 @@ func updateChannelCloseAIBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	channel.UpdateBalance(response.TotalAvailable)
 	return response.TotalAvailable, nil
 }
 
-func updateChannelOpenAISBBalance(channel *model.Channel) (float64, error) {
+func fetchChannelOpenAISBBillingAmount(channel *model.Channel) (float64, error) {
 	url := fmt.Sprintf("https://api.openai-sb.com/sb-api/user/status?api_key=%s", channel.Key)
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
@@ -211,11 +279,10 @@ func updateChannelOpenAISBBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	channel.UpdateBalance(balance)
 	return balance, nil
 }
 
-func updateChannelAIProxyBalance(channel *model.Channel) (float64, error) {
+func fetchChannelAIProxyBillingAmount(channel *model.Channel) (float64, error) {
 	url := "https://aiproxy.io/api/report/getUserOverview"
 	headers := http.Header{}
 	headers.Add("Api-Key", channel.Key)
@@ -231,11 +298,10 @@ func updateChannelAIProxyBalance(channel *model.Channel) (float64, error) {
 	if !response.Success {
 		return 0, fmt.Errorf("code: %d, message: %s", response.ErrorCode, response.Message)
 	}
-	channel.UpdateBalance(response.Data.TotalPoints)
 	return response.Data.TotalPoints, nil
 }
 
-func updateChannelAPI2GPTBalance(channel *model.Channel) (float64, error) {
+func fetchChannelAPI2GPTBillingAmount(channel *model.Channel) (float64, error) {
 	url := "https://api.api2gpt.com/dashboard/billing/credit_grants"
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 
@@ -247,11 +313,10 @@ func updateChannelAPI2GPTBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	channel.UpdateBalance(response.TotalRemaining)
 	return response.TotalRemaining, nil
 }
 
-func updateChannelAIGC2DBalance(channel *model.Channel) (float64, error) {
+func fetchChannelAIGC2DBillingAmount(channel *model.Channel) (float64, error) {
 	url := "https://api.aigc2d.com/dashboard/billing/credit_grants"
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
@@ -262,11 +327,10 @@ func updateChannelAIGC2DBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	channel.UpdateBalance(response.TotalAvailable)
 	return response.TotalAvailable, nil
 }
 
-func updateChannelSiliconFlowBalance(channel *model.Channel) (float64, error) {
+func fetchChannelSiliconFlowBillingAmount(channel *model.Channel) (float64, error) {
 	url := "https://api.siliconflow.cn/v1/user/info"
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
@@ -284,11 +348,10 @@ func updateChannelSiliconFlowBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	channel.UpdateBalance(balance)
 	return balance, nil
 }
 
-func updateChannelDeepSeekBalance(channel *model.Channel) (float64, error) {
+func fetchChannelDeepSeekBillingAmount(channel *model.Channel) (float64, error) {
 	url := "https://api.deepseek.com/user/balance"
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
@@ -313,11 +376,10 @@ func updateChannelDeepSeekBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	channel.UpdateBalance(balance)
 	return balance, nil
 }
 
-func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
+func fetchChannelOpenRouterBillingAmount(channel *model.Channel) (float64, error) {
 	url := "https://openrouter.ai/api/v1/credits"
 	body, err := fetchChannelBillingResponseBody("GET", url, channel, buildBearerAuthHeader(channel.Key))
 	if err != nil {
@@ -329,18 +391,179 @@ func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	balance := response.Data.TotalCredits - response.Data.TotalUsage
-	channel.UpdateBalance(balance)
 	return balance, nil
 }
 
-func resolveChannelBalanceRequestURLs(channel *model.Channel) []string {
+func resolveChannelCDKKey(channel *model.Channel, profile model.ChannelBillingProfile) string {
+	if cdk := profile.ParseBillingConfig().CDK; cdk != "" {
+		return cdk
+	}
+	if channel != nil {
+		cfg, _ := channel.LoadConfig()
+		if cdk := model.ExtractCDKFromAccountURL(cfg.GetAccountBaseURL()); cdk != "" {
+			return cdk
+		}
+	}
+	return strings.TrimSpace(channel.Key)
+}
+
+func resolveChannelCDKBillingCurrency(profile model.ChannelBillingProfile) string {
+	if currency := profile.ParseBillingConfig().Currency; currency != "" {
+		return currency
+	}
+	return "USD"
+}
+
+func fetchChannelCDKBillingStats(channel *model.Channel, profile model.ChannelBillingProfile) (*CDKUsageStatsResponse, error) {
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
+	if baseURL == "" {
+		return nil, errors.New("渠道账务未配置 CDK API 地址")
+	}
+	cdkKey := resolveChannelCDKKey(channel, profile)
+	if cdkKey == "" {
+		return nil, errors.New("渠道未配置 CDK 密钥")
+	}
+	statsURL := fmt.Sprintf("%s/api/public/usage/stats?cdk=%s", baseURL, cdkKey)
+	body, err := fetchChannelBillingResponseBody("GET", statsURL, channel, http.Header{})
+	if err != nil {
+		return nil, err
+	}
+	response := CDKUsageStatsResponse{}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	if response.Code != 0 {
+		return nil, fmt.Errorf("CDK 余额查询失败: %s", response.Message)
+	}
+	return &response, nil
+}
+
+func fetchChannelCDKCardInfo(channel *model.Channel, profile model.ChannelBillingProfile) (*CDKCardInfoResponse, error) {
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
+	if baseURL == "" {
+		return nil, errors.New("渠道账务未配置 CDK API 地址")
+	}
+	cdkKey := resolveChannelCDKKey(channel, profile)
+	if cdkKey == "" {
+		return nil, errors.New("渠道未配置 CDK 密钥")
+	}
+	cardInfoURL := fmt.Sprintf("%s/api/public/card-info?cdk=%s", baseURL, cdkKey)
+	body, err := fetchChannelBillingResponseBody("GET", cardInfoURL, channel, http.Header{})
+	if err != nil {
+		return nil, err
+	}
+	response := CDKCardInfoResponse{}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	if response.Code != 0 {
+		return nil, fmt.Errorf("CDK 套餐信息查询失败: %s", response.Message)
+	}
+	return &response, nil
+}
+
+func buildCDKBillingSnapshotItems(stats *CDKUsageStatsResponse, currency string) []model.ChannelBillingSnapshotItem {
+	data := stats.Data
+	items := make([]model.ChannelBillingSnapshotItem, 0, 3)
+
+	dailyResetAt := int64(0)
+	if t, err := time.Parse(time.RFC3339Nano, data.ResetAt); err == nil {
+		dailyResetAt = t.Unix()
+	}
+	weeklyResetAt := int64(0)
+	if t, err := time.Parse(time.RFC3339Nano, data.WeeklyResetAt); err == nil {
+		weeklyResetAt = t.Unix()
+	}
+
+	items = append(items, model.ChannelBillingSnapshotItem{
+		QuotaType:  "daily",
+		QuotaLabel: "日额度",
+		Amount:     data.Remaining,
+		Currency:   currency,
+		ExpiresAt:  dailyResetAt,
+		SortOrder:  1,
+	})
+	items = append(items, model.ChannelBillingSnapshotItem{
+		QuotaType:  "weekly",
+		QuotaLabel: "周额度",
+		Amount:     data.WeeklyRemaining,
+		Currency:   currency,
+		ExpiresAt:  weeklyResetAt,
+		SortOrder:  2,
+	})
+	items = append(items, model.ChannelBillingSnapshotItem{
+		QuotaType:  "total",
+		QuotaLabel: "总额度",
+		Amount:     data.TotalRemaining,
+		Currency:   currency,
+		SortOrder:  3,
+	})
+	return items
+}
+
+func resolveChannelCDKBillingRequestURL(channel *model.Channel, profile model.ChannelBillingProfile) string {
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
+	if baseURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/api/public/usage/stats?cdk=***", baseURL)
+}
+
+func resolveChannelCDKCardInfoRequestURL(channel *model.Channel, profile model.ChannelBillingProfile) string {
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
+	if baseURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/api/public/card-info?cdk=***", baseURL)
+}
+
+func refreshAndPersistChannelCDKBilling(channel *model.Channel, profile model.ChannelBillingProfile, message string) (float64, error) {
+	stats, err := fetchChannelCDKBillingStats(channel, profile)
+	if err != nil {
+		return 0, err
+	}
+
+	currency := resolveChannelCDKBillingCurrency(profile)
+	items := buildCDKBillingSnapshotItems(stats, currency)
+	now := helper.GetTimestamp()
+	requestURL := resolveChannelCDKBillingRequestURL(channel, profile)
+
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		snapshotRow, err := model.CreateChannelBillingSnapshotWithDB(tx, model.ChannelBillingSnapshot{
+			ChannelId:  strings.TrimSpace(channel.Id),
+			SourceType: model.ChannelBillingSnapshotSourceAPI,
+			Balance:    stats.Data.TotalRemaining,
+			RawStatus:  "ok",
+			Message:    strings.TrimSpace(message),
+			RequestURL: requestURL,
+			CreatedAt:  now,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = model.CreateChannelBillingSnapshotItemsWithDB(tx, snapshotRow.Id, channel.Id, items)
+		return err
+	})
+
+	return stats.Data.TotalRemaining, err
+}
+
+func resolveChannelBillingRequestURLs(channel *model.Channel) []string {
 	if channel == nil {
 		return nil
 	}
+	profile, err := model.GetChannelBillingProfileByChannelIDWithDB(model.DB, channel.Id)
+	if err != nil {
+		return nil
+	}
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
 	switch channel.GetChannelProtocol() {
 	case relaychannel.CloseAI:
+		if baseURL == "" {
+			return nil
+		}
 		return []string{
-			fmt.Sprintf("%s/dashboard/billing/credit_grants", channel.ResolveAccountBaseURL()),
+			fmt.Sprintf("%s/dashboard/billing/credit_grants", baseURL),
 		}
 	case relaychannel.OpenAISB:
 		return []string{
@@ -359,7 +582,6 @@ func resolveChannelBalanceRequestURLs(channel *model.Channel) []string {
 	case relaychannel.OpenRouter:
 		return []string{"https://openrouter.ai/api/v1/credits"}
 	}
-	baseURL := channel.ResolveAccountBaseURL()
 	if baseURL == "" {
 		return nil
 	}
@@ -372,39 +594,88 @@ func resolveChannelBalanceRequestURLs(channel *model.Channel) []string {
 	}
 }
 
-func updateChannelBalance(channel *model.Channel) (float64, error) {
-	channelProtocol := channel.GetChannelProtocol()
-	baseURL := relaychannel.BaseURLByProtocol(channel.GetProtocol())
-	if channel.ResolveAPIBaseURL("") == "" {
-		channel.BaseURL = &baseURL
-	}
-	switch channelProtocol {
-	case relaychannel.OpenAI:
-		if channel.ResolveAccountBaseURL() != "" {
-			baseURL = channel.ResolveAccountBaseURL()
-		}
-	case relaychannel.Azure:
-		return 0, errors.New("尚未实现")
-	case relaychannel.Custom:
-		baseURL = channel.ResolveAccountBaseURL()
-	case relaychannel.CloseAI:
-		return updateChannelCloseAIBalance(channel)
-	case relaychannel.OpenAISB:
-		return updateChannelOpenAISBBalance(channel)
-	case relaychannel.AIProxy:
-		return updateChannelAIProxyBalance(channel)
-	case relaychannel.API2GPT:
-		return updateChannelAPI2GPTBalance(channel)
-	case relaychannel.AIGC2D:
-		return updateChannelAIGC2DBalance(channel)
-	case relaychannel.SiliconFlow:
-		return updateChannelSiliconFlowBalance(channel)
-	case relaychannel.DeepSeek:
-		return updateChannelDeepSeekBalance(channel)
-	case relaychannel.OpenRouter:
-		return updateChannelOpenRouterBalance(channel)
+func resolveChannelBillingSnapshotCurrency(channel *model.Channel) string {
+	switch strings.TrimSpace(strings.ToLower(channel.GetProtocol())) {
+	case "closeai", "openai-sb", "api2gpt", "deepseek", "siliconflow":
+		return "CNY"
 	default:
-		return 0, errors.New("尚未实现")
+		return "USD"
+	}
+}
+
+func persistChannelAutoBillingSnapshot(channel *model.Channel, amount float64, message string) error {
+	if channel == nil {
+		return errors.New("渠道不存在")
+	}
+	now := helper.GetTimestamp()
+	return model.DB.Transaction(func(tx *gorm.DB) error {
+		snapshotRow, err := model.CreateChannelBillingSnapshotWithDB(tx, model.ChannelBillingSnapshot{
+			ChannelId:  strings.TrimSpace(channel.Id),
+			SourceType: model.ChannelBillingSnapshotSourceAPI,
+			RawStatus:  "ok",
+			Message:    strings.TrimSpace(message),
+			RequestURL: strings.Join(resolveChannelBillingRequestURLs(channel), "\n"),
+			CreatedAt:  now,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = model.CreateChannelBillingSnapshotItemsWithDB(tx, snapshotRow.Id, channel.Id, []model.ChannelBillingSnapshotItem{
+			{
+				QuotaType:  "total",
+				QuotaLabel: "总额度",
+				Amount:     amount,
+				Currency:   resolveChannelBillingSnapshotCurrency(channel),
+				SortOrder:  1,
+				CreatedAt:  now,
+			},
+		})
+		return err
+	})
+}
+
+func refreshChannelBillingAmount(channel *model.Channel) (float64, error) {
+	if channel == nil {
+		return 0, errors.New("渠道不存在")
+	}
+	profile, err := model.GetChannelBillingProfileByChannelIDWithDB(model.DB, channel.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, errors.New("渠道账务未配置")
+		}
+		return 0, err
+	}
+	switch strings.TrimSpace(profile.BillingMode) {
+	case model.ChannelBillingModeBuiltinCloseAI:
+		return fetchChannelCloseAIBillingAmount(channel, profile)
+	case model.ChannelBillingModeBuiltinOpenAISB:
+		return fetchChannelOpenAISBBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinAIProxy:
+		return fetchChannelAIProxyBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinAPI2GPT:
+		return fetchChannelAPI2GPTBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinAIGC2D:
+		return fetchChannelAIGC2DBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinSiliconFlow:
+		return fetchChannelSiliconFlowBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinDeepSeek:
+		return fetchChannelDeepSeekBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinOpenRouter:
+		return fetchChannelOpenRouterBillingAmount(channel)
+	case model.ChannelBillingModeBuiltinCDK:
+		stats, err := fetchChannelCDKBillingStats(channel, profile)
+		if err != nil {
+			return 0, err
+		}
+		return stats.Data.TotalRemaining, nil
+	case model.ChannelBillingModeBuiltinOpenAI:
+		// Continue below with OpenAI-style subscription + usage billing API.
+	default:
+		return 0, errors.New("当前渠道不支持自动刷新账务")
+	}
+	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
+	if baseURL == "" {
+		return 0, errors.New("渠道账务未配置账务 API 地址")
 	}
 	url := fmt.Sprintf("%s/v1/dashboard/billing/subscription", baseURL)
 
@@ -434,32 +705,31 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	balance := subscription.HardLimitUSD - usage.TotalUsage/100
-	channel.UpdateBalance(balance)
 	return balance, nil
 }
 
-// UpdateChannelBalance submits a single-channel balance refresh task.
-// The admin HTTP route is unified under POST /api/v1/admin/channel/{id}/refresh with action=balance.
-func UpdateChannelBalance(c *gin.Context) {
+// UpdateChannelBilling submits a single-channel billing refresh task.
+// The admin HTTP route is unified under POST /api/v1/admin/channel/{id}/refresh with action=billing.
+func UpdateChannelBilling(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		logChannelAdminWarn(c, "refresh_balance", stringField("reason", "id 为空"))
+		logChannelAdminWarn(c, "refresh_billing", stringField("reason", "id 为空"))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "id 为空",
 		})
 		return
 	}
-	taskRow, reused, err := CreateChannelRefreshBalanceTask(id, c.GetString(ctxkey.Id), c.GetString(helper.TraceIDKey))
+	taskRow, reused, err := CreateChannelRefreshBillingTask(id, c.GetString(ctxkey.Id), c.GetString(helper.TraceIDKey))
 	if err != nil {
-		logChannelAdminWarn(c, "refresh_balance", stringField("channel_id", id), stringField("reason", err.Error()))
+		logChannelAdminWarn(c, "refresh_billing", stringField("channel_id", id), stringField("reason", err.Error()))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
 		return
 	}
-	logChannelAdminInfo(c, "refresh_balance", stringField("channel_id", taskRow.ChannelId), stringField("task_id", taskRow.Id), stringField("status", taskRow.Status))
+	logChannelAdminInfo(c, "refresh_billing", stringField("channel_id", taskRow.ChannelId), stringField("task_id", taskRow.Id), stringField("status", taskRow.Status))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -473,7 +743,7 @@ func UpdateChannelBalance(c *gin.Context) {
 	return
 }
 
-func updateAllChannelsBalance() error {
+func refreshAllChannelsBilling() error {
 	channels, err := channelsvc.GetAllBasic(0, 0, "all", true)
 	if err != nil {
 		return err
@@ -482,54 +752,21 @@ func updateAllChannelsBalance() error {
 		if channel.Status != model.ChannelStatusEnabled {
 			continue
 		}
-		// TODO: support Azure
-		channelProtocol := channel.GetChannelProtocol()
-		if channelProtocol != relaychannel.OpenAI && channelProtocol != relaychannel.Custom {
+		profile, _ := model.GetChannelBillingProfileByChannelIDWithDB(model.DB, channel.Id)
+		if _, err := refreshAndPersistChannelBillingEntitlements(channel, profile, "批量自动刷新账务"); err != nil {
+			time.Sleep(config.RequestInterval)
 			continue
-		}
-		balance, err := updateChannelBalance(channel)
-		if err != nil {
-			continue
-		} else {
-			// err is nil & balance <= 0 means quota is used up
-			if balance <= 0 {
-				monitor.DisableChannel(channel.Id, channel.DisplayName(), "余额不足")
-			}
 		}
 		time.Sleep(config.RequestInterval)
 	}
 	return nil
 }
 
-// UpdateAllChannelsBalance godoc
-// @Summary Update all channels balance (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/update_balance [post]
-func UpdateAllChannelsBalance(c *gin.Context) {
-	//err := updateAllChannelsBalance()
-	//if err != nil {
-	//	c.JSON(http.StatusOK, gin.H{
-	//		"success": false,
-	//		"message": err.Error(),
-	//	})
-	//	return
-	//}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-	})
-	return
-}
-
-func AutomaticallyUpdateChannels(frequency int) {
+func AutomaticallyRefreshChannelBilling(frequency int) {
 	for {
 		time.Sleep(time.Duration(frequency) * time.Minute)
-		logger.SysLog("updating all channels")
-		_ = updateAllChannelsBalance()
-		logger.SysLog("channels update done")
+		logger.SysLog("refreshing channel billing")
+		_ = refreshAllChannelsBilling()
+		logger.SysLog("channel billing refresh done")
 	}
 }

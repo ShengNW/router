@@ -1,7 +1,5 @@
 package zhipu
 
-// https://open.bigmodel.cn/pricing
-
 var ModelList = []string{
 	"glm-zero-preview", "glm-4-plus", "glm-4-0520", "glm-4-airx",
 	"glm-4-air", "glm-4-long", "glm-4-flashx", "glm-4-flash",

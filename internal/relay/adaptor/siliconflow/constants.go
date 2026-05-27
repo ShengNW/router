@@ -1,7 +1,5 @@
 package siliconflow
 
-// https://docs.siliconflow.cn/docs/getting-started
-
 var ModelList = []string{
 	"deepseek-ai/deepseek-llm-67b-chat",
 	"Qwen/Qwen1.5-14B-Chat",

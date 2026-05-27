@@ -4,13 +4,9 @@ import (
 	"github.com/yeying-community/router/internal/relay/adaptor/geminiv2"
 )
 
-// https://ai.google.dev/models/gemini
-
 var ModelList = geminiv2.ModelList
 
 // ModelsSupportSystemInstruction is the list of models that support system instruction.
-//
-// https://cloud.google.com/vertex-ai/generative-ai/docs/learn/prompts/system-instructions
 var ModelsSupportSystemInstruction = []string{
 	// "gemini-1.0-pro-002",
 	// "gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-flash-002",

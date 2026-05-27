@@ -2,7 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { timestamp2string } from '../../helpers';
-import { BALANCE_LOT_COLUMN_WIDTHS } from '../../constants/tableWidthPresets';
+import {
+  BALANCE_LOT_COLUMN_WIDTHS,
+  BALANCE_LOT_TABLE_MIN_WIDTH,
+} from '../../constants/tableWidthPresets';
 import RedeemCodePage from './RedeemCodePage';
 import {
   renderTopupIntegerAmountWithExactPopup,
@@ -220,6 +223,7 @@ const BalanceStatusPage = () => {
               className='router-list-table router-table-fit-page'
               rowKey={(row) => row.id || `${row.source_type}-${row.source_id}`}
               pagination={false}
+              scroll={{ x: BALANCE_LOT_TABLE_MIN_WIDTH }}
               dataSource={balanceLots}
               columns={balanceLotColumns}
             />

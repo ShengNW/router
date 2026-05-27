@@ -14,6 +14,11 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 	if err := tx.AutoMigrate(
 		&User{},
 		&Channel{},
+		&ChannelBillingProfile{},
+		&ChannelBillingSnapshot{},
+		&ChannelBillingSnapshotItem{},
+		&ChannelBillingAction{},
+		&ChannelBillingAlertEvent{},
 		&ChannelModel{},
 		&ChannelModelPriceComponent{},
 		&ChannelTest{},
@@ -32,6 +37,7 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 		&GroupChannel{},
 		&GroupModel{},
 		&ServicePackage{},
+		&ServicePackageVisibleUser{},
 		&UserPackageSubscription{},
 		&GroupQuotaCounter{},
 		&UserQuotaCounter{},
@@ -43,7 +49,7 @@ func runMainBaselineMigrationWithDB(tx *gorm.DB) error {
 	if err := ensureChannelProtocolCatalogSeededWithDB(tx); err != nil {
 		return err
 	}
-	if err := syncDefaultProvidersWithDB(tx); err != nil {
+	if err := replaceProviderMigrationSeedsWithDB(tx); err != nil {
 		return err
 	}
 	if err := tx.Exec(

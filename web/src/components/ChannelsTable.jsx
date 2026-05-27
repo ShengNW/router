@@ -5,21 +5,21 @@ import {
   API,
   showError,
   showInfo,
-  showSuccess,
   timestamp2string,
 } from '../helpers';
 
 import { ITEMS_PER_PAGE } from '../constants';
-import { CHANNEL_LIST_COLUMN_WIDTHS } from '../constants/tableWidthPresets';
+import {
+  CHANNEL_LIST_COLUMN_WIDTHS,
+  CHANNEL_LIST_TABLE_MIN_WIDTH,
+} from '../constants/tableWidthPresets';
 import {
   getChannelProtocolOptions,
   loadChannelProtocolOptions,
 } from '../helpers/helper';
-import { renderNumber } from '../helpers/render';
 import {
   AppButton,
   AppFilterHeader,
-  AppIcon,
   AppInput,
   AppInputNumber,
   AppFormActions,
@@ -29,32 +29,17 @@ import {
   AppTooltip,
 } from '../router-ui';
 
-const normalizeAsyncTaskStatus = (value) => {
-  const normalized = (value || '').toString().trim().toLowerCase();
-  switch (normalized) {
-    case 'pending':
-    case 'running':
-    case 'succeeded':
-    case 'failed':
-    case 'canceled':
-      return normalized;
-    default:
-      return 'pending';
-  }
-};
+const compareTextValue = (left, right) =>
+  String(left || '').localeCompare(String(right || ''));
 
-async function fetchTaskById(taskId) {
-  const normalizedTaskId = (taskId || '').toString().trim();
-  if (normalizedTaskId === '') {
-    throw new Error('fetch task failed');
-  }
-  const res = await API.get(`/api/v1/admin/tasks/${normalizedTaskId}`);
-  const { success, message, data } = res.data || {};
-  if (!success) {
-    throw new Error(message || 'fetch task failed');
-  }
-  return data || null;
-}
+const compareNumberValue = (left, right) =>
+  Number(left || 0) - Number(right || 0);
+
+const compareArrayValue = (left, right) =>
+  compareTextValue(
+    Array.isArray(left) ? left.join(',') : left,
+    Array.isArray(right) ? right.join(',') : right,
+  );
 
 function renderTimestamp(timestamp) {
   return <>{timestamp2string(timestamp)}</>;
@@ -113,37 +98,6 @@ function renderChannelName(channel, t) {
   return <span>{displayName || t('channel.table.no_name')}</span>;
 }
 
-function renderBalance(protocol, balance, t) {
-  const normalized = (protocol || '').toString().trim().toLowerCase();
-  switch (normalized) {
-    case 'openai':
-      if (balance === 0) {
-        return <span>{t('channel.table.balance_not_supported')}</span>;
-      }
-      return <span>${balance.toFixed(2)}</span>;
-    case 'closeai':
-      return <span>¥{balance.toFixed(2)}</span>;
-    case 'custom':
-      return <span>${balance.toFixed(2)}</span>;
-    case 'openai-sb':
-      return <span>¥{(balance / 10000).toFixed(2)}</span>;
-    case 'aiproxy':
-      return <span>{renderNumber(balance)}</span>;
-    case 'api2gpt':
-      return <span>¥{balance.toFixed(2)}</span>;
-    case 'aigc2d':
-      return <span>{renderNumber(balance)}</span>;
-    case 'openrouter':
-      return <span>${balance.toFixed(2)}</span>;
-    case 'deepseek':
-      return <span>¥{balance.toFixed(2)}</span>;
-    case 'siliconflow':
-      return <span>¥{balance.toFixed(2)}</span>;
-    default:
-      return <span>{t('channel.table.balance_not_supported')}</span>;
-  }
-}
-
 const selectionModeNone = '';
 const selectionModeDelete = 'delete';
 const selectionModeDisable = 'disable';
@@ -164,7 +118,10 @@ const ChannelsTable = () => {
   const [selectedChannelIds, setSelectedChannelIds] = useState([]);
   const [disableBlockedImpact, setDisableBlockedImpact] = useState(null);
   const currentPagePath = `${location.pathname}${location.search}${location.hash}`;
-  const [balanceRefreshTasks, setBalanceRefreshTasks] = useState({});
+  const [tableSorter, setTableSorter] = useState({
+    columnKey: 'created_time',
+    order: 'descend',
+  });
   const [protocolMap, setProtocolMap] = useState(() =>
     buildProtocolMap(getChannelProtocolOptions(), t)
   );
@@ -249,76 +206,6 @@ const ChannelsTable = () => {
     const validIds = new Set(channels.map((channel) => channel.id));
     setSelectedChannelIds((prev) => prev.filter((id) => validIds.has(id)));
   }, [selectionMode, channels]);
-
-  useEffect(() => {
-    const taskEntries = Object.entries(balanceRefreshTasks || {});
-    if (taskEntries.length === 0) {
-      return undefined;
-    }
-    const hasActiveTasks = taskEntries.some(([, task]) =>
-      ['pending', 'running'].includes(normalizeAsyncTaskStatus(task?.status))
-    );
-    if (!hasActiveTasks) {
-      return undefined;
-    }
-    const timer = window.setInterval(async () => {
-      const updates = await Promise.all(
-        taskEntries.map(async ([channelId, task]) => {
-          const status = normalizeAsyncTaskStatus(task?.status);
-          if (!['pending', 'running'].includes(status)) {
-            return { channelId, task };
-          }
-          try {
-            const latestTask = await fetchTaskById(task.id);
-            return { channelId, task: latestTask || task };
-          } catch {
-            return { channelId, task };
-          }
-        })
-      );
-      const nextTaskMap = {};
-      const finishedTasks = [];
-      updates.forEach(({ channelId, task }) => {
-        const status = normalizeAsyncTaskStatus(task?.status);
-        if (['pending', 'running'].includes(status)) {
-          nextTaskMap[channelId] = task;
-        } else {
-          finishedTasks.push({ channelId, task });
-        }
-      });
-      setBalanceRefreshTasks(nextTaskMap);
-      if (finishedTasks.length === 0) {
-        return;
-      }
-      const succeeded = finishedTasks.filter(
-        ({ task }) => normalizeAsyncTaskStatus(task?.status) === 'succeeded'
-      );
-      if (succeeded.length > 0) {
-        setLoading(true);
-        await loadChannels({ page: activePage, keyword: searchKeyword });
-      }
-      finishedTasks.forEach(({ channelId, task }) => {
-        const targetChannel = channels.find((item) => item.id === channelId);
-        const channelName = getChannelDisplayName(targetChannel);
-        if (normalizeAsyncTaskStatus(task?.status) === 'succeeded') {
-          showSuccess(t('channel.messages.balance_update_success', { name: channelName }));
-          return;
-        }
-        showError(
-          task?.error_message ||
-            t('channel.messages.balance_update_failed', { name: channelName })
-        );
-      });
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [
-    activePage,
-    balanceRefreshTasks,
-    channels,
-    loadChannels,
-    searchKeyword,
-    t,
-  ]);
 
   const manageChannel = async (id, action, idx, value) => {
     const normalizedID = (id || '').toString().trim();
@@ -440,61 +327,19 @@ const ChannelsTable = () => {
     setSearching(false);
   };
 
-  const updateChannelBalance = async (id, name, idx) => {
-    try {
-      const res = await API.post(`/api/v1/admin/channel/${id}/refresh`, {
-        action: 'balance',
-      });
-      const { success, message, data, meta } = res.data || {};
-      if (!success) {
-        showError(message);
-        return;
-      }
-      const task = data?.task;
-      if (!task?.id) {
-        showError(t('channel.messages.balance_update_submit_failed'));
-        return;
-      }
-      setBalanceRefreshTasks((prev) => ({
-        ...prev,
-        [id]: task,
-      }));
-      showSuccess(
-        meta?.reused
-          ? t('channel.messages.balance_update_reused', { name })
-          : t('channel.messages.balance_update_submitted', { name })
-      );
-    } catch (error) {
-      showError(
-        error?.message || t('channel.messages.balance_update_submit_failed')
-      );
-    }
-  };
-
   const handleKeywordChange = async (e, { value }) => {
     setSearchKeyword(value.trim());
   };
 
-  const sortChannel = (key) => {
-    if (channels.length === 0) return;
-    setLoading(true);
-    let sortedChannels = [...channels];
-    sortedChannels.sort((a, b) => {
-      const leftValue = Array.isArray(a[key]) ? a[key].join(',') : a[key];
-      const rightValue = Array.isArray(b[key]) ? b[key].join(',') : b[key];
-      if (!isNaN(leftValue)) {
-        // If the value is numeric, subtract to sort
-        return leftValue - rightValue;
-      } else {
-        // If the value is not numeric, sort as strings
-        return ('' + leftValue).localeCompare(String(rightValue));
-      }
-    });
-    if (sortedChannels[0].id === channels[0].id) {
-      sortedChannels.reverse();
+  const handleTableChange = (_, __, sorter) => {
+    if (!sorter || Array.isArray(sorter) || !sorter.columnKey || !sorter.order) {
+      setTableSorter({ columnKey: null, order: null });
+      return;
     }
-    setChannels(sortedChannels);
-    setLoading(false);
+    setTableSorter({
+      columnKey: sorter.columnKey,
+      order: sorter.order,
+    });
   };
 
   const pagedChannels = channels;
@@ -543,7 +388,7 @@ const ChannelsTable = () => {
     if (!channel || !channel.id || inBatchSelectMode) {
       return;
     }
-    navigate(`/channel/detail/${channel.id}`, {
+    navigate(`/admin/channel/detail/${channel.id}`, {
       state: {
         from: currentPagePath,
         channelLabel: getChannelDisplayName(channel),
@@ -730,7 +575,7 @@ const ChannelsTable = () => {
               className='router-page-button'
               color='blue'
               disabled={actionBusy}
-              onClick={() => navigate('/channel/add')}
+              onClick={() => navigate('/admin/channel/add')}
             >
               {t('channel.buttons.add')}
             </AppButton>
@@ -759,178 +604,101 @@ const ChannelsTable = () => {
           </div>
         }
       />
-      <AppTable
-        className='router-hover-table router-list-table router-table-fit-page'
-        pagination={false}
-        rowKey={(channel) => channel.id}
-        dataSource={visibleChannels}
-        rowSelection={tableRowSelection}
-        locale={{ emptyText: '-' }}
-        onRow={(channel) => ({
-          onClick: () => openChannelByStatus(channel),
-          className: inBatchSelectMode ? undefined : 'router-row-clickable',
-        })}
-        columns={[
+      <div className='router-table-scroll-x'>
+        <AppTable
+          className='router-hover-table router-list-table router-table-fit-page'
+          pagination={false}
+          scroll={{ x: CHANNEL_LIST_TABLE_MIN_WIDTH }}
+          rowKey={(channel) => channel.id}
+          onChange={handleTableChange}
+          dataSource={visibleChannels}
+          rowSelection={tableRowSelection}
+          locale={{ emptyText: '-' }}
+          onRow={(channel) => ({
+            onClick: () => openChannelByStatus(channel),
+            className: inBatchSelectMode ? undefined : 'router-row-clickable',
+          })}
+          columns={[
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('name');
-                }}
-              >
-                {t('channel.table.id')}
-              </span>
-            ),
+            title: t('channel.table.id'),
             dataIndex: 'name',
             key: 'name',
             width: CHANNEL_LIST_COLUMN_WIDTHS.name,
             ellipsis: true,
+            sorter: (a, b) => compareTextValue(a.name, b.name),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'name' ? tableSorter.order : null,
             render: (_, channel) => renderChannelName(channel, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('protocol');
-                }}
-              >
-                {t('channel.table.type')}
-              </span>
-            ),
+            title: t('channel.table.type'),
             dataIndex: 'protocol',
             key: 'protocol',
             className: 'router-table-col-type-narrow',
             width: CHANNEL_LIST_COLUMN_WIDTHS.type,
+            sorter: (a, b) => compareTextValue(a.protocol, b.protocol),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'protocol' ? tableSorter.order : null,
             render: (value) => renderProtocol(value, protocolMap),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('status');
-                }}
-              >
-                {t('channel.table.status')}
-              </span>
-            ),
+            title: t('channel.table.status'),
             dataIndex: 'status',
             key: 'status',
             className: 'router-table-col-status-compact',
             width: CHANNEL_LIST_COLUMN_WIDTHS.status,
+            sorter: (a, b) => compareNumberValue(a.status, b.status),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder: tableSorter.columnKey === 'status' ? tableSorter.order : null,
             render: (value) => renderStatus(value, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('created_time');
-                }}
-              >
-                {t('channel.table.created_time')}
-              </span>
-            ),
+            title: t('channel.table.created_time'),
             dataIndex: 'created_time',
             key: 'created_time',
             className: 'router-table-col-datetime',
             width: CHANNEL_LIST_COLUMN_WIDTHS.createdAt,
+            sorter: (a, b) => compareNumberValue(a.created_time, b.created_time),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'created_time' ? tableSorter.order : null,
             render: (value) => (value ? renderTimestamp(value) : '-'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('updated_at');
-                }}
-              >
-                {t('channel.table.updated_at')}
-              </span>
-            ),
+            title: t('channel.table.updated_at'),
             dataIndex: 'updated_at',
             key: 'updated_at',
             className: 'router-table-col-datetime',
             width: CHANNEL_LIST_COLUMN_WIDTHS.updatedAt,
+            sorter: (a, b) => compareNumberValue(a.updated_at, b.updated_at),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'updated_at' ? tableSorter.order : null,
             render: (value) => (value ? renderTimestamp(value) : '-'),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('capabilities');
-                }}
-              >
-                {t('channel.table.capabilities')}
-              </span>
-            ),
+            title: t('channel.table.capabilities'),
             dataIndex: 'capabilities',
             key: 'capabilities',
             width: CHANNEL_LIST_COLUMN_WIDTHS.capabilities,
             ellipsis: true,
+            sorter: (a, b) => compareArrayValue(a.capabilities, b.capabilities),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'capabilities' ? tableSorter.order : null,
             render: (value) => renderCapabilities(value, t),
           },
           {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('balance');
-                }}
-              >
-                {t('channel.table.balance')}
-              </span>
-            ),
-            dataIndex: 'balance',
-            key: 'balance',
-            width: CHANNEL_LIST_COLUMN_WIDTHS.balance,
-            render: (_, channel, idx) => (
-              <div onClick={stopRowClick}>
-                <AppTooltip title={t('channel.table.click_to_update')}>
-                  <span
-                    onClick={() => {
-                      if (balanceRefreshTasks[channel.id]) {
-                        return;
-                      }
-                      updateChannelBalance(
-                        channel.id,
-                        getChannelDisplayName(channel),
-                        idx,
-                      );
-                    }}
-                    className='router-row-clickable'
-                  >
-                    {balanceRefreshTasks[channel.id] ? (
-                      <>
-                        <AppIcon name='spinner' className='router-spin-icon' />
-                        {renderBalance(channel.protocol, channel.balance, t)}
-                      </>
-                    ) : (
-                      renderBalance(channel.protocol, channel.balance, t)
-                    )}
-                  </span>
-                </AppTooltip>
-              </div>
-            ),
-          },
-          {
-            title: (
-              <span
-                className='router-sortable-header'
-                onClick={() => {
-                  sortChannel('priority');
-                }}
-              >
-                {t('channel.table.priority')}
-              </span>
-            ),
+            title: t('channel.table.priority'),
             dataIndex: 'priority',
             key: 'priority',
             className: 'router-table-col-status-compact',
             width: CHANNEL_LIST_COLUMN_WIDTHS.priority,
+            sorter: (a, b) => compareNumberValue(a.priority, b.priority),
+            sortDirections: ['ascend', 'descend'],
+            sortOrder:
+              tableSorter.columnKey === 'priority' ? tableSorter.order : null,
             render: (value, channel, idx) => (
               <div onClick={stopRowClick}>
                 <AppTooltip title={t('channel.table.priority_tip')}>
@@ -977,7 +745,9 @@ const ChannelsTable = () => {
                 </AppButton>
                 <AppButton
                   className='router-inline-button'
-                  onClick={() => navigate(`/channel/add?copy_from=${channel.id}`)}
+                  onClick={() =>
+                    navigate(`/admin/channel/add?copy_from=${channel.id}`)
+                  }
                 >
                   {t('channel.buttons.copy')}
                 </AppButton>
@@ -993,8 +763,9 @@ const ChannelsTable = () => {
               </div>
             ),
           },
-        ]}
-      />
+          ]}
+        />
+      </div>
       <AppModal
         size='small'
         open={!!disableBlockedImpact}

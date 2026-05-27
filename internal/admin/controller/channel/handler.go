@@ -3,6 +3,7 @@ package channel
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -19,22 +20,23 @@ import (
 const maxChannelListPageSize = 100
 
 type channelListItem struct {
-	ID                 string   `json:"id"`
-	Protocol           string   `json:"protocol"`
-	Status             int      `json:"status"`
-	Name               string   `json:"name"`
-	Weight             *uint    `json:"weight,omitempty"`
-	CreatedTime        int64    `json:"created_time"`
-	UpdatedAt          int64    `json:"updated_at"`
-	TestTime           int64    `json:"test_time"`
-	Capabilities       []string `json:"capabilities"`
-	BaseURL            string   `json:"base_url,omitempty"`
-	Other              string   `json:"other,omitempty"`
-	Balance            float64  `json:"balance"`
-	BalanceUpdatedTime int64    `json:"balance_updated_time"`
-	UsedQuota          int64    `json:"used_quota"`
-	YYCUsed            int64    `json:"yyc_used"`
-	Priority           int64    `json:"priority"`
+	ID                    string   `json:"id"`
+	Protocol              string   `json:"protocol"`
+	Status                int      `json:"status"`
+	Name                  string   `json:"name"`
+	Weight                *uint    `json:"weight,omitempty"`
+	CreatedTime           int64    `json:"created_time"`
+	UpdatedAt             int64    `json:"updated_at"`
+	TestTime              int64    `json:"test_time"`
+	Capabilities          []string `json:"capabilities"`
+	BaseURL               string   `json:"base_url,omitempty"`
+	Other                 string   `json:"other,omitempty"`
+	BillingSummary        string   `json:"billing_summary"`
+	BillingSnapshotAt     int64    `json:"billing_snapshot_at"`
+	BillingQuotaItemCount int      `json:"billing_quota_item_count"`
+	UsedQuota             int64    `json:"used_quota"`
+	YYCUsed               int64    `json:"yyc_used"`
+	Priority              int64    `json:"priority"`
 }
 
 type channelListPageData struct {
@@ -88,23 +90,50 @@ func buildChannelListItem(channel *model.Channel) channelListItem {
 		other = strings.TrimSpace(*channel.Other)
 	}
 	return channelListItem{
-		ID:                 strings.TrimSpace(channel.Id),
-		Protocol:           strings.TrimSpace(channel.Protocol),
-		Status:             channel.Status,
-		Name:               strings.TrimSpace(channel.Name),
-		Weight:             channel.Weight,
-		CreatedTime:        channel.CreatedTime,
-		UpdatedAt:          channel.UpdatedAt,
-		TestTime:           channel.TestTime,
-		Capabilities:       capabilities,
-		BaseURL:            baseURL,
-		Other:              other,
-		Balance:            channel.Balance,
-		BalanceUpdatedTime: channel.BalanceUpdatedTime,
-		UsedQuota:          channel.UsedQuota,
-		YYCUsed:            channel.UsedQuota,
-		Priority:           channel.GetPriority(),
+		ID:           strings.TrimSpace(channel.Id),
+		Protocol:     strings.TrimSpace(channel.Protocol),
+		Status:       channel.Status,
+		Name:         strings.TrimSpace(channel.Name),
+		Weight:       channel.Weight,
+		CreatedTime:  channel.CreatedTime,
+		UpdatedAt:    channel.UpdatedAt,
+		TestTime:     channel.TestTime,
+		Capabilities: capabilities,
+		BaseURL:      baseURL,
+		Other:        other,
+		UsedQuota:    channel.UsedQuota,
+		YYCUsed:      channel.UsedQuota,
+		Priority:     channel.GetPriority(),
 	}
+}
+
+func summarizeChannelBillingSnapshot(snapshot model.ChannelBillingSnapshot) (string, int64, int) {
+	items := model.NormalizeChannelBillingSnapshotItems(snapshot.Items)
+	if len(items) == 0 {
+		return "-", snapshot.CreatedAt, 0
+	}
+	parts := make([]string, 0, len(items))
+	for index, item := range items {
+		if index >= 2 {
+			parts = append(parts, fmt.Sprintf("+%d", len(items)-index))
+			break
+		}
+		label := strings.TrimSpace(item.QuotaLabel)
+		if label == "" {
+			label = strings.TrimSpace(item.QuotaType)
+		}
+		if label == "" {
+			label = "quota"
+		}
+		amountText := strconv.FormatFloat(item.Amount, 'f', -1, 64)
+		currency := strings.TrimSpace(item.Currency)
+		if currency != "" {
+			parts = append(parts, fmt.Sprintf("%s %s %s", label, amountText, currency))
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", label, amountText))
+	}
+	return strings.Join(parts, " / "), snapshot.CreatedAt, len(items)
 }
 
 func collectChannelCapabilities(channel *model.Channel) []string {
@@ -165,8 +194,26 @@ func listChannelsPage(page int, pageSize int, keyword string) (channelListPageDa
 		return channelListPageData{}, err
 	}
 	items := make([]channelListItem, 0, len(rows))
+	channelIDs := make([]string, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, buildChannelListItem(row))
+		channelIDs = append(channelIDs, strings.TrimSpace(row.Id))
+	}
+	latestSnapshots, err := model.ListLatestChannelBillingSnapshotsByChannelIDsWithDB(model.DB, channelIDs)
+	if err != nil {
+		return channelListPageData{}, err
+	}
+	latestSnapshotMap := make(map[string]model.ChannelBillingSnapshot, len(latestSnapshots))
+	for _, snapshot := range latestSnapshots {
+		latestSnapshotMap[strings.TrimSpace(snapshot.ChannelId)] = snapshot
+	}
+	for _, row := range rows {
+		item := buildChannelListItem(row)
+		if snapshot, ok := latestSnapshotMap[strings.TrimSpace(row.Id)]; ok {
+			item.BillingSummary, item.BillingSnapshotAt, item.BillingQuotaItemCount = summarizeChannelBillingSnapshot(snapshot)
+		} else {
+			item.BillingSummary = "-"
+		}
+		items = append(items, item)
 	}
 	return channelListPageData{
 		Items:    items,
@@ -189,18 +236,6 @@ func isModelInChannelModels(testModel string, models string) bool {
 	return false
 }
 
-// GetChannels godoc
-// @Summary List channels with pagination (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param page_size query int false "Page size"
-// @Param keyword query string false "Keyword"
-// @Param compact query int false "Compact mode (1=true)"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channels [get]
 func GetChannels(c *gin.Context) {
 	page, pageSize, keyword := parseChannelListPageParams(c)
 	data, err := listChannelsPage(page, pageSize, keyword)
@@ -240,15 +275,6 @@ func GetChannels(c *gin.Context) {
 	})
 }
 
-// GetChannel godoc
-// @Summary Get channel by ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id} [get]
 func GetChannel(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -276,16 +302,6 @@ func GetChannel(c *gin.Context) {
 	return
 }
 
-// AddChannel godoc
-// @Summary Create channel (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.ChannelCreateRequest true "Channel payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel [post]
 func AddChannel(c *gin.Context) {
 	channel := model.Channel{}
 	err := c.ShouldBindJSON(&channel)
@@ -321,15 +337,6 @@ func AddChannel(c *gin.Context) {
 	return
 }
 
-// DeleteChannel godoc
-// @Summary Delete channel (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id} [delete]
 func DeleteChannel(c *gin.Context) {
 	id := c.Param("id")
 	channel := model.Channel{Id: id}
@@ -350,14 +357,6 @@ func DeleteChannel(c *gin.Context) {
 	return
 }
 
-// DeleteDisabledChannel godoc
-// @Summary Delete disabled channels (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/disabled [delete]
 func DeleteDisabledChannel(c *gin.Context) {
 	rows, err := channelsvc.DeleteDisabled()
 	if err != nil {
@@ -377,16 +376,6 @@ func DeleteDisabledChannel(c *gin.Context) {
 	return
 }
 
-// UpdateChannel godoc
-// @Summary Update channel (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param body body docs.ChannelUpdateRequest true "Channel update payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel [put]
 func UpdateChannel(c *gin.Context) {
 	rawBody, err := io.ReadAll(c.Request.Body)
 	if err != nil {

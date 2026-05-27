@@ -10,13 +10,13 @@ import { formatYYCValue } from '../../helpers/render';
 import UnitDropdown from '../../components/UnitDropdown';
 import {
   AppButton,
+  AppDetailSection,
   AppField,
   AppFilterHeader,
   AppFormActions,
   AppFormRow,
   AppInput,
   AppInputNumber,
-  AppSection,
   AppSelect,
   AppSpin,
 } from '../../router-ui';
@@ -122,7 +122,7 @@ const EditRedemption = () => {
   }, [t]);
 
   const handleCancel = () => {
-    navigate('/redemption');
+    navigate('/admin/redemption');
   };
 
   const handleInputChange = (e, { name, value }) => {
@@ -185,7 +185,7 @@ const EditRedemption = () => {
           downloadTextAsFile(text, `${inputs.name}.txt`);
         }
         setInputs(originInputs);
-        navigate('/redemption');
+        navigate('/admin/redemption');
       } else {
         showError(message);
       }
@@ -198,29 +198,43 @@ const EditRedemption = () => {
 
   return (
     <div className='dashboard-container'>
-      <AppSection>
-        <AppFilterHeader
-          title={t('redemption.edit.title_create')}
-          className='router-block-gap-sm'
-          actions={
-            <>
-              <AppButton className='router-page-button' onClick={handleCancel} disabled={submitting}>
-                {t('redemption.edit.buttons.cancel')}
-              </AppButton>
-              <AppButton
-                className='router-page-button'
-                color='blue'
-                onClick={submit}
-                loading={submitting}
-                disabled={loading || submitting}
-              >
-                {t('redemption.edit.buttons.submit')}
-              </AppButton>
-            </>
-          }
-        />
+      <AppFilterHeader
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'business', label: t('header.business_operation') },
+          {
+            key: 'redemption-list',
+            label: t('header.redemption'),
+            onClick: handleCancel,
+          },
+          {
+            key: 'redemption-create',
+            label: t('redemption.edit.title_create'),
+            active: true,
+          },
+        ]}
+        title={t('redemption.edit.title_create')}
+        className='router-block-gap-sm'
+        actions={
+          <>
+            <AppButton className='router-page-button' onClick={handleCancel} disabled={submitting}>
+              {t('redemption.edit.buttons.cancel')}
+            </AppButton>
+            <AppButton
+              className='router-page-button'
+              color='blue'
+              onClick={submit}
+              loading={submitting}
+              disabled={loading || submitting}
+            >
+              {t('redemption.edit.buttons.submit')}
+            </AppButton>
+          </>
+        }
+      />
+      <div className='router-entity-detail-page'>
         <AppSpin spinning={loading}>
-          <div className='router-page-stack'>
+          <AppDetailSection title={t('common.basic_info')} bodyClassName='router-page-stack'>
             <AppFormRow>
               <AppField label={t('redemption.edit.name')} required>
                 <AppInput
@@ -250,28 +264,27 @@ const EditRedemption = () => {
             </AppFormRow>
             <AppFormRow>
               <AppField label={t('redemption.edit.face_value_amount')}>
-                <AppInputNumber
-                  className='router-section-input'
-                  name='face_value_amount'
-                  placeholder={t('redemption.edit.face_value_amount_placeholder')}
-                  onChange={handleInputChange}
-                  value={face_value_amount}
-                  step={face_value_unit === YYC_UNIT ? 1 : 0.01}
-                  precision={face_value_unit === YYC_UNIT ? 0 : 2}
-                  min={0}
-                  fluid
-                />
-              </AppField>
-              <AppField label={t('redemption.edit.face_value_unit')}>
-                <UnitDropdown
-                  variant='section'
-                  fluid
-                  name='face_value_unit'
-                  placeholder={t('redemption.edit.face_value_unit_placeholder')}
-                  options={unitOptions}
-                  value={face_value_unit}
-                  onChange={handleInputChange}
-                />
+                <div className='router-section-input-with-unit'>
+                  <AppInputNumber
+                    className='router-section-input router-section-input-with-unit-field'
+                    name='face_value_amount'
+                    placeholder={t('redemption.edit.face_value_amount_placeholder')}
+                    onChange={handleInputChange}
+                    value={face_value_amount}
+                    step={face_value_unit === YYC_UNIT ? 1 : 0.01}
+                    precision={face_value_unit === YYC_UNIT ? 0 : 2}
+                    min={0}
+                    fluid
+                  />
+                  <UnitDropdown
+                    variant='inputUnit'
+                    name='face_value_unit'
+                    placeholder={t('redemption.edit.face_value_unit_placeholder')}
+                    options={unitOptions}
+                    value={face_value_unit}
+                    onChange={handleInputChange}
+                  />
+                </div>
               </AppField>
             </AppFormRow>
             <AppFormRow>
@@ -337,9 +350,9 @@ const EditRedemption = () => {
                 {t('redemption.edit.buttons.submit')}
               </AppButton>
             </AppFormActions>
-          </div>
+          </AppDetailSection>
         </AppSpin>
-      </AppSection>
+      </div>
     </div>
   );
 };

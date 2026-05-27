@@ -28,6 +28,9 @@ var FXAutoSyncProvider = "frankfurter"
 var FXAutoSyncLastRunAt int64 = 0
 var FXAutoSyncLastSuccessAt int64 = 0
 var FXAutoSyncLastError = ""
+var ChannelBillingAutoRefreshEnabled = true
+var ChannelBillingAutoRefreshIntervalSeconds = 30 * 60
+var ChannelBillingAutoRefreshLastRunAt int64 = 0
 
 // Any options with "Secret", "Token" in its key won't be return by GetOptions
 
@@ -127,8 +130,10 @@ var UcanTrustedIssuerDIDs []string
 // CORS allowlist (comma-separated env CORS_ALLOWED_ORIGINS)
 var CorsAllowedOrigins []string
 
-var MessagePusherAddress = ""
-var MessagePusherToken = ""
+var NotifyProvider = ""
+var NotifyWebhookURL = ""
+var NotifySecret = ""
+var NotifyToken = ""
 
 var TurnstileSiteKey = ""
 var TurnstileSecretKey = ""

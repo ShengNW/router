@@ -36,3 +36,4 @@ export { default as AppFormActions } from './patterns/AppFormActions';
 export { default as RouterUIProvider } from './RouterUIProvider';
 export { routerTokens } from './theme/tokens';
 export { antdTheme } from './theme/antd-theme';
+export { resolvePopupContainer } from './popupContainer';

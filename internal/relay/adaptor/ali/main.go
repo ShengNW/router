@@ -2,8 +2,13 @@ package ali
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -17,8 +22,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/adaptor/openai"
 	"github.com/yeying-community/router/internal/relay/model"
 )
-
-// https://help.aliyun.com/document_detail/613695.html?spm=a2c4g.2399480.0.0.1adb778fAdzP9w#341800c0f8w0r
 
 const EnableSearchModelSuffix = "-internet"
 
@@ -79,6 +82,71 @@ func ConvertImageRequest(request model.ImageRequest) *ImageRequest {
 	return &imageRequest
 }
 
+func ConvertQwenImageRequest(request model.ImageRequest) *QwenImageRequest {
+	var imageRequest QwenImageRequest
+	imageRequest.Model = request.Model
+	imageRequest.Input.Messages = []QwenImageMessage{
+		{
+			Role: "user",
+			Content: []QwenImageContent{
+				{Text: request.Prompt},
+			},
+		},
+	}
+	imageRequest.Parameters.Size = strings.Replace(request.Size, "x", "*", -1)
+	imageRequest.ResponseFormat = request.ResponseFormat
+	return &imageRequest
+}
+
+func ConvertQwenImageEditRequest(request model.ImageRequest, form *multipart.Form) (*QwenImageRequest, error) {
+	if form == nil {
+		return nil, errors.New("multipart form is required")
+	}
+	files := form.File["image"]
+	if len(files) == 0 {
+		return nil, errors.New("image file is required")
+	}
+	imageDataURI, err := readMultipartImageDataURI(files[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var imageRequest QwenImageRequest
+	imageRequest.Model = request.Model
+	imageRequest.Input.Messages = []QwenImageMessage{
+		{
+			Role: "user",
+			Content: []QwenImageContent{
+				{Image: imageDataURI},
+				{Text: request.Prompt},
+			},
+		},
+	}
+	imageRequest.Parameters.Size = strings.Replace(request.Size, "x", "*", -1)
+	imageRequest.ResponseFormat = request.ResponseFormat
+	return &imageRequest, nil
+}
+
+func readMultipartImageDataURI(fileHeader *multipart.FileHeader) (string, error) {
+	if fileHeader == nil {
+		return "", errors.New("image file is required")
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+	contentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data)), nil
+}
+
 func EmbeddingHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
 	var aliResponse EmbeddingResponse
 	err := json.NewDecoder(resp.Body).Decode(&aliResponse)
@@ -133,11 +201,12 @@ func embeddingResponseAli2OpenAI(response *EmbeddingResponse) *openai.EmbeddingR
 	return &openAIEmbeddingResponse
 }
 
-func responseAli2OpenAI(response *ChatResponse) *openai.TextResponse {
+func responseAli2OpenAI(response *ChatResponse, modelName string) *openai.TextResponse {
 	fullTextResponse := openai.TextResponse{
 		Id:      response.RequestId,
 		Object:  "chat.completion",
 		Created: helper.GetTimestamp(),
+		Model:   strings.TrimSpace(modelName),
 		Choices: response.Output.Choices,
 		Usage: model.Usage{
 			PromptTokens:     response.Usage.InputTokens,
@@ -148,7 +217,7 @@ func responseAli2OpenAI(response *ChatResponse) *openai.TextResponse {
 	return &fullTextResponse
 }
 
-func streamResponseAli2OpenAI(aliResponse *ChatResponse) *openai.ChatCompletionsStreamResponse {
+func streamResponseAli2OpenAI(aliResponse *ChatResponse, modelName string) *openai.ChatCompletionsStreamResponse {
 	if len(aliResponse.Output.Choices) == 0 {
 		return nil
 	}
@@ -163,13 +232,13 @@ func streamResponseAli2OpenAI(aliResponse *ChatResponse) *openai.ChatCompletions
 		Id:      aliResponse.RequestId,
 		Object:  "chat.completion.chunk",
 		Created: helper.GetTimestamp(),
-		Model:   "qwen",
+		Model:   strings.TrimSpace(modelName),
 		Choices: []openai.ChatCompletionsStreamResponseChoice{choice},
 	}
 	return &response
 }
 
-func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
+func StreamHandler(c *gin.Context, resp *http.Response, modelName string) (*model.ErrorWithStatusCode, *model.Usage) {
 	var usage model.Usage
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -205,7 +274,7 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 			usage.CompletionTokens = aliResponse.Usage.OutputTokens
 			usage.TotalTokens = aliResponse.Usage.InputTokens + aliResponse.Usage.OutputTokens
 		}
-		response := streamResponseAli2OpenAI(&aliResponse)
+		response := streamResponseAli2OpenAI(&aliResponse, modelName)
 		if response == nil {
 			continue
 		}
@@ -228,7 +297,7 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 	return nil, &usage
 }
 
-func Handler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
+func Handler(c *gin.Context, resp *http.Response, modelName string) (*model.ErrorWithStatusCode, *model.Usage) {
 	ctx := c.Request.Context()
 	var aliResponse ChatResponse
 	responseBody, err := io.ReadAll(resp.Body)
@@ -255,8 +324,7 @@ func Handler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *
 			StatusCode: resp.StatusCode,
 		}, nil
 	}
-	fullTextResponse := responseAli2OpenAI(&aliResponse)
-	fullTextResponse.Model = "qwen"
+	fullTextResponse := responseAli2OpenAI(&aliResponse, modelName)
 	jsonResponse, err := json.Marshal(fullTextResponse)
 	if err != nil {
 		return openai.ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
@@ -265,4 +333,56 @@ func Handler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *
 	c.Writer.WriteHeader(resp.StatusCode)
 	_, err = c.Writer.Write(jsonResponse)
 	return nil, &fullTextResponse.Usage
+}
+
+type compatibleEmbeddingUsage struct {
+	PromptTokens int `json:"prompt_tokens"`
+	TotalTokens  int `json:"total_tokens"`
+}
+
+type compatibleEmbeddingEnvelope struct {
+	Usage compatibleEmbeddingUsage `json:"usage"`
+	Error model.Error              `json:"error"`
+}
+
+func relayCompatibleEmbeddingResponse(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return openai.ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if err := resp.Body.Close(); err != nil {
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+	}
+
+	var envelope compatibleEmbeddingEnvelope
+	if err := json.Unmarshal(responseBody, &envelope); err != nil {
+		return openai.ErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if envelope.Error.Type != "" {
+		return &model.ErrorWithStatusCode{
+			Error:      envelope.Error,
+			StatusCode: resp.StatusCode,
+		}, nil
+	}
+
+	resp.Body = io.NopCloser(bytes.NewBuffer(responseBody))
+	for k, v := range resp.Header {
+		c.Writer.Header().Set(k, v[0])
+	}
+	c.Writer.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+		return openai.ErrorWrapper(err, "copy_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if err := resp.Body.Close(); err != nil {
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+	}
+
+	usage := &model.Usage{
+		PromptTokens: envelope.Usage.PromptTokens,
+		TotalTokens:  envelope.Usage.TotalTokens,
+	}
+	if usage.TotalTokens >= usage.PromptTokens {
+		usage.CompletionTokens = usage.TotalTokens - usage.PromptTokens
+	}
+	return nil, usage
 }

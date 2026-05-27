@@ -16,7 +16,7 @@ const (
 
 	AsyncTaskTypeChannelModelTest      = "channel_model_test"
 	AsyncTaskTypeChannelRefreshModels  = "channel_refresh_models"
-	AsyncTaskTypeChannelRefreshBalance = "channel_refresh_balance"
+	AsyncTaskTypeChannelRefreshBilling = "channel_refresh_billing"
 
 	AsyncTaskStatusPending   = "pending"
 	AsyncTaskStatusRunning   = "running"
@@ -62,8 +62,8 @@ func NormalizeAsyncTaskType(value string) string {
 		return AsyncTaskTypeChannelModelTest
 	case AsyncTaskTypeChannelRefreshModels:
 		return AsyncTaskTypeChannelRefreshModels
-	case AsyncTaskTypeChannelRefreshBalance:
-		return AsyncTaskTypeChannelRefreshBalance
+	case AsyncTaskTypeChannelRefreshBilling:
+		return AsyncTaskTypeChannelRefreshBilling
 	default:
 		return ""
 	}

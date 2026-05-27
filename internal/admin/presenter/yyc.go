@@ -96,15 +96,15 @@ func NewChannel(channel *model.Channel) *Channel {
 }
 
 type Group struct {
-	Id           string                          `json:"id"`
-	Name         string                          `json:"name"`
-	Description  string                          `json:"description"`
-	Source       string                          `json:"source"`
-	BillingRatio float64                         `json:"billing_ratio"`
-	Enabled      bool                            `json:"enabled"`
-	SortOrder    int                             `json:"sort_order"`
-	CreatedAt    int64                           `json:"created_at"`
-	UpdatedAt    int64                           `json:"updated_at"`
+	Id           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Description  string                   `json:"description"`
+	Source       string                   `json:"source"`
+	BillingRatio float64                  `json:"billing_ratio"`
+	Enabled      bool                     `json:"enabled"`
+	SortOrder    int                      `json:"sort_order"`
+	CreatedAt    int64                    `json:"created_at"`
+	UpdatedAt    int64                    `json:"updated_at"`
 	Channels     []model.GroupChannelItem `json:"channels,omitempty"`
 }
 

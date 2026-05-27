@@ -83,7 +83,7 @@ func LoadProviderModelDetailsMapForProviders(db *gorm.DB, providers []string) (m
 		}
 		detail := ProviderModelDetail{
 			Model:              modelName,
-			Type:               strings.TrimSpace(strings.ToLower(row.Type)),
+			Tags:               NormalizeProviderModelTags(splitProviderModelTags(row.Tags)),
 			Status:             normalizeProviderModelStatus(row.Status),
 			Description:        strings.TrimSpace(row.Description),
 			IsDeleted:          row.IsDeleted,
@@ -95,7 +95,11 @@ func LoadProviderModelDetailsMapForProviders(db *gorm.DB, providers []string) (m
 			Source:             strings.TrimSpace(strings.ToLower(row.Source)),
 			UpdatedAt:          row.UpdatedAt,
 		}
+		detail.Type = ProviderModelTypeFromTags(detail.Tags)
 		if len(detail.SupportedEndpoints) == 0 {
+			if detail.Type == "" {
+				continue
+			}
 			detail.SupportedEndpoints = DefaultProviderModelSupportedEndpoints(
 				provider,
 				detail.Type,
@@ -174,7 +178,7 @@ func BuildProviderModelStoreRows(provider string, details []ProviderModelDetail,
 		rows = append(rows, ProviderModel{
 			Provider:           normalizedProvider,
 			Model:              detail.Model,
-			Type:               detail.Type,
+			Tags:               joinProviderModelTags(detail.Model, detail.Tags),
 			Status:             normalizeProviderModelStatus(detail.Status),
 			Description:        strings.TrimSpace(detail.Description),
 			IsDeleted:          detail.IsDeleted,
@@ -231,6 +235,30 @@ func splitProviderModelSupportedEndpoints(raw string) []string {
 
 func joinProviderModelSupportedEndpoints(modelType string, values []string) string {
 	normalized := NormalizeProviderModelSupportedEndpoints(modelType, values)
+	if len(normalized) == 0 {
+		return ""
+	}
+	return strings.Join(normalized, ",")
+}
+
+func splitProviderModelTags(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		tag := strings.TrimSpace(strings.ToLower(part))
+		if tag == "" {
+			continue
+		}
+		result = append(result, tag)
+	}
+	return result
+}
+
+func joinProviderModelTags(modelName string, values []string) string {
+	normalized := NormalizeProviderModelTags(values)
 	if len(normalized) == 0 {
 		return ""
 	}

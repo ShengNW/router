@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-// https://www.xfyun.cn/doc/spark/Web.html#_1-%E6%8E%A5%E5%8F%A3%E8%AF%B4%E6%98%8E
-
 //Spark4.0 Ultra 请求地址，对应的domain参数为4.0Ultra：
 //
 //wss://spark-api.xf-yun.com/v4.0/chat
@@ -59,7 +57,6 @@ func modelName2APIVersion(modelName string) string {
 	return ""
 }
 
-// https://www.xfyun.cn/doc/spark/Web.html#_1-%E6%8E%A5%E5%8F%A3%E8%AF%B4%E6%98%8E
 func apiVersion2domain(apiVersion string) string {
 	switch apiVersion {
 	case "v1.1":

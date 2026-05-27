@@ -68,6 +68,7 @@ const ChannelEndpointPolicyEditorModal = ({
               <AppSelect
                 clearable
                 className='router-modal-dropdown'
+                fluid
                 options={endpointPolicyTemplates}
                 value={selectedPolicyTemplate}
                 placeholder={t(

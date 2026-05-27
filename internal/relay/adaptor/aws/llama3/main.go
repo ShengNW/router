@@ -25,8 +25,7 @@ import (
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 )
 
-// Only support llama-3-8b and llama-3-70b instruction models
-// https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
+// Only support llama-3-8b and llama-3-70b instruction models.
 var AwsModelIDMap = map[string]string{
 	"llama3-8b-8192":  "meta.llama3-8b-instruct-v1:0",
 	"llama3-70b-8192": "meta.llama3-70b-instruct-v1:0",

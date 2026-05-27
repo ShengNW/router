@@ -8,7 +8,10 @@ import {
   timestamp2string,
 } from '../helpers';
 import { ITEMS_PER_PAGE } from '../constants';
-import { PROVIDER_LIST_COLUMN_WIDTHS } from '../constants/tableWidthPresets';
+import {
+  PROVIDER_LIST_COLUMN_WIDTHS,
+  PROVIDER_LIST_TABLE_MIN_WIDTH,
+} from '../constants/tableWidthPresets';
 import {
   AppButton,
   AppDetailSection,
@@ -220,6 +223,40 @@ function normalizeProviderModelType(value, model) {
   return inferModelType(model);
 }
 
+const BASE_MODEL_TAGS = ['text', 'image', 'audio', 'video', 'embedding'];
+const PROVIDER_MODEL_TAG_ORDER = [
+  'text',
+  'image',
+  'audio',
+  'video',
+  'embedding',
+  'tool_calling',
+  'reasoning',
+  'vision',
+  'realtime',
+  'structured_output',
+];
+
+const normalizeProviderModelTags = (tags, model) => {
+  const values = Array.isArray(tags)
+    ? tags
+    : typeof tags === 'string'
+      ? tags.split(',')
+      : [];
+  const seen = new Set();
+  values.forEach((item) => {
+    const tag = (item || '').toString().trim().toLowerCase();
+    if (!PROVIDER_MODEL_TAG_ORDER.includes(tag)) return;
+    seen.add(tag);
+  });
+  return PROVIDER_MODEL_TAG_ORDER.filter((tag) => seen.has(tag));
+};
+
+const providerModelTypeFromTags = (tags, model) => {
+  const normalizedTags = normalizeProviderModelTags(tags, model);
+  return normalizedTags.find((tag) => BASE_MODEL_TAGS.includes(tag)) || '';
+};
+
 const normalizeProviderEndpoint = (endpoint) => {
   const normalized = (endpoint || '').toString().trim().toLowerCase();
   if (normalized.startsWith('/v1/chat/completions')) {
@@ -373,7 +410,7 @@ const createEmptyModelDetail = (model = '') => {
   const t = inferModelType(model);
   return {
     model,
-    type: t,
+    tags: [t],
     status: 'active',
     description: '',
     is_deleted: false,
@@ -400,10 +437,8 @@ const normalizeModelDetails = (details) => {
           ? item.id.trim()
           : '';
     if (!model) return;
-    const type =
-      typeof item.type === 'string' && item.type.trim() !== ''
-        ? item.type.trim().toLowerCase()
-        : inferModelType(model);
+    const tags = normalizeProviderModelTags(item.tags, model);
+    const type = providerModelTypeFromTags(tags, model);
     const inputPrice = Number(item.input_price || 0);
     const outputPrice = Number(item.output_price || 0);
     const currency =
@@ -428,7 +463,7 @@ const normalizeModelDetails = (details) => {
     const updatedAt = Number(item.updated_at || 0);
     unique.set(model, {
       model,
-      type,
+      tags,
       status,
       description,
       is_deleted: isDeleted,
@@ -468,7 +503,6 @@ const createEmptyRow = () => ({
   base_url: '',
   official_url: '',
   model_details: [],
-  sort_order: 0,
   source: 'manual',
   created_at: 0,
   updated_at: 0,
@@ -483,7 +517,6 @@ const toEditableRows = (items) => {
     base_url: item?.base_url || '',
     official_url: item?.official_url || '',
     model_details: detailsFromCatalogItem(item),
-    sort_order: Number(item?.sort_order || 0),
     source: item?.source || 'manual',
     created_at: item?.created_at || 0,
     updated_at: item?.updated_at || 0,
@@ -499,7 +532,7 @@ const OFFICIAL_PROVIDER_BASE_URLS = {
   cohere: 'https://api.cohere.com/compatibility/v1',
   deepseek: 'https://api.deepseek.com',
   baidu: 'https://qianfan.baidubce.com/v2',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  qwen: 'https://dashscope.aliyuncs.com',
   zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   hunyuan: 'https://api.hunyuan.cloud.tencent.com/v1',
   minimax: 'https://api.minimax.io/v1',
@@ -511,13 +544,11 @@ const cloneEditableRow = (row) => toEditableRows([row])[0] || createEmptyRow();
 const cloneModelDetail = (detail) =>
   normalizeModelDetails([detail])[0] || createEmptyModelDetail('');
 
-const MODEL_TYPE_OPTIONS = [
-  { key: 'text', value: 'text', text: 'text' },
-  { key: 'image', value: 'image', text: 'image' },
-  { key: 'audio', value: 'audio', text: 'audio' },
-  { key: 'video', value: 'video', text: 'video' },
-  { key: 'embedding', value: 'embedding', text: 'embedding' },
-];
+const MODEL_TAG_OPTIONS = PROVIDER_MODEL_TAG_ORDER.map((tag) => ({
+  key: tag,
+  value: tag,
+  text: tag,
+}));
 
 const PROVIDER_MODEL_STATUS_OPTIONS = [
   { key: 'active', value: 'active', text: 'active' },
@@ -557,9 +588,11 @@ const PROVIDER_ENDPOINT_OPTIONS = [
 ];
 
 const providerEndpointOptionsForType = (type) =>
-  PROVIDER_ENDPOINT_OPTIONS.filter((option) =>
-    isProviderEndpointAllowedForType(type, option.value),
-  );
+  type
+    ? PROVIDER_ENDPOINT_OPTIONS.filter((option) =>
+        isProviderEndpointAllowedForType(type, option.value),
+      )
+    : [];
 
 const PRICE_UNIT_OPTIONS = [
   { key: 'per_1k_tokens', value: 'per_1k_tokens', text: 'per_1k_tokens' },
@@ -865,10 +898,12 @@ const ProvidersManager = () => {
         next[key] = (value || '').toUpperCase();
       } else if (key === 'source') {
         next[key] = (value || '').toLowerCase();
-      } else if (key === 'type') {
-        const normalizedType =
-          (value || '').toLowerCase() || inferModelType(next.model || '');
-        next.type = normalizedType;
+      } else if (key === 'tags') {
+        next.tags = normalizeProviderModelTags(value, next.model || '');
+        const normalizedType = providerModelTypeFromTags(
+          next.tags,
+          next.model || '',
+        );
         next.supported_endpoints = normalizeSupportedEndpoints(
           next.supported_endpoints,
           normalizedType,
@@ -881,20 +916,22 @@ const ProvidersManager = () => {
         }
       } else if (key === 'model') {
         next.model = value || '';
-        if (!next.type) {
-          next.type = inferModelType(next.model);
-        }
+        next.tags = normalizeProviderModelTags(next.tags, next.model);
+        const normalizedType = providerModelTypeFromTags(
+          next.tags,
+          next.model,
+        );
         next.supported_endpoints = normalizeSupportedEndpoints(
           next.supported_endpoints,
-          next.type,
+          normalizedType,
         );
         if (!next.price_unit) {
-          next.price_unit = defaultPriceUnitByType(next.type, next.model);
+          next.price_unit = defaultPriceUnitByType(normalizedType, next.model);
         }
       } else if (key === 'supported_endpoints') {
         next.supported_endpoints = normalizeSupportedEndpoints(
           value,
-          next.type,
+          providerModelTypeFromTags(next.tags, next.model),
         );
       } else {
         next[key] = value || '';
@@ -1268,7 +1305,6 @@ const ProvidersManager = () => {
         '',
       official_url: (row.official_url || '').trim(),
       model_details: normalizeModelDetails(row.model_details || []),
-      sort_order: Number(row.sort_order || 0),
       source: row.source || 'manual',
       updated_at: row.updated_at || 0,
     };
@@ -1363,7 +1399,6 @@ const ProvidersManager = () => {
         '',
       official_url: (sourceRow.official_url || '').trim(),
       model_details: normalizeModelDetails(sourceRow.model_details || []),
-      sort_order: Number(sourceRow.sort_order || 0),
       source: sourceRow.source || 'manual',
       updated_at: Math.floor(Date.now() / 1000),
     };
@@ -1414,7 +1449,6 @@ const ProvidersManager = () => {
         '',
       official_url: (createRow.official_url || '').trim(),
       model_details: normalizeModelDetails(createRow.model_details || []),
-      sort_order: Number(createRow.sort_order || 0),
       source: createRow.source || 'manual',
       updated_at: Math.floor(Date.now() / 1000),
     };
@@ -1454,7 +1488,7 @@ const ProvidersManager = () => {
               detail.model || '',
               detail.description || '',
               detail.status || '',
-              detail.type || '',
+              (detail.tags || []).join(','),
               (detail.supported_endpoints || []).join(','),
               detail.price_unit || '',
               detail.currency || '',
@@ -1874,23 +1908,24 @@ const ProvidersManager = () => {
               ),
             },
             {
-              title: t('channel.providers.model_detail_table.type'),
-              key: 'type',
-              width: 72,
+              title: t('channel.providers.model_detail_table.tags'),
+              key: 'tags',
+              width: 150,
               render: (_, { detail, index: detailIndex }) => (
                 <div>
                   <AppSelect
                     className='router-inline-dropdown'
-                    options={MODEL_TYPE_OPTIONS}
-                    value={detail.type || 'text'}
+                    multiple
+                    options={MODEL_TAG_OPTIONS}
+                    value={detail.tags || []}
                     disabled={disabled}
                     onChange={(e, { value }) =>
                       setModelDetailField(
                         setValueFn,
                         row,
                         detailIndex,
-                        'type',
-                        value || 'text',
+                        'tags',
+                        Array.isArray(value) ? value : [],
                       )
                     }
                   />
@@ -1907,7 +1942,9 @@ const ProvidersManager = () => {
                     className='router-inline-dropdown'
                     multiple
                     clearable
-                    options={providerEndpointOptionsForType(detail.type)}
+                    options={providerEndpointOptionsForType(
+                      providerModelTypeFromTags(detail.tags, detail.model),
+                    )}
                     placeholder={t(
                       'channel.providers.model_detail_table.supported_endpoints',
                     )}
@@ -2085,7 +2122,7 @@ const ProvidersManager = () => {
               detail.model || '',
               detail.description || '',
               detail.status || '',
-              detail.type || '',
+              (detail.tags || []).join(','),
               (detail.supported_endpoints || []).join(','),
               detail.price_unit || '',
               detail.currency || '',
@@ -2162,11 +2199,24 @@ const ProvidersManager = () => {
               render: (value) => value || 'active',
             },
             {
-              title: t('channel.providers.model_detail_table.type'),
-              dataIndex: ['detail', 'type'],
-              key: 'type',
-              width: 60,
-              render: (value) => value || 'text',
+              title: t('channel.providers.model_detail_table.tags'),
+              dataIndex: ['detail', 'tags'],
+              key: 'tags',
+              width: 160,
+              render: (tags, record) => (
+                <div>
+                  {normalizeProviderModelTags(tags, record?.detail?.model).map(
+                    (tag) => (
+                      <AppTag
+                        key={`${record.detail?.model || 'model'}-${tag}`}
+                        className='router-tag'
+                      >
+                        {tag}
+                      </AppTag>
+                    ),
+                  )}
+                </div>
+              ),
             },
             {
               title: t('channel.providers.model_detail_table.supported_endpoints'),
@@ -2355,21 +2405,22 @@ const ProvidersManager = () => {
             </AppFormRow>
             <AppFormRow className='router-provider-model-detail-form-row router-provider-model-detail-form-row-2'>
               <AppField
-                label={t('channel.providers.model_detail_table.type')}
+                label={t('channel.providers.model_detail_table.tags')}
                 required
               >
                 <AppSelect
                   className='router-section-dropdown'
                   fluid
-                  options={MODEL_TYPE_OPTIONS}
-                  value={detail.type || 'text'}
+                  multiple
+                  options={MODEL_TAG_OPTIONS}
+                  value={detail.tags || []}
                   onChange={(e, { value }) =>
                     setModelDetailField(
                       setDetailModelsValue,
                       detailModelsDraft,
                       detailEditingModelIndex,
-                      'type',
-                      value || 'text',
+                      'tags',
+                      Array.isArray(value) ? value : [],
                     )
                   }
                 />
@@ -2407,7 +2458,9 @@ const ProvidersManager = () => {
                   multiple
                   clearable
                   fluid
-                  options={providerEndpointOptionsForType(detail.type)}
+                  options={providerEndpointOptionsForType(
+                    providerModelTypeFromTags(detail.tags, detail.model),
+                  )}
                   value={detail.supported_endpoints || []}
                   onChange={(e, { value }) =>
                     setModelDetailField(
@@ -2862,35 +2915,37 @@ const ProvidersManager = () => {
           />
         }
       />
-      <AppTable
-        className='router-hover-table router-list-table router-table-fit-page'
-        size='small'
-        pagination={false}
-        rowKey={(row) =>
-          row?.id ||
-          `${row?.name || 'provider'}-${row?.created_at || 0}-${row?.updated_at || 0}`
-        }
-        dataSource={rows}
-        locale={{
-          emptyText: (
-            <AppEmpty>
-              {loading ? t('common.loading') : t('channel.providers.table.empty')}
-            </AppEmpty>
-          ),
-        }}
-        onRow={(row) =>
-          creating || saving
-            ? {}
-            : {
-                onClick: () => {
-                  openViewer(row);
-                },
-              }
-        }
-        rowClassName={() =>
-          creating || saving ? '' : 'router-row-clickable'
-        }
-        columns={[
+      <div className='router-table-scroll-x'>
+        <AppTable
+          className='router-hover-table router-list-table router-table-fit-page'
+          size='small'
+          pagination={false}
+          scroll={{ x: PROVIDER_LIST_TABLE_MIN_WIDTH }}
+          rowKey={(row) =>
+            row?.id ||
+            `${row?.name || 'provider'}-${row?.created_at || 0}-${row?.updated_at || 0}`
+          }
+          dataSource={rows}
+          locale={{
+            emptyText: (
+              <AppEmpty>
+                {loading ? t('common.loading') : t('channel.providers.table.empty')}
+              </AppEmpty>
+            ),
+          }}
+          onRow={(row) =>
+            creating || saving
+              ? {}
+              : {
+                  onClick: () => {
+                    openViewer(row);
+                  },
+                }
+          }
+          rowClassName={() =>
+            creating || saving ? '' : 'router-row-clickable'
+          }
+          columns={[
           {
             title: t('channel.providers.table.provider'),
             dataIndex: 'id',
@@ -2910,6 +2965,8 @@ const ProvidersManager = () => {
             key: 'created_at',
             className: 'router-table-col-datetime',
             width: PROVIDER_LIST_COLUMN_WIDTHS.createdAt,
+            sorter: (a, b) => Number(a.created_at || 0) - Number(b.created_at || 0),
+            defaultSortOrder: 'descend',
             render: (value) => (value ? timestamp2string(value) : '-'),
           },
           {
@@ -2918,6 +2975,7 @@ const ProvidersManager = () => {
             key: 'updated_at',
             className: 'router-table-col-datetime',
             width: PROVIDER_LIST_COLUMN_WIDTHS.updatedAt,
+            sorter: (a, b) => Number(a.updated_at || 0) - Number(b.updated_at || 0),
             render: (value) => (value ? timestamp2string(value) : '-'),
           },
           {
@@ -2943,8 +3001,9 @@ const ProvidersManager = () => {
               </div>
             ),
           },
-        ]}
-      />
+          ]}
+        />
+      </div>
       {totalPages > 1 ? (
         <div className='router-pagination-wrap-md'>
           <AppPagination

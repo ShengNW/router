@@ -13,15 +13,6 @@ type deleteChannelModelRequest struct {
 	UpstreamModel string `json:"upstream_model"`
 }
 
-// DeleteChannelModel godoc
-// @Summary Delete a channel model (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/models [delete]
 func DeleteChannelModel(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {

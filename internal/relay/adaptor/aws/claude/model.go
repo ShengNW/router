@@ -2,9 +2,7 @@ package aws
 
 import "github.com/yeying-community/router/internal/relay/adaptor/anthropic"
 
-// Request is the request to AWS Claude
-//
-// https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages.html
+// Request is the request to AWS Claude.
 type Request struct {
 	// AnthropicVersion should be "bedrock-2023-05-31"
 	AnthropicVersion string              `json:"anthropic_version"`

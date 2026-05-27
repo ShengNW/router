@@ -40,9 +40,81 @@ func TestDefaultProviderModelSupportedEndpointsByProvider(t *testing.T) {
 		t.Fatalf("anthropic default endpoints = %#v, want messages", anthropic)
 	}
 
+	deepSeek := NormalizeProviderModelSupportedEndpointsForModel(
+		ProviderModelTypeText,
+		"deepseek-v4-pro",
+		[]string{ChannelModelEndpointChat, ChannelModelEndpointMessages},
+	)
+	if len(deepSeek) != 2 || deepSeek[0] != ChannelModelEndpointChat || deepSeek[1] != ChannelModelEndpointMessages {
+		t.Fatalf("deepseek normalized endpoints = %#v, want chat+messages", deepSeek)
+	}
+
 	embedding := DefaultProviderModelSupportedEndpoints("volcengine", ProviderModelTypeEmbedding, "Seed1.6-Embedding")
 	if len(embedding) != 1 || embedding[0] != ChannelModelEndpointEmbeddings {
 		t.Fatalf("embedding default endpoints = %#v, want embeddings", embedding)
+	}
+
+	qwenVL := DefaultProviderModelSupportedEndpoints("qwen", ProviderModelTypeImage, "qwen-vl-max")
+	if len(qwenVL) != 1 || qwenVL[0] != ChannelModelEndpointChat {
+		t.Fatalf("qwen vl default endpoints = %#v, want chat", qwenVL)
+	}
+
+	qwenOmni := DefaultProviderModelSupportedEndpoints("qwen", ProviderModelTypeAudio, "qwen3-omni-flash")
+	if len(qwenOmni) != 1 || qwenOmni[0] != ChannelModelEndpointChat {
+		t.Fatalf("qwen omni default endpoints = %#v, want chat", qwenOmni)
+	}
+
+	qwenRealtime := DefaultProviderModelSupportedEndpoints("qwen", ProviderModelTypeAudio, "qwen3-omni-flash-realtime")
+	if len(qwenRealtime) != 1 || qwenRealtime[0] != ChannelModelEndpointRealtime {
+		t.Fatalf("qwen realtime default endpoints = %#v, want realtime", qwenRealtime)
+	}
+
+	qwenTTS := DefaultProviderModelSupportedEndpoints("qwen", ProviderModelTypeAudio, "qwen-tts")
+	if len(qwenTTS) != 0 {
+		t.Fatalf("qwen tts default endpoints = %#v, want empty", qwenTTS)
+	}
+
+	qwenImage := DefaultProviderModelSupportedEndpoints("qwen", ProviderModelTypeImage, "qwen-image-2.0")
+	if len(qwenImage) != 2 || qwenImage[0] != ChannelModelEndpointImages || qwenImage[1] != ChannelModelEndpointImageEdit {
+		t.Fatalf("qwen image default endpoints = %#v, want images+edits", qwenImage)
+	}
+}
+
+func TestNormalizeProviderModelSupportedEndpointsForQwenSpecialModels(t *testing.T) {
+	qwenVL := NormalizeProviderModelSupportedEndpointsForModel(
+		ProviderModelTypeImage,
+		"qwen-vl-max",
+		[]string{ChannelModelEndpointResponses, ChannelModelEndpointChat},
+	)
+	if len(qwenVL) != 1 || qwenVL[0] != ChannelModelEndpointChat {
+		t.Fatalf("qwen vl normalized endpoints = %#v, want chat", qwenVL)
+	}
+
+	qwenOmni := NormalizeProviderModelSupportedEndpointsForModel(
+		ProviderModelTypeAudio,
+		"qwen3-omni-flash",
+		[]string{ChannelModelEndpointAudio, ChannelModelEndpointChat},
+	)
+	if len(qwenOmni) != 1 || qwenOmni[0] != ChannelModelEndpointChat {
+		t.Fatalf("qwen omni normalized endpoints = %#v, want chat", qwenOmni)
+	}
+
+	qwenTTS := NormalizeProviderModelSupportedEndpointsForModel(
+		ProviderModelTypeAudio,
+		"qwen-tts",
+		[]string{ChannelModelEndpointAudio, ChannelModelEndpointChat},
+	)
+	if len(qwenTTS) != 0 {
+		t.Fatalf("qwen tts normalized endpoints = %#v, want empty", qwenTTS)
+	}
+
+	qwenImage := NormalizeProviderModelSupportedEndpointsForModel(
+		ProviderModelTypeImage,
+		"qwen-image-2.0",
+		[]string{ChannelModelEndpointResponses, ChannelModelEndpointImages, ChannelModelEndpointImageEdit},
+	)
+	if len(qwenImage) != 3 || qwenImage[0] != ChannelModelEndpointResponses || qwenImage[1] != ChannelModelEndpointImages || qwenImage[2] != ChannelModelEndpointImageEdit {
+		t.Fatalf("qwen image normalized endpoints = %#v, want responses+images+edits", qwenImage)
 	}
 }
 
@@ -302,7 +374,7 @@ func TestReplaceChannelModelsWithDBSyncsEndpointsFromStoredRows(t *testing.T) {
 	if err := db.Create(&ProviderModel{
 		Provider:           "openai",
 		Model:              "gpt-5.4",
-		Type:               ProviderModelTypeText,
+		Tags:               ProviderModelTypeText,
 		Status:             ProviderModelStatusActive,
 		SupportedEndpoints: ChannelModelEndpointChat + "," + ChannelModelEndpointResponses,
 	}).Error; err != nil {
@@ -311,7 +383,7 @@ func TestReplaceChannelModelsWithDBSyncsEndpointsFromStoredRows(t *testing.T) {
 	if err := db.Create(&ProviderModel{
 		Provider:           "openai",
 		Model:              "gpt-5.4-nano",
-		Type:               ProviderModelTypeText,
+		Tags:               ProviderModelTypeText,
 		Status:             ProviderModelStatusActive,
 		SupportedEndpoints: ChannelModelEndpointChat + "," + ChannelModelEndpointResponses,
 	}).Error; err != nil {

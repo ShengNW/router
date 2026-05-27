@@ -20,8 +20,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://www.coze.com/open
-
 func stopReasonCoze2OpenAI(reason *string) string {
 	if reason == nil {
 		return ""

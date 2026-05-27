@@ -48,7 +48,6 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 			return
 		}
 		// time.Since will return negative number!
-		// See: https://stackoverflow.com/questions/50970900/why-is-time-since-returning-negative-durations-on-windows
 		if int64(nowTime.Sub(oldTime).Seconds()) < duration {
 			rdb.Expire(ctx, key, config.RateLimitKeyExpirationDuration)
 			c.Status(http.StatusTooManyRequests)

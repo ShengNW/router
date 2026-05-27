@@ -7,6 +7,7 @@ import (
 
 	adminmodel "github.com/yeying-community/router/internal/admin/model"
 	"github.com/yeying-community/router/internal/relay/apitype"
+	relaychannel "github.com/yeying-community/router/internal/relay/channel"
 	"github.com/yeying-community/router/internal/relay/meta"
 	relaymodel "github.com/yeying-community/router/internal/relay/model"
 	"github.com/yeying-community/router/internal/relay/relaymode"
@@ -108,7 +109,9 @@ func supportsMessagesUpstream(meta *meta.Meta) bool {
 	if meta == nil {
 		return false
 	}
-	return meta.APIType == apitype.Anthropic || meta.APIType == apitype.AwsClaude
+	return meta.APIType == apitype.Anthropic ||
+		meta.APIType == apitype.AwsClaude ||
+		meta.ChannelProtocol == relaychannel.DeepSeek
 }
 
 func endpointByRelayMode(mode int) string {

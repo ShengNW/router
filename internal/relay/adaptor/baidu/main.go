@@ -22,8 +22,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://cloud.baidu.com/doc/WENXINWORKSHOP/s/flfmc9do2
-
 type TokenResponse struct {
 	ExpiresIn   int    `json:"expires_in"`
 	AccessToken string `json:"access_token"`

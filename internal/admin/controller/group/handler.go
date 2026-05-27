@@ -71,17 +71,6 @@ func listGroupsPage(page int, pageSize int, keyword string) (groupListPageData, 
 	}, nil
 }
 
-// GetGroups godoc
-// @Summary List groups with pagination (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param page query int false "Page (1-based)"
-// @Param page_size query int false "Page size"
-// @Param keyword query string false "Keyword"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/groups [get]
 func GetGroups(c *gin.Context) {
 	page, pageSize, keyword := parseGroupListPageParams(c)
 	data, err := listGroupsPage(page, pageSize, keyword)
@@ -105,15 +94,6 @@ func GetGroups(c *gin.Context) {
 	})
 }
 
-// GetGroup godoc
-// @Summary Get group detail by ID (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Group ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id} [get]
 func GetGroup(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -138,17 +118,6 @@ func GetGroup(c *gin.Context) {
 	})
 }
 
-// GetGroupDailyQuota godoc
-// @Summary Get group daily quota snapshot by date (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Group ID"
-// @Param user_id query string true "User ID"
-// @Param date query string false "Biz date in YYYY-MM-DD, defaults to today in group timezone"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/quota/daily [get]
 func GetGroupDailyQuota(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -182,15 +151,6 @@ func GetGroupDailyQuota(c *gin.Context) {
 	})
 }
 
-// CreateGroup godoc
-// @Summary Create group (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group [post]
 func CreateGroup(c *gin.Context) {
 	req := upsertGroupRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -235,15 +195,6 @@ func CreateGroup(c *gin.Context) {
 	})
 }
 
-// UpdateGroup godoc
-// @Summary Update group (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group [put]
 func UpdateGroup(c *gin.Context) {
 	req := upsertGroupRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -305,15 +256,6 @@ func UpdateGroup(c *gin.Context) {
 	})
 }
 
-// DeleteGroup godoc
-// @Summary Delete group (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Group ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id} [delete]
 func DeleteGroup(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -356,15 +298,6 @@ func resolveUpdateBillingRatio(value *float64, fallback float64) (float64, error
 	return *value, nil
 }
 
-// GetGroupChannels godoc
-// @Summary List group channels (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Group ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/channels [get]
 func GetGroupChannels(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -389,15 +322,6 @@ func GetGroupChannels(c *gin.Context) {
 	})
 }
 
-// GetGroupModels godoc
-// @Summary List group models payload (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Group ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/models [get]
 func GetGroupModels(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -431,16 +355,6 @@ type updateSingleGroupModelRequest struct {
 	Models []model.GroupModelBindingItem `json:"models"`
 }
 
-// UpdateGroupModels godoc
-// @Summary Update group models (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Group ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/models [put]
 func UpdateGroupModels(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -472,17 +386,6 @@ func UpdateGroupModels(c *gin.Context) {
 	})
 }
 
-// UpdateSingleGroupModel godoc
-// @Summary Update one group model (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Group ID"
-// @Param model path string true "Model ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/models/{model} [put]
 func UpdateSingleGroupModel(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -529,16 +432,6 @@ func UpdateSingleGroupModel(c *gin.Context) {
 	})
 }
 
-// DeleteSingleGroupModel godoc
-// @Summary Delete one group model (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Group ID"
-// @Param model path string true "Model ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/models/{model} [delete]
 func DeleteSingleGroupModel(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {
@@ -569,16 +462,6 @@ func DeleteSingleGroupModel(c *gin.Context) {
 	})
 }
 
-// UpdateGroupChannels godoc
-// @Summary Update group channels (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Group ID"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/group/{id}/channels [put]
 func UpdateGroupChannels(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	if id == "" {

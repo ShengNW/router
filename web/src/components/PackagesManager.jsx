@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../helpers';
 import { ITEMS_PER_PAGE } from '../constants';
-import { PACKAGE_LIST_COLUMN_WIDTHS } from '../constants/tableWidthPresets';
+import {
+  PACKAGE_LIST_COLUMN_WIDTHS,
+  PACKAGE_LIST_TABLE_MIN_WIDTH,
+} from '../constants/tableWidthPresets';
 import {
   buildBillingCurrencyIndex,
   buildDisplayUnitOptions,
@@ -28,7 +31,6 @@ import {
   AppSelect,
   AppSwitch,
   AppTable,
-  AppTag,
   AppTextarea,
 } from '../router-ui';
 import {
@@ -40,6 +42,8 @@ const createEmptyForm = (defaultBillingUnit = 'USD') => ({
   name: '',
   description: '',
   group_id: '',
+  visibility_scope: 'all',
+  visible_user_ids: [],
   sale_price: '0',
   sale_currency: 'CNY',
   daily_amount: '0',
@@ -49,20 +53,8 @@ const createEmptyForm = (defaultBillingUnit = 'USD') => ({
   duration_days: 30,
   reset_timezone: 'Asia/Shanghai',
   enabled: true,
-  sort_order: 0,
   source: 'manual',
 });
-
-const statusLabel = (enabled, t) =>
-  enabled ? (
-    <AppTag color='green' className='router-tag'>
-      {t('package_manage.status.enabled')}
-    </AppTag>
-  ) : (
-    <AppTag color='grey' className='router-tag'>
-      {t('package_manage.status.disabled')}
-    </AppTag>
-  );
 
 const toGroupOptions = (rows) =>
   (Array.isArray(rows) ? rows : []).map((item) => ({
@@ -70,6 +62,17 @@ const toGroupOptions = (rows) =>
     value: item.id,
     text: item.name || item.id,
   }));
+
+const toUserOption = (item) => {
+  const id = (item?.id || '').toString().trim();
+  const username = (item?.username || '').toString().trim();
+  const displayName = (item?.display_name || '').toString().trim();
+  return {
+    key: id,
+    value: id,
+    text: [username, displayName].filter(Boolean).join(' / ') || id,
+  };
+};
 
 const appendGroupOptionIfMissing = (options, groupID, groupName) => {
   const normalizedGroupID = (groupID || '').toString().trim();
@@ -88,6 +91,24 @@ const appendGroupOptionIfMissing = (options, groupID, groupName) => {
       text: (groupName || '').toString().trim() || normalizedGroupID,
     },
   ];
+};
+
+const appendUserOptionsIfMissing = (options, users) => {
+  const currentOptions = Array.isArray(options) ? options : [];
+  const nextOptions = [...currentOptions];
+  const seen = new Set(
+    currentOptions.map((item) => (item?.value || '').toString().trim()).filter(Boolean)
+  );
+  (Array.isArray(users) ? users : []).forEach((item) => {
+    const option = toUserOption(item);
+    const normalizedID = (option?.value || '').toString().trim();
+    if (!normalizedID || seen.has(normalizedID)) {
+      return;
+    }
+    seen.add(normalizedID);
+    nextOptions.push(option);
+  });
+  return nextOptions;
 };
 
 const formatByCurrencyMinorUnit = (amount, currency) => {
@@ -147,6 +168,8 @@ const PackagesManager = () => {
 
   const [groupOptions, setGroupOptions] = useState([]);
   const [groupLoading, setGroupLoading] = useState(false);
+  const [userOptions, setUserOptions] = useState([]);
+  const [userLoading, setUserLoading] = useState(false);
   const [displayUnit, setDisplayUnit] = useState('USD');
   const [currencyIndex, setCurrencyIndex] = useState(
     buildBillingCurrencyIndex([], { activeOnly: true })
@@ -243,6 +266,55 @@ const PackagesManager = () => {
     [t]
   );
 
+  const searchUsers = useCallback(
+    async (keyword) => {
+      const normalizedValue = (keyword || '').toString().trim();
+      if (normalizedValue === '') {
+        return;
+      }
+      setUserLoading(true);
+      try {
+        const res = await API.get('/api/v1/admin/user/search', {
+          params: {
+            keyword: normalizedValue,
+          },
+        });
+        const { success, message, data } = res?.data || {};
+        if (!success) {
+          showError(message || t('package_manage.messages.user_load_failed'));
+          return;
+        }
+        setUserOptions((current) => appendUserOptionsIfMissing(current, data));
+      } catch (error) {
+        showError(error?.message || t('package_manage.messages.user_load_failed'));
+      } finally {
+        setUserLoading(false);
+      }
+    },
+    [t]
+  );
+
+  const loadInitialUsers = useCallback(async () => {
+    setUserLoading(true);
+    try {
+      const res = await API.get('/api/v1/admin/user', {
+        params: {
+          page: 1,
+        },
+      });
+      const { success, message, data } = res?.data || {};
+      if (!success) {
+        showError(message || t('package_manage.messages.user_load_failed'));
+        return;
+      }
+      setUserOptions((current) => appendUserOptionsIfMissing(current, data));
+    } catch (error) {
+      showError(error?.message || t('package_manage.messages.user_load_failed'));
+    } finally {
+      setUserLoading(false);
+    }
+  }, [t]);
+
   const loadDisplayUnits = useCallback(async () => {
     try {
       const res = await API.get('/api/v1/admin/billing/currencies');
@@ -337,6 +409,7 @@ const PackagesManager = () => {
     setEditOpen(false);
     setActiveRow(null);
     resetForm();
+    loadInitialUsers().then();
   };
 
   const openViewPage = (row) => {
@@ -372,6 +445,10 @@ const PackagesManager = () => {
         name: detail.name || '',
         description: detail.description || '',
         group_id: resolvedGroupID,
+        visibility_scope: detail?.visibility_scope || 'all',
+        visible_user_ids: Array.isArray(detail?.visible_user_ids)
+          ? detail.visible_user_ids.map((item) => (item || '').toString()).filter(Boolean)
+          : [],
         sale_price: detail?.sale_price ?? '0',
         sale_currency: detail?.sale_currency || 'CNY',
         daily_amount: yycToBillingInputValue(
@@ -389,9 +466,12 @@ const PackagesManager = () => {
         duration_days: Number(detail?.duration_days || 30),
         reset_timezone: detail?.quota_reset_timezone || 'Asia/Shanghai',
         enabled: Boolean(detail?.enabled),
-        sort_order: Number(detail?.sort_order || 0),
         source: detail?.source || 'manual',
       });
+      setUserOptions((current) =>
+        appendUserOptionsIfMissing(current, detail?.visible_users)
+      );
+      loadInitialUsers().then();
       setEditOpen(true);
     } catch (error) {
       showError(error?.message || error);
@@ -413,6 +493,14 @@ const PackagesManager = () => {
     const groupID = (form.group_id || '').trim();
     if (groupID === '') {
       showInfo(t('package_manage.messages.group_required'));
+      return null;
+    }
+    const visibilityScope = (form.visibility_scope || 'all').toString().trim() || 'all';
+    const visibleUserIDs = Array.isArray(form.visible_user_ids)
+      ? [...new Set(form.visible_user_ids.map((item) => (item || '').toString().trim()).filter(Boolean))]
+      : [];
+    if (visibilityScope === 'partial_users' && visibleUserIDs.length === 0) {
+      showInfo(t('package_manage.messages.visible_users_required'));
       return null;
     }
     const dailyStored = billingInputValueToYYC(
@@ -446,6 +534,8 @@ const PackagesManager = () => {
       name,
       description: (form.description || '').trim(),
       group_id: groupID,
+      visibility_scope: visibilityScope,
+      visible_user_ids: visibilityScope === 'partial_users' ? visibleUserIDs : [],
       sale_price: Number(form.sale_price || 0),
       sale_currency: (form.sale_currency || 'CNY').trim().toUpperCase() || 'CNY',
       daily_quota_limit: Math.trunc(dailyStored),
@@ -454,7 +544,7 @@ const PackagesManager = () => {
       quota_reset_timezone:
         (form.reset_timezone || '').trim() || 'Asia/Shanghai',
       enabled: Boolean(form.enabled),
-      sort_order: Math.trunc(Number(form.sort_order || 0)),
+      sort_order: Math.trunc(Number(activeRow?.sort_order || 0)),
       source: (form.source || '').trim() || 'manual',
     };
   };
@@ -534,6 +624,95 @@ const PackagesManager = () => {
     }
   };
 
+  const updatePackageRow = useCallback(
+    async (row, patch) => {
+      const id = (row?.id || '').toString().trim();
+      if (id === '' || submitting) return;
+      setSubmitting(true);
+      try {
+        const visibleUserIDs = Array.isArray(row?.visible_user_ids)
+          ? row.visible_user_ids.map((item) => (item || '').toString().trim()).filter(Boolean)
+          : Array.isArray(row?.visible_users)
+            ? row.visible_users
+              .map((item) => (item?.id || '').toString().trim())
+              .filter(Boolean)
+            : [];
+        const payload = {
+          id,
+          name: row?.name || '',
+          description: row?.description || '',
+          group_id: row?.group_id || '',
+          visibility_scope: row?.visibility_scope || 'all',
+          visible_user_ids: visibleUserIDs,
+          sale_price: Number(row?.sale_price || 0),
+          sale_currency: row?.sale_currency || 'CNY',
+          daily_quota_limit: Number(row?.daily_quota_limit || 0),
+          package_emergency_quota_limit: Number(row?.package_emergency_quota_limit || 0),
+          duration_days: Number(row?.duration_days || 0),
+          quota_reset_timezone: row?.quota_reset_timezone || 'Asia/Shanghai',
+          enabled: Boolean(row?.enabled),
+          source: row?.source || 'manual',
+          ...patch,
+        };
+        const res = await API.put('/api/v1/admin/package/', payload);
+        const { success, message, data } = res.data || {};
+        if (!success) {
+          showError(message || t('package_manage.messages.update_failed'));
+          return;
+        }
+        setRows((current) =>
+          current.map((item) => (((item?.id || '') === (data?.id || '')) ? data : item)),
+        );
+        if ((activeRow?.id || '') === (data?.id || '')) {
+          setActiveRow(data);
+        }
+        showSuccess(t('package_manage.messages.update_success'));
+      } catch (error) {
+        showError(error?.message || t('package_manage.messages.update_failed'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [activeRow, submitting, t],
+  );
+
+  const toggleEnabled = useCallback(
+    async (row, checked) => {
+      await updatePackageRow(row, {
+        enabled: Boolean(checked),
+      });
+    },
+    [updatePackageRow],
+  );
+
+  const togglePublicVisible = useCallback(
+    async (row, checked) => {
+      if (checked) {
+        await updatePackageRow(row, {
+          visibility_scope: 'all',
+          visible_user_ids: [],
+        });
+        return;
+      }
+      const visibleUserIDs = Array.isArray(row?.visible_user_ids)
+        ? row.visible_user_ids.map((item) => (item || '').toString().trim()).filter(Boolean)
+        : Array.isArray(row?.visible_users)
+          ? row.visible_users
+            .map((item) => (item?.id || '').toString().trim())
+            .filter(Boolean)
+          : [];
+      if (visibleUserIDs.length === 0) {
+        showInfo(t('package_manage.messages.visible_users_required_for_toggle'));
+        return;
+      }
+      await updatePackageRow(row, {
+        visibility_scope: 'partial_users',
+        visible_user_ids: visibleUserIDs,
+      });
+    },
+    [t, updatePackageRow],
+  );
+
   const renderTable = () => (
     <>
       <AppFilterHeader
@@ -582,6 +761,7 @@ const PackagesManager = () => {
         <AppTable
           className='router-hover-table router-list-table router-table-fit-page router-package-list-table'
           pagination={false}
+          scroll={{ x: PACKAGE_LIST_TABLE_MIN_WIDTH }}
           rowKey='id'
           dataSource={rows}
           locale={{
@@ -638,6 +818,8 @@ const PackagesManager = () => {
                 </div>
               ),
               key: 'daily_quota_limit',
+              className: 'router-package-daily-quota-cell',
+              width: PACKAGE_LIST_COLUMN_WIDTHS.dailyQuota,
               render: (_, row) =>
                 renderPackageAmountFieldValue(row, 'daily', displayUnit, currencyIndex),
             },
@@ -660,6 +842,8 @@ const PackagesManager = () => {
                 </div>
               ),
               key: 'package_emergency_quota_limit',
+              className: 'router-package-emergency-quota-cell',
+              width: PACKAGE_LIST_COLUMN_WIDTHS.emergencyQuota,
               render: (_, row) =>
                 renderPackageAmountFieldValue(row, 'emergency', displayUnit, currencyIndex),
             },
@@ -675,9 +859,43 @@ const PackagesManager = () => {
               title: t('package_manage.table.status'),
               dataIndex: 'enabled',
               key: 'enabled',
-              className: 'router-table-col-status-compact router-package-status-cell',
+              className: 'router-table-col-status-narrow router-package-status-cell',
               width: PACKAGE_LIST_COLUMN_WIDTHS.status,
-              render: (value) => statusLabel(Boolean(value), t),
+              render: (_, row) => (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <AppSwitch
+                    checked={Boolean(row.enabled)}
+                    disabled={submitting}
+                    onChange={(_, { checked }) => toggleEnabled(row, Boolean(checked))}
+                  />
+                </div>
+              ),
+            },
+            {
+              title: t('package_manage.table.public_visible'),
+              dataIndex: 'visibility_scope',
+              key: 'public_visible',
+              className: 'router-table-col-status-narrow router-package-public-visible-cell',
+              width: PACKAGE_LIST_COLUMN_WIDTHS.publicVisible,
+              render: (_, row) => (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <AppSwitch
+                    checked={(row?.visibility_scope || 'all') === 'all'}
+                    disabled={submitting}
+                    onChange={(_, { checked }) =>
+                      togglePublicVisible(row, Boolean(checked))
+                    }
+                  />
+                </div>
+              ),
             },
             {
               title: t('package_manage.table.created_at'),
@@ -685,6 +903,8 @@ const PackagesManager = () => {
               key: 'created_at',
               className: 'router-table-col-datetime router-package-created-at-cell',
               width: PACKAGE_LIST_COLUMN_WIDTHS.createdAt,
+              sorter: (a, b) => Number(a.created_at || 0) - Number(b.created_at || 0),
+              defaultSortOrder: 'descend',
               render: (value) => (value ? timestamp2string(value) : '-'),
             },
             {
@@ -693,6 +913,7 @@ const PackagesManager = () => {
               key: 'updated_at',
               className: 'router-table-col-datetime router-package-updated-at-cell',
               width: PACKAGE_LIST_COLUMN_WIDTHS.updatedAt,
+              sorter: (a, b) => Number(a.updated_at || 0) - Number(b.updated_at || 0),
               render: (value) => (value ? timestamp2string(value) : '-'),
             },
             {
@@ -774,6 +995,67 @@ const PackagesManager = () => {
             loading={groupLoading}
             onChange={(e, { value }) =>
               setForm((prev) => ({ ...prev, group_id: (value || '').toString() }))
+            }
+          />
+        </AppField>
+      </AppFormRow>
+
+      <AppFormRow>
+        <AppField label={t('package_manage.form.visibility_scope')} required>
+          <AppSelect
+            className='router-section-input'
+            options={[
+              {
+                key: 'all',
+                value: 'all',
+                text: t('package_manage.form.visibility_scope_all'),
+              },
+              {
+                key: 'partial_users',
+                value: 'partial_users',
+                text: t('package_manage.form.visibility_scope_partial_users'),
+              },
+            ]}
+            value={form.visibility_scope}
+            onChange={(e, { value }) =>
+              setForm((prev) => ({
+                ...prev,
+                visibility_scope: (value || 'all').toString(),
+                visible_user_ids:
+                  (value || 'all').toString() === 'partial_users'
+                    ? prev.visible_user_ids
+                    : [],
+              }))
+            }
+            onClick={() => {
+              if (userOptions.length === 0) {
+                loadInitialUsers().then();
+              }
+            }}
+          />
+        </AppField>
+        <AppField label={t('package_manage.form.visible_users')}>
+          <AppSelect
+            className='router-section-input'
+            placeholder={t('package_manage.form.visible_users_placeholder')}
+            options={userOptions}
+            value={form.visible_user_ids}
+            loading={userLoading}
+            multiple
+            search
+            clearable
+            disabled={form.visibility_scope !== 'partial_users'}
+            onClick={() => {
+              if (userOptions.length === 0) {
+                loadInitialUsers().then();
+              }
+            }}
+            onSearch={searchUsers}
+            onChange={(e, { value }) =>
+              setForm((prev) => ({
+                ...prev,
+                visible_user_ids: Array.isArray(value) ? value : [],
+              }))
             }
           />
         </AppField>
@@ -927,18 +1209,7 @@ const PackagesManager = () => {
             }
           />
         </AppField>
-        <AppField label={t('package_manage.form.sort_order')}>
-          <AppInputNumber
-            className='router-section-input'
-            step={1}
-            precision={0}
-            fluid
-            value={form.sort_order}
-            onChange={(e, { value }) =>
-              setForm((prev) => ({ ...prev, sort_order: value || 0 }))
-            }
-          />
-        </AppField>
+        <AppField />
       </AppFormRow>
 
       <AppFormRow>

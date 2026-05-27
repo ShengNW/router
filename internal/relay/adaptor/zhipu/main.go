@@ -21,10 +21,7 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://open.bigmodel.cn/doc/api#chatglm_std
 // chatglm_std, chatglm_lite
-// https://open.bigmodel.cn/api/paas/v3/model-api/chatglm_std/invoke
-// https://open.bigmodel.cn/api/paas/v3/model-api/chatglm_std/sse-invoke
 
 var zhipuTokens sync.Map
 var expSeconds int64 = 24 * 3600

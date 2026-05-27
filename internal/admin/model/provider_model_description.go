@@ -47,8 +47,6 @@ func defaultProviderModelDeleted(provider string, modelName string) bool {
 		return modelName == "claude-3-5-haiku-20241022"
 	case "google":
 		return modelName == "gemini-live-2.5-flash-preview"
-	case "qwen":
-		return modelName == "qwen-omni-turbo-latest"
 	case "xai":
 		return modelName == "grok-2-image-1212"
 	default:
@@ -70,10 +68,6 @@ func defaultProviderModelStatus(provider string, modelName string) string {
 		}
 	case "google":
 		if modelName == "gemini-live-2.5-flash-preview" {
-			return ProviderModelStatusDeprecated
-		}
-	case "qwen":
-		if modelName == "qwen-omni-turbo-latest" {
 			return ProviderModelStatusDeprecated
 		}
 	case "xai":
@@ -235,12 +229,14 @@ func googleProviderModelDescription(modelName string) string {
 
 func deepSeekProviderModelDescription(modelName string) string {
 	switch modelName {
+	case "deepseek-v4-flash":
+		return "DeepSeek V4 Flash 是 DeepSeek 当前的高吞吐通用模型，支持非思考和思考模式。"
+	case "deepseek-v4-pro":
+		return "DeepSeek V4 Pro 是 DeepSeek 当前的高能力通用模型，支持非思考和思考模式。"
 	case "deepseek-chat":
-		return "DeepSeek Chat 是 DeepSeek 的通用对话模型别名，适合日常生成与编码任务。"
+		return "DeepSeek Chat 是 DeepSeek V4 Flash 非思考模式的兼容别名，将于 2026-07-24 15:59 UTC 后退役。"
 	case "deepseek-reasoner":
-		return "DeepSeek Reasoner 是 DeepSeek 的推理模型别名，适合数学、代码和复杂问题求解。"
-	case "deepseek-v3.1":
-		return "DeepSeek V3.1 是 DeepSeek 的通用模型，适合对话、生成与编程任务。"
+		return "DeepSeek Reasoner 是 DeepSeek V4 Flash 思考模式的兼容别名，将于 2026-07-24 15:59 UTC 后退役。"
 	default:
 		return ""
 	}
@@ -290,20 +286,22 @@ func volcengineProviderModelDescription(modelName string) string {
 
 func qwenProviderModelDescription(modelName string) string {
 	switch modelName {
-	case "qwen-max-latest":
-		return "Qwen-Max 是阿里云百炼的高能力通用模型，适合复杂中文和多轮任务。"
-	case "qwen-plus-latest":
-		return "Qwen-Plus 是均衡型通用模型，适合多数生产场景。"
-	case "qwen-turbo-latest":
-		return "Qwen-Turbo 是更快更低成本的通用模型。"
-	case "qwen-vl-max-latest":
-		return "Qwen-VL-Max 是视觉语言模型，适合图文理解与多模态任务。"
-	case "qvq-max-latest":
-		return "QVQ-Max 是偏视觉推理的多模态模型。"
-	case "qwen-tts-latest":
-		return "Qwen-TTS 是文本转语音模型。"
-	case "qwen-omni-turbo-latest":
-		return ""
+	case "qwen3.7-max":
+		return "Qwen3.7-Max 是 Qwen 当前高能力通用模型，适合复杂推理、代码和多轮任务。"
+	case "qwen3.6-plus":
+		return "Qwen3.6-Plus 是均衡型通用模型，适合多数生产场景。"
+	case "qwen3.6-flash":
+		return "Qwen3.6-Flash 是低延迟低成本通用模型。"
+	case "qwen3.5-plus":
+		return "Qwen3.5-Plus 是上一代均衡型通用模型。"
+	case "qwen3.5-flash":
+		return "Qwen3.5-Flash 是上一代低成本通用模型。"
+	case "qwen3-max":
+		return "Qwen3-Max 是高能力通用模型，适合复杂任务。"
+	case "qwen-image-2.0":
+		return "Qwen-Image 2.0 是图像生成模型。"
+	case "qwen-image-2.0-pro":
+		return "Qwen-Image 2.0 Pro 是更高质量的图像生成模型。"
 	default:
 		return ""
 	}

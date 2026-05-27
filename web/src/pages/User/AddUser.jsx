@@ -5,6 +5,7 @@ import { API, showError, showSuccess } from '../../helpers';
 import {
   AppButton,
   AppField,
+  AppFilterHeader,
   AppFormActions,
   AppFormRow,
   AppInput,
@@ -36,7 +37,7 @@ const AddUser = () => {
     if (success) {
       showSuccess(t('user.messages.create_success'));
       setInputs(originInputs);
-      navigate('/user');
+      navigate('/admin/user');
     } else {
       showError(message);
     }
@@ -44,6 +45,15 @@ const AddUser = () => {
 
   return (
     <div className='dashboard-container'>
+      <AppFilterHeader
+        breadcrumbs={[
+          { key: 'workspace', label: t('header.admin_workspace') },
+          { key: 'business', label: t('header.business_operation') },
+          { key: 'user', label: t('header.user') },
+          { key: 'user-add', label: t('user.add.title'), active: true },
+        ]}
+        title={t('user.add.title')}
+      />
       <AppSection title={t('user.add.title')}>
         <AppFormRow>
           <AppField label={t('user.edit.username')} required>

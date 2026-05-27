@@ -17,6 +17,8 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
+const qwenImageOutputCountContextKey = "qwen_image_output_count"
+
 func ImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
 	apiKey := c.Request.Header.Get("Authorization")
 	apiKey = strings.TrimPrefix(apiKey, "Bearer ")
@@ -60,6 +62,63 @@ func ImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCo
 
 	fullTextResponse := responseAli2OpenAIImage(aliResponse, responseFormat)
 	jsonResponse, err := json.Marshal(fullTextResponse)
+	if err != nil {
+		return openai.ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
+	}
+	c.Writer.Header().Set("Content-Type", "application/json")
+	c.Writer.WriteHeader(resp.StatusCode)
+	_, err = c.Writer.Write(jsonResponse)
+	return nil, nil
+}
+
+func QwenImageHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
+	responseFormat := c.GetString("response_format")
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return openai.ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if err := resp.Body.Close(); err != nil {
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+	}
+
+	var aliResponse QwenImageResponse
+	if err := json.Unmarshal(responseBody, &aliResponse); err != nil {
+		return openai.ErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if aliResponse.Code != "" || aliResponse.Message != "" {
+		message := strings.TrimSpace(aliResponse.Message)
+		if message == "" {
+			message = aliResponse.Code
+		}
+		return openai.ErrorWrapper(errors.New(message), "ali_image_failed", resp.StatusCode), nil
+	}
+
+	imageResponse := openai.ImageResponse{
+		Created: helper.GetTimestamp(),
+	}
+	outputCount := 0
+	for _, choice := range aliResponse.Output.Choices {
+		for _, content := range choice.Message.Content {
+			imageURL := strings.TrimSpace(content.Image)
+			if imageURL == "" {
+				continue
+			}
+			outputCount++
+			data := openai.ImageData{Url: imageURL}
+			if responseFormat == "b64_json" {
+				imageData, err := getImageData(imageURL)
+				if err != nil {
+					logger.SysError("getImageData Error getting image data: " + err.Error())
+					continue
+				}
+				data.B64Json = Base64Encode(imageData)
+			}
+			imageResponse.Data = append(imageResponse.Data, data)
+		}
+	}
+	c.Set(qwenImageOutputCountContextKey, outputCount)
+
+	jsonResponse, err := json.Marshal(imageResponse)
 	if err != nil {
 		return openai.ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
 	}

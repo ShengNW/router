@@ -9,17 +9,6 @@ import (
 	"github.com/yeying-community/router/internal/admin/model"
 )
 
-// DownloadChannelTestArtifact godoc
-// @Summary Download channel test artifact (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce application/octet-stream
-// @Param id path string true "Channel ID"
-// @Param model query string true "Model"
-// @Param endpoint query string true "Endpoint"
-// @Success 200 {file} binary
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/tests/artifact [get]
 func DownloadChannelTestArtifact(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	modelID := strings.TrimSpace(c.Query("model"))

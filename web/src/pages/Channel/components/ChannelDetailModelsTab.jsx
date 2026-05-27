@@ -19,6 +19,9 @@ const ChannelDetailModelsTab = ({
   modelSectionMetaText,
   detailModelFilter,
   setDetailModelFilter,
+  detailProviderFilter,
+  setDetailProviderFilter,
+  detailProviderFilterOptions,
   detailModelsEditing,
   modelSearchKeyword,
   setModelSearchKeyword,
@@ -176,6 +179,15 @@ const ChannelDetailModelsTab = ({
             value={detailModelFilter}
             onChange={(e, { value }) =>
               setDetailModelFilter((value || 'all').toString())
+            }
+          />
+          <AppSelect
+            className='router-section-dropdown router-dropdown-min-170 router-detail-filter-dropdown'
+            disabled={detailModelsEditing || providerDataLoading}
+            options={detailProviderFilterOptions}
+            value={detailProviderFilter}
+            onChange={(e, { value }) =>
+              setDetailProviderFilter((value || 'all').toString())
             }
           />
           <AppInput

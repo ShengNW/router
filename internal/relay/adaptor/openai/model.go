@@ -26,7 +26,6 @@ type TextRequest struct {
 	//Stream   bool      `json:"stream"`
 }
 
-// ImageRequest docs: https://platform.openai.com/docs/api-reference/images/create
 type ImageRequest struct {
 	Model          string `json:"model"`
 	Prompt         string `json:"prompt" binding:"required"`

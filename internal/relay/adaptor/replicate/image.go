@@ -24,7 +24,6 @@ import (
 
 // ImagesEditsHandler just copy response body to client
 //
-// https://replicate.com/black-forest-labs/flux-fill-pro
 // func ImagesEditsHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusCode, *model.Usage) {
 // 	c.Writer.WriteHeader(resp.StatusCode)
 // 	for k, v := range resp.Header {

@@ -18,9 +18,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://developers.generativeai.google/api/rest/generativelanguage/models/generateMessage#request-body
-// https://developers.generativeai.google/api/rest/generativelanguage/models/generateMessage#response-body
-
 func ConvertRequest(textRequest model.GeneralOpenAIRequest) *ChatRequest {
 	palmRequest := ChatRequest{
 		Prompt: Prompt{

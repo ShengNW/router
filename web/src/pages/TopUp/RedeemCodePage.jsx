@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { showError, showInfo, timestamp2string } from '../../helpers';
 import { formatAmountWithUnit } from '../../helpers/render';
-import { TOPUP_RESULT_COLUMN_WIDTHS } from '../../constants/tableWidthPresets';
+import {
+  TOPUP_RESULT_COLUMN_WIDTHS,
+  TOPUP_RESULT_TABLE_MIN_WIDTH,
+} from '../../constants/tableWidthPresets';
 import { useTopUpWorkspace } from './shared.jsx';
 import { AppButton, AppInput, AppModal, AppTable } from '../../router-ui';
 
@@ -156,37 +159,40 @@ const RedeemCodePage = ({ open, onClose, onRedeemed }) => {
               {t('topup.redemption_result.close')}
             </AppButton>
           </div>
-          <AppTable
-            className='router-list-table router-table-fit-page'
-            rowKey='key'
-            pagination={false}
-            dataSource={recentResultRows}
-            columns={[
-              {
-                title: '',
-                dataIndex: 'leftLabel',
-                width: TOPUP_RESULT_COLUMN_WIDTHS.label,
-                render: (value) => <span className='router-text-muted'>{value}</span>,
-              },
-              {
-                title: '',
-                dataIndex: 'leftValue',
-                width: TOPUP_RESULT_COLUMN_WIDTHS.value,
-              },
-              {
-                title: '',
-                dataIndex: 'rightLabel',
-                width: TOPUP_RESULT_COLUMN_WIDTHS.label,
-                render: (value) =>
-                  value ? <span className='router-text-muted'>{value}</span> : null,
-              },
-              {
-                title: '',
-                dataIndex: 'rightValue',
-                width: TOPUP_RESULT_COLUMN_WIDTHS.value,
-              },
-            ]}
-          />
+          <div className='router-table-scroll-x'>
+            <AppTable
+              className='router-list-table router-table-fit-page'
+              rowKey='key'
+              pagination={false}
+              scroll={{ x: TOPUP_RESULT_TABLE_MIN_WIDTH }}
+              dataSource={recentResultRows}
+              columns={[
+                {
+                  title: '',
+                  dataIndex: 'leftLabel',
+                  width: TOPUP_RESULT_COLUMN_WIDTHS.label,
+                  render: (value) => <span className='router-text-muted'>{value}</span>,
+                },
+                {
+                  title: '',
+                  dataIndex: 'leftValue',
+                  width: TOPUP_RESULT_COLUMN_WIDTHS.value,
+                },
+                {
+                  title: '',
+                  dataIndex: 'rightLabel',
+                  width: TOPUP_RESULT_COLUMN_WIDTHS.label,
+                  render: (value) =>
+                    value ? <span className='router-text-muted'>{value}</span> : null,
+                },
+                {
+                  title: '',
+                  dataIndex: 'rightValue',
+                  width: TOPUP_RESULT_COLUMN_WIDTHS.value,
+                },
+              ]}
+            />
+          </div>
         </div>
       ) : null}
     </AppModal>

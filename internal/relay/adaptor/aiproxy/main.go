@@ -21,8 +21,6 @@ import (
 	"github.com/yeying-community/router/internal/relay/model"
 )
 
-// https://docs.aiproxy.io/dev/library#使用已经定制好的知识库进行对话问答
-
 func ConvertRequest(request model.GeneralOpenAIRequest) *LibraryRequest {
 	query := ""
 	if len(request.Messages) != 0 {

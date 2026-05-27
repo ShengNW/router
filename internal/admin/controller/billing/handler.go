@@ -40,12 +40,6 @@ type publicBillingCurrencyItem struct {
 	YYCPerUnit float64 `json:"yyc_per_unit"`
 }
 
-// GetPublicBillingCurrencies godoc
-// @Summary List billing currencies (public)
-// @Tags public
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Router /api/v1/public/billing/currencies [get]
 func GetPublicBillingCurrencies(c *gin.Context) {
 	rows, err := model.ListBillingCurrencies()
 	if err != nil {
@@ -98,14 +92,6 @@ func GetPublicBillingCurrencies(c *gin.Context) {
 	})
 }
 
-// GetBillingCurrencies godoc
-// @Summary List billing currencies (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/currencies [get]
 func GetBillingCurrencies(c *gin.Context) {
 	rows, err := model.ListBillingCurrencies()
 	if err != nil {
@@ -122,15 +108,6 @@ func GetBillingCurrencies(c *gin.Context) {
 	})
 }
 
-// CreateBillingCurrency godoc
-// @Summary Create billing currency (root)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/currencies [post]
 func CreateBillingCurrency(c *gin.Context) {
 	req := upsertBillingCurrencyRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -163,16 +140,6 @@ func CreateBillingCurrency(c *gin.Context) {
 	})
 }
 
-// UpdateBillingCurrency godoc
-// @Summary Update billing currency (root)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param code path string true "Currency code"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/currencies/{code} [put]
 func UpdateBillingCurrency(c *gin.Context) {
 	code := strings.TrimSpace(c.Param("code"))
 	if code == "" {
@@ -218,15 +185,6 @@ func UpdateBillingCurrency(c *gin.Context) {
 	})
 }
 
-// DeleteBillingCurrency godoc
-// @Summary Delete billing currency (root)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param code path string true "Currency code"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/currencies/{code} [delete]
 func DeleteBillingCurrency(c *gin.Context) {
 	code := strings.TrimSpace(c.Param("code"))
 	if code == "" {
@@ -249,14 +207,6 @@ func DeleteBillingCurrency(c *gin.Context) {
 	})
 }
 
-// SyncBillingCurrenciesFromFX godoc
-// @Summary Sync fiat market rates from FX provider (root)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/fx/sync [post]
 func SyncBillingCurrenciesFromFX(c *gin.Context) {
 	runAt := helper.GetTimestamp()
 	_ = model.UpdateOption("FXAutoSyncLastRunAt", strconv.FormatInt(runAt, 10))
@@ -279,14 +229,6 @@ func SyncBillingCurrenciesFromFX(c *gin.Context) {
 	})
 }
 
-// GetFXSyncStatus godoc
-// @Summary Get FX auto-sync status (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/fx/status [get]
 func GetFXSyncStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -304,14 +246,6 @@ func GetFXSyncStatus(c *gin.Context) {
 	})
 }
 
-// GetFXMarketRates godoc
-// @Summary Get FX market rates (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/billing/fx/rates [get]
 func GetFXMarketRates(c *gin.Context) {
 	currenciesParam := strings.TrimSpace(c.Query("currencies"))
 	currencies := make([]string, 0)

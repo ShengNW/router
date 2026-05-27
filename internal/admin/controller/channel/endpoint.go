@@ -30,17 +30,6 @@ type channelEndpointItem struct {
 	EnableBlockReason string `json:"enable_block_reason,omitempty"`
 }
 
-// GetChannelEndpoints godoc
-// @Summary List channel endpoint capabilities (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Param model query string false "Model"
-// @Param endpoint query string false "Endpoint"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/endpoints [get]
 func GetChannelEndpoints(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {
@@ -137,17 +126,6 @@ func GetChannelEndpoints(c *gin.Context) {
 	})
 }
 
-// UpdateChannelEndpoint godoc
-// @Summary Upsert channel endpoint capability (admin)
-// @Tags admin
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param id path string true "Channel ID"
-// @Param body body docs.StandardResponse true "Endpoint capability payload"
-// @Success 200 {object} docs.StandardResponse
-// @Failure 401 {object} docs.ErrorResponse
-// @Router /api/v1/admin/channel/{id}/endpoints [put]
 func UpdateChannelEndpoint(c *gin.Context) {
 	channelID := strings.TrimSpace(c.Param("id"))
 	if channelID == "" {

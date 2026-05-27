@@ -1,7 +1,5 @@
 package togetherai
 
-// https://docs.together.ai/docs/inference-models
-
 var ModelList = []string{
 	"meta-llama/Llama-3-70b-chat-hf",
 	"deepseek-ai/deepseek-coder-33b-instruct",

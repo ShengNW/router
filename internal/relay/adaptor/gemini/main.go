@@ -23,8 +23,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// https://ai.google.dev/docs/gemini_api_overview?hl=zh-cn
-
 const (
 	VisionMaxImageNum = 16
 )
