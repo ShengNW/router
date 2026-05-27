@@ -186,3 +186,61 @@ func TestGetChannelEndpointsDoesNotShowLooseUpstreamModelSuccess(t *testing.T) {
 		t.Fatalf("enable_block_reason=%q, want exact test result block reason", reason)
 	}
 }
+
+func TestCollectRestoredChannelModelCapabilities(t *testing.T) {
+	currentRows := []model.ChannelModel{
+		{
+			Model:          "qwen3.7-max",
+			Inactive:       true,
+			Selected:       false,
+			DisabledReason: "model not found",
+			DisabledAt:     123,
+			DisabledBy:     "runtime",
+		},
+		{
+			Model:    "deepseek-chat",
+			Inactive: true,
+			Selected: false,
+		},
+	}
+	nextRows := []model.ChannelModel{
+		{
+			Model:    "qwen3.7-max",
+			Selected: true,
+		},
+		{
+			Model:    "deepseek-chat",
+			Selected: true,
+		},
+	}
+
+	restored := collectRestoredChannelModelCapabilities(currentRows, nextRows)
+	if len(restored) != 1 || restored[0] != "qwen3.7-max" {
+		t.Fatalf("restored=%v, want [qwen3.7-max]", restored)
+	}
+}
+
+func TestIsChannelModelEndpointRuntimeDisabled(t *testing.T) {
+	rows := []model.ChannelModelEndpoint{
+		{
+			Model:          "qwen3.7-max",
+			Endpoint:       model.ChannelModelEndpointResponses,
+			Enabled:        false,
+			DisabledReason: "unsupported endpoint",
+			DisabledAt:     123,
+			DisabledBy:     "runtime",
+		},
+		{
+			Model:    "qwen3.7-max",
+			Endpoint: model.ChannelModelEndpointChat,
+			Enabled:  false,
+		},
+	}
+
+	if !isChannelModelEndpointRuntimeDisabled(rows, "qwen3.7-max", model.ChannelModelEndpointResponses) {
+		t.Fatalf("responses endpoint disabled=false, want true")
+	}
+	if isChannelModelEndpointRuntimeDisabled(rows, "qwen3.7-max", model.ChannelModelEndpointChat) {
+		t.Fatalf("chat endpoint disabled=true, want false")
+	}
+}

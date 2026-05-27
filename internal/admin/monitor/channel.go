@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/yeying-community/router/common/config"
@@ -31,6 +32,78 @@ func notifyRootUser(subject string, content string) error {
 
 func NotifyRootUser(subject string, content string) error {
 	return notifyRootUser(subject, content)
+}
+
+func NotifyChannelModelCapabilityDisabled(channelId string, channelName string, modelName string, reason string) {
+	subject := "渠道模型能力摘除提醒"
+	content := message.EmailTemplate(
+		subject,
+		fmt.Sprintf(`
+			<p>您好！</p>
+			<p>渠道「<strong>%s</strong>」（#%s）的模型能力已被系统自动摘除。</p>
+			<p>模型：<strong>%s</strong></p>
+			<p>摘除原因：</p>
+			<p style="background-color: #f8f8f8; padding: 10px; border-radius: 4px;">%s</p>
+			<p>该模型已从运行态路由候选中移除，请检查上游模型权限或模型名称配置。</p>
+		`, notificationValue(channelName), notificationValue(channelId), notificationValue(modelName), notificationValue(reason)),
+	)
+	_ = notifyRootUser(subject, content)
+}
+
+func NotifyChannelModelEndpointCapabilityDisabled(channelId string, channelName string, modelName string, endpoint string, reason string) {
+	subject := "渠道模型端点能力摘除提醒"
+	content := message.EmailTemplate(
+		subject,
+		fmt.Sprintf(`
+			<p>您好！</p>
+			<p>渠道「<strong>%s</strong>」（#%s）的模型端点能力已被系统自动摘除。</p>
+			<p>模型：<strong>%s</strong></p>
+			<p>端点：<strong>%s</strong></p>
+			<p>摘除原因：</p>
+			<p style="background-color: #f8f8f8; padding: 10px; border-radius: 4px;">%s</p>
+			<p>该模型端点已从运行态路由候选中移除，请检查供应商端点支持情况或渠道配置。</p>
+		`, notificationValue(channelName), notificationValue(channelId), notificationValue(modelName), notificationValue(endpoint), notificationValue(reason)),
+	)
+	_ = notifyRootUser(subject, content)
+}
+
+func NotifyChannelModelCapabilityRestored(channelId string, channelName string, modelName string, operator string) {
+	subject := "渠道模型能力恢复提醒"
+	content := message.EmailTemplate(
+		subject,
+		fmt.Sprintf(`
+			<p>您好！</p>
+			<p>渠道「<strong>%s</strong>」（#%s）的模型能力已恢复。</p>
+			<p>模型：<strong>%s</strong></p>
+			<p>操作人：<strong>%s</strong></p>
+			<p>该模型已重新进入运行态路由候选，请确认上游模型权限和计费配置符合预期。</p>
+		`, notificationValue(channelName), notificationValue(channelId), notificationValue(modelName), notificationValue(operator)),
+	)
+	_ = notifyRootUser(subject, content)
+}
+
+func NotifyChannelModelEndpointCapabilityRestored(channelId string, channelName string, modelName string, endpoint string, operator string) {
+	subject := "渠道模型端点能力恢复提醒"
+	content := message.EmailTemplate(
+		subject,
+		fmt.Sprintf(`
+			<p>您好！</p>
+			<p>渠道「<strong>%s</strong>」（#%s）的模型端点能力已恢复。</p>
+			<p>模型：<strong>%s</strong></p>
+			<p>端点：<strong>%s</strong></p>
+			<p>操作人：<strong>%s</strong></p>
+			<p>该模型端点已重新进入运行态路由候选，请确认上游端点支持情况和测试结果符合预期。</p>
+		`, notificationValue(channelName), notificationValue(channelId), notificationValue(modelName), notificationValue(endpoint), notificationValue(operator)),
+	)
+	_ = notifyRootUser(subject, content)
+}
+
+func notificationValue(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "未提供"
+	}
+	return html.EscapeString(value)
 }
 
 // DisableChannel disable & notify

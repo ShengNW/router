@@ -1283,6 +1283,13 @@ func runMainVersionedMigrations(db *gorm.DB) error {
 				return upsertProviderMigrationProvidersWithDB(tx, "deepseek")
 			},
 		},
+		{
+			Version:     "202605271030_channel_capability_disable_observability",
+			Description: "add runtime disable metadata to channel model and endpoint capabilities",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&ChannelModel{}, &ChannelModelEndpoint{})
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeMain, migrations)
 }
