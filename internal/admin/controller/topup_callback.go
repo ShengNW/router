@@ -82,10 +82,14 @@ func ProcessTopupCallback(c *gin.Context) {
 	})
 	if err != nil {
 		logTopupCallbackFailure(c, true, "payment_callback_apply_failed", http.StatusOK, &req, err)
-		c.JSON(http.StatusOK, gin.H{
+		response := gin.H{
 			"success": false,
 			"message": err.Error(),
-		})
+		}
+		if code := model.TopupErrorCode(err); code != "" {
+			response["data"] = gin.H{"code": code}
+		}
+		c.JSON(http.StatusOK, response)
 		return
 	}
 	if order.Status == model.TopupOrderStatusPaid {
