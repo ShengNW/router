@@ -137,3 +137,21 @@ func TestResolveEstimateModelFallsBackToStructuredRequest(t *testing.T) {
 		t.Fatalf("resolveEstimateModel() = %q, want gpt-4o", got)
 	}
 }
+
+func TestDetectFamilyModernOpenAIModels(t *testing.T) {
+	tests := []string{
+		"gpt-5.9-codex",
+		"gpt-realtime-mini",
+		"gpt-audio-preview",
+		"gpt-image-1",
+		"chatgpt-image-latest",
+		"o5-preview",
+	}
+	for _, model := range tests {
+		t.Run(model, func(t *testing.T) {
+			if got := detectFamily(model); got != familyOpenAI {
+				t.Fatalf("detectFamily(%q) = %q, want %q", model, got, familyOpenAI)
+			}
+		})
+	}
+}
