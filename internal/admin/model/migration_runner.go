@@ -1436,6 +1436,13 @@ func runLogVersionedMigrations(db *gorm.DB) error {
 				return normalizeProviderPricingLegacySourcesWithDB(tx)
 			},
 		},
+		{
+			Version:     "202605281030_log_token_estimate_observability",
+			Description: "add token estimate observability fields to consume logs",
+			Up: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&Log{})
+			},
+		},
 	}
 	return runVersionedMigrations(db, migrationScopeLog, migrations)
 }

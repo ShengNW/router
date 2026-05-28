@@ -430,6 +430,30 @@ const LogDetail = () => {
                     </div>
                     <div className='router-detail-item'>
                       <div className='router-detail-label'>
+                        {t('log.detail.fields.billing_estimate_estimator')}
+                      </div>
+                      <pre className='router-detail-value'>
+                        {renderText(log?.billing_estimate_estimator)}
+                      </pre>
+                    </div>
+                    <div className='router-detail-item'>
+                      <div className='router-detail-label'>
+                        {t('log.detail.fields.billing_estimate_precision')}
+                      </div>
+                      <pre className='router-detail-value'>
+                        {renderText(log?.billing_estimate_precision)}
+                      </pre>
+                    </div>
+                    <div className='router-detail-item'>
+                      <div className='router-detail-label'>
+                        {t('log.detail.fields.estimated_prompt_tokens')}
+                      </div>
+                      <pre className='router-detail-value'>
+                        {log?.estimated_prompt_tokens ?? '-'}
+                      </pre>
+                    </div>
+                    <div className='router-detail-item'>
+                      <div className='router-detail-label'>
                         {t('log.detail.fields.billing_settlement_mode')}
                       </div>
                       <pre className='router-detail-value'>
