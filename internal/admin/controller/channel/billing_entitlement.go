@@ -50,6 +50,56 @@ func finalizeCollectedBillingItems(items []model.ChannelBillingSnapshotItem, not
 	return normalized
 }
 
+func isPackageBillingQuotaType(quotaType string) bool {
+	switch strings.TrimSpace(strings.ToLower(quotaType)) {
+	case "daily", "weekly", "monthly":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUsableBillingEntitlement(item model.ChannelBillingSnapshotItem, now int64) bool {
+	if item.ExpiresAt > 0 && item.ExpiresAt <= now {
+		return false
+	}
+	switch strings.TrimSpace(strings.ToLower(item.Status)) {
+	case model.ChannelBillingItemStatusDepleted, model.ChannelBillingItemStatusExpired:
+		return false
+	}
+	return item.RemainingAmount > 0
+}
+
+func shouldDisableChannelForBillingEntitlements(collected collectedChannelBillingSnapshot, items []model.ChannelBillingSnapshotItem, now int64) bool {
+	normalized := model.NormalizeChannelBillingSnapshotItems(items)
+	hasPackageEntitlement := false
+	hasUsablePackageEntitlement := false
+	for _, item := range normalized {
+		resourceType := strings.TrimSpace(strings.ToLower(item.ResourceType))
+		quotaType := strings.TrimSpace(strings.ToLower(item.QuotaType))
+		isPackageEntitlement := resourceType == model.ChannelBillingResourceTypePlan || isPackageBillingQuotaType(quotaType)
+		if !isPackageEntitlement {
+			continue
+		}
+		hasPackageEntitlement = true
+		if isUsableBillingEntitlement(item, now) {
+			hasUsablePackageEntitlement = true
+		}
+	}
+	if hasPackageEntitlement {
+		return !hasUsablePackageEntitlement
+	}
+	if collected.ShouldHardStop {
+		return true
+	}
+	for _, item := range normalized {
+		if strings.TrimSpace(strings.ToLower(item.QuotaType)) == "total" && item.RemainingAmount <= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func collectOpenAIBillingSnapshot(channel *model.Channel, profile model.ChannelBillingProfile, messageText string) (collectedChannelBillingSnapshot, error) {
 	baseURL := resolveChannelBillingAPIBaseURL(channel, profile)
 	if baseURL == "" {
@@ -240,9 +290,8 @@ func collectCDKBillingSnapshot(channel *model.Channel, profile model.ChannelBill
 				resolveChannelCDKCardInfoRequestURL(channel, profile),
 			}, "\n"),
 		},
-		Items:          items,
-		PrimaryAmount:  data.TotalRemaining,
-		ShouldHardStop: data.TotalRemaining <= 0,
+		Items:         items,
+		PrimaryAmount: data.TotalRemaining,
 	}, nil
 }
 
@@ -469,15 +518,9 @@ func refreshAndPersistChannelBillingEntitlements(channel *model.Channel, profile
 	if err != nil {
 		return 0, err
 	}
-	if collected.ShouldHardStop {
+	if shouldDisableChannelForBillingEntitlements(collected, items, time.Now().Unix()) {
 		monitor.DisableChannelForInsufficientBalance(channel.Id, channel.DisplayName(), collected.PrimaryAmount)
 		return collected.PrimaryAmount, nil
-	}
-	for _, item := range items {
-		if item.QuotaType == "total" && item.RemainingAmount <= 0 {
-			monitor.DisableChannelForInsufficientBalance(channel.Id, channel.DisplayName(), collected.PrimaryAmount)
-			break
-		}
 	}
 	return collected.PrimaryAmount, nil
 }
