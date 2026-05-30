@@ -680,12 +680,6 @@
           "plan": "Plan Validity",
           "custom": "Custom"
         },
-        "entitlement_kind_descriptions": {
-          "metered": "Deducts from balance or total credit",
-          "periodic": "Resets by day, week, or month",
-          "plan": "Controls whether the plan is still valid",
-          "custom": "Manually maintained entitlement"
-        },
         "mode_summary": {
           "package_title": "Package Channel",
           "package_description": "This channel has plan validity or periodic quota. Check expiration, daily/weekly/monthly remaining quota, and reset time before judging availability.",

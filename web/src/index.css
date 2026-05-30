@@ -3820,32 +3820,6 @@ body,
     min-width: 0;
 }
 
-.router-billing-kind-cell,
-.router-billing-label-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    min-width: 0;
-}
-
-.router-billing-kind-cell > span:last-child,
-.router-billing-label-cell > span {
-    color: var(--router-text-muted, rgba(0, 0, 0, 0.5));
-    font-size: 12px;
-    line-height: 1.35;
-    white-space: normal;
-}
-
-.router-billing-label-cell > strong {
-    max-width: 100%;
-    color: var(--router-text-primary, rgba(0, 0, 0, 0.88));
-    font-size: 13px;
-    font-weight: var(--router-font-weight-medium, 500);
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-}
-
 .router-row-clickable {
     cursor: pointer;
 }

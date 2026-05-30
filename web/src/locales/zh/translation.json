@@ -680,12 +680,6 @@
           "plan": "套餐有效期",
           "custom": "自定义"
         },
-        "entitlement_kind_descriptions": {
-          "metered": "按余额或总额度扣减",
-          "periodic": "按日/周/月周期重置",
-          "plan": "控制套餐是否仍有效",
-          "custom": "人工维护的权益项"
-        },
         "mode_summary": {
           "package_title": "套餐渠道",
           "package_description": "该渠道存在套餐有效期或周期额度，运营判断可用性时优先看有效期、日/周/月剩余额度和重置时间。",

@@ -837,14 +837,6 @@ const ChannelsTable = () => {
                 </AppButton>
                 <AppButton
                   className='router-inline-button'
-                  onClick={() =>
-                    navigate(`/admin/channel/add?copy_from=${channel.id}`)
-                  }
-                >
-                  {t('channel.buttons.copy')}
-                </AppButton>
-                <AppButton
-                  className='router-inline-button'
                   color='red'
                   onClick={() => {
                     manageChannel(channel.id, 'delete', idx);

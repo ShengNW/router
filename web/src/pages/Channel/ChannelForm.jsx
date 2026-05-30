@@ -1839,14 +1839,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     }
     return raw.trim();
   }, [location.state]);
-  const copyFromId = useMemo(() => {
-    if (hasChannelID) return '';
-    const query = new URLSearchParams(location.search);
-    return (query.get('copy_from') || '').trim();
-  }, [hasChannelID, location.search]);
-  const [loading, setLoading] = useState(
-    hasChannelID || copyFromId !== '',
-  );
+  const [loading, setLoading] = useState(hasChannelID);
   const activeDetailTab = useMemo(() => {
     if (!isDetailMode) {
       return 'overview';
@@ -3538,7 +3531,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   ]);
 
   const loadChannelById = useCallback(
-    async (targetId, forCopy = false, fromCreating = false) => {
+    async (targetId, fromCreating = false) => {
       try {
         let res = await API.get(`/api/v1/admin/channel/${targetId}`);
         const { success, message, data } = res.data;
@@ -3559,30 +3552,16 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
                 data.id || targetId,
                 resolveProtocolFromChannelPayload(data),
               ),
-              forCopy
-                ? Promise.resolve({ items: [], lastTestedAt: 0 })
-                : loadChannelTestsFromServer(data.id || targetId),
-              forCopy
-                ? Promise.resolve([])
-                : loadChannelTasksFromServer(data.id || targetId),
-              forCopy
-                ? Promise.resolve(null)
-                : loadChannelBillingSummaryFromServer(data.id || targetId),
-              forCopy
-                ? Promise.resolve(null)
-                : loadChannelBillingProfileFromServer(data.id || targetId),
-              forCopy
-                ? Promise.resolve([])
-                : loadChannelBillingSnapshotsFromServer(data.id || targetId),
-              forCopy
-                ? Promise.resolve([])
-                : loadChannelBillingActionsFromServer(data.id || targetId),
+              loadChannelTestsFromServer(data.id || targetId),
+              loadChannelTasksFromServer(data.id || targetId),
+              loadChannelBillingSummaryFromServer(data.id || targetId),
+              loadChannelBillingProfileFromServer(data.id || targetId),
+              loadChannelBillingSnapshotsFromServer(data.id || targetId),
+              loadChannelBillingActionsFromServer(data.id || targetId),
               activeDetailTab !== 'billing'
                 ? Promise.resolve([])
                 : loadChannelBillingAlertsFromServer(data.id || targetId),
-              forCopy
-                ? Promise.resolve([])
-                : loadChannelCircuitBreakerEventsFromServer(data.id || targetId),
+              loadChannelCircuitBreakerEventsFromServer(data.id || targetId),
             ]);
           const storedModelTestResults = normalizeModelTestResults(
             channelTestsData.items,
@@ -3609,75 +3588,43 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
             channelModels: modelState.channelModels,
           });
 
-          if (forCopy) {
-            pendingRefreshTaskIdRef.current = '';
-            pendingRefreshSignatureRef.current = '';
-            setInputs({
-              id: '',
-              name: '',
-              protocol: normalizedProtocol,
-              key: '',
-              base_url: data.base_url || '',
-              other: data.other || '',
-              channel_models: modelState.channelModels,
-              models: modelState.selectedModels,
-              test_model: data.test_model || modelState.selectedModels[0] || '',
-              created_time: 0,
-              updated_at: 0,
-            });
-            setModelTestResults([]);
-            setModelTestError('');
-            setModelTestedAt(0);
-            setModelTestedSignature('');
-            setModelTestTargetModels([]);
-            setChannelTasks([]);
-            setChannelBillingSummary(null);
-            setChannelBillingProfile(null);
-            setDetailBillingDraft(null);
-            setChannelBillingSnapshots([]);
-            setChannelBillingActions([]);
-            setChannelCircuitBreakerEvents([]);
-            setChannelCircuitBreakerEventsError('');
-            setChannelBillingError('');
-          } else {
-            pendingRefreshTaskIdRef.current = '';
-            pendingRefreshSignatureRef.current = '';
-            setInputs({
-              id: data.id,
-              name: data.name || '',
-              protocol: normalizedProtocol,
-              key: '',
-              base_url: data.base_url || '',
-              other: data.other || '',
-              channel_models: modelState.channelModels,
-              models: modelState.selectedModels,
-              test_model: data.test_model || modelState.selectedModels[0] || '',
-              status: data.status,
-              weight: data.weight,
-              priority: data.priority,
-              created_time: Number(data.created_time || 0),
-              updated_at: Number(data.updated_at || 0),
-            });
-            setModelTestResults(storedModelTestResults);
-            setModelTestError('');
-            setModelTestedAt(storedModelTestedAt);
-            setModelTestedSignature(
-              storedModelTestResults.length > 0 && storedModelTestedAt > 0
-                ? loadedModelTestSignature
-                : '',
-            );
-            setModelTestTargetModels([]);
-            setChannelTasks(normalizeAsyncTasks(activeTasks));
-            setChannelBillingSummary(billingSummaryData);
-            setChannelBillingProfile(billingProfileData);
-            setDetailBillingDraft(billingProfileData);
-            setChannelBillingSnapshots(billingSnapshotsData);
-            setChannelBillingActions(billingActionsData);
-            setChannelBillingAlerts(billingAlertsData);
-            setChannelCircuitBreakerEvents(circuitBreakerEventsData);
-            setChannelCircuitBreakerEventsError('');
-            setChannelBillingError('');
-          }
+          pendingRefreshTaskIdRef.current = '';
+          pendingRefreshSignatureRef.current = '';
+          setInputs({
+            id: data.id,
+            name: data.name || '',
+            protocol: normalizedProtocol,
+            key: '',
+            base_url: data.base_url || '',
+            other: data.other || '',
+            channel_models: modelState.channelModels,
+            models: modelState.selectedModels,
+            test_model: data.test_model || modelState.selectedModels[0] || '',
+            status: data.status,
+            weight: data.weight,
+            priority: data.priority,
+            created_time: Number(data.created_time || 0),
+            updated_at: Number(data.updated_at || 0),
+          });
+          setModelTestResults(storedModelTestResults);
+          setModelTestError('');
+          setModelTestedAt(storedModelTestedAt);
+          setModelTestedSignature(
+            storedModelTestResults.length > 0 && storedModelTestedAt > 0
+              ? loadedModelTestSignature
+              : '',
+          );
+          setModelTestTargetModels([]);
+          setChannelTasks(normalizeAsyncTasks(activeTasks));
+          setChannelBillingSummary(billingSummaryData);
+          setChannelBillingProfile(billingProfileData);
+          setDetailBillingDraft(billingProfileData);
+          setChannelBillingSnapshots(billingSnapshotsData);
+          setChannelBillingActions(billingActionsData);
+          setChannelBillingAlerts(billingAlertsData);
+          setChannelCircuitBreakerEvents(circuitBreakerEventsData);
+          setChannelCircuitBreakerEventsError('');
+          setChannelBillingError('');
           setConfig({
             ...CHANNEL_DEFAULT_CONFIG,
             ...parsedConfig,
@@ -4710,12 +4657,7 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
   useEffect(() => {
     if (hasChannelID) {
       setLoading(true);
-      loadChannelById(channelId, false, false).then();
-      return;
-    }
-    if (copyFromId !== '') {
-      setLoading(true);
-      loadChannelById(copyFromId, true, false).then();
+      loadChannelById(channelId, false).then();
       return;
     }
     setChannelKeySet(false);
@@ -4723,7 +4665,6 @@ const ChannelForm = ({ mode = 'auto' } = {}) => {
     setLoading(false);
   }, [
     channelId,
-    copyFromId,
     hasChannelID,
     loadChannelById,
   ]);

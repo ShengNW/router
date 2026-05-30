@@ -62,7 +62,6 @@ const classifyEntitlementItem = (item, t) => {
       key: 'plan',
       color: 'purple',
       label: t('channel.edit.billing.entitlement_kinds.package'),
-      description: t('channel.edit.billing.entitlement_kind_descriptions.plan'),
     };
   }
   if (isPeriodicQuotaType(quotaType)) {
@@ -72,7 +71,6 @@ const classifyEntitlementItem = (item, t) => {
       label: t(`channel.edit.billing.quota_types.${quotaType}`, {
         defaultValue: quotaType,
       }),
-      description: t('channel.edit.billing.entitlement_kind_descriptions.periodic'),
     };
   }
   if (resourceType === 'balance' || resourceType === 'credit' || quotaType === 'total') {
@@ -80,14 +78,12 @@ const classifyEntitlementItem = (item, t) => {
       key: 'metered',
       color: 'cyan',
       label: t('channel.edit.billing.entitlement_kinds.metered'),
-      description: t('channel.edit.billing.entitlement_kind_descriptions.metered'),
     };
   }
   return {
     key: 'custom',
     color: 'default',
     label: t('channel.edit.billing.entitlement_kinds.custom'),
-    description: t('channel.edit.billing.entitlement_kind_descriptions.custom'),
   };
 };
 
@@ -122,21 +118,6 @@ const summarizeEntitlementMode = (items, t) => {
     label: t('channel.edit.billing.mode_summary.unknown_title'),
     description: t('channel.edit.billing.mode_summary.unknown_description'),
   };
-};
-
-const formatResourceTypeText = (item, t) => {
-  const resourceType = (item?.resource_type || '').toString().trim().toLowerCase();
-  switch (resourceType) {
-    case 'balance':
-      return t('channel.edit.billing.resource_types.balance');
-    case 'credit':
-      return t('channel.edit.billing.resource_types.credit');
-    case 'plan':
-      return t('channel.edit.billing.resource_types.plan');
-    case 'quota':
-    default:
-      return t('channel.edit.billing.resource_types.quota');
-  }
 };
 
 const formatExpiresAtText = (item, timestamp2string, t) => {
@@ -240,26 +221,15 @@ const statusColor = (item) => {
 
 const renderEntitlementKind = (row, t) => {
   const kind = classifyEntitlementItem(row, t);
-  return (
-    <div className='router-billing-kind-cell'>
-      <AppTag color={kind.color}>{kind.label}</AppTag>
-      <span>{kind.description}</span>
-    </div>
-  );
+  return <AppTag color={kind.color}>{kind.label}</AppTag>;
 };
 
 const renderQuotaLabel = (value, row, t) => {
-  const label =
+  return (
     value ||
     t(`channel.edit.billing.quota_types.${row?.quota_type || 'custom'}`, {
       defaultValue: row?.quota_type || '-',
-    });
-  const resourceText = formatResourceTypeText(row, t);
-  return (
-    <div className='router-billing-label-cell'>
-      <strong>{label}</strong>
-      <span>{resourceText}</span>
-    </div>
+    })
   );
 };
 
