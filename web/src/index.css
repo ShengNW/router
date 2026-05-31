@@ -996,6 +996,17 @@ body,
     text-align: center;
 }
 
+.router-ui-input-number.router-section-input .ant-input-number-group-addon {
+    padding: 0 !important;
+    background: var(--router-surface-subtle) !important;
+}
+
+.router-ui-input-number.router-section-input .ant-input-number-group-addon .router-ui-select.router-section-input-unit-dropdown,
+.router-ui-input-number.router-section-input .ant-input-number-group-addon .router-ui-select.router-section-input-unit-dropdown .ant-select-selector {
+    border-radius: 0 10px 10px 0 !important;
+    box-shadow: none !important;
+}
+
 .router-ui-textarea.router-section-textarea .ant-input {
     font-size: 14px !important;
     line-height: 1.5 !important;
