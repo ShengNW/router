@@ -281,7 +281,7 @@ const ChannelDetailModelsTab = ({
                 ) : null;
                 return (
                   <div className='router-cell-truncate' title={value}>
-                    <span className='router-nowrap'>{value}</span>
+                    <span className='router-nowrap router-monospace-value'>{value}</span>
                     {disableInfo && inactiveTag ? (
                       <AppTooltip title={disableInfo}>{inactiveTag}</AppTooltip>
                     ) : (
@@ -306,7 +306,10 @@ const ChannelDetailModelsTab = ({
               width: columnWidths.alias,
               ellipsis: true,
               render: (value) => (
-                <span className='router-cell-truncate' title={value}>
+                <span
+                  className='router-cell-truncate router-monospace-value'
+                  title={value}
+                >
                   {value}
                 </span>
               ),

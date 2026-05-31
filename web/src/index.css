@@ -2231,6 +2231,28 @@ body,
     white-space: nowrap;
 }
 
+.router-monospace-value {
+    font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace !important;
+    font-variant-ligatures: none;
+    letter-spacing: 0;
+}
+
+.router-monospace-truncate {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.router-ui-input.router-machine-input .ant-input,
+.router-ui-input.router-machine-input input {
+    font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace !important;
+    font-variant-ligatures: none;
+    letter-spacing: 0;
+}
+
 .router-ui-table.router-provider-model-detail-table .ant-table {
     width: 100%;
     table-layout: fixed;

@@ -283,7 +283,7 @@ const LogDetail = () => {
                       <div className='router-detail-label'>
                         {t('log.detail.fields.model')}
                       </div>
-                      <pre className='router-detail-value'>
+                      <pre className='router-detail-value router-monospace-value'>
                         {renderText(log?.model_name)}
                       </pre>
                     </div>
@@ -309,7 +309,7 @@ const LogDetail = () => {
                       <div className='router-detail-label'>
                         {t('log.detail.fields.trace_id')}
                       </div>
-                      <pre className='router-detail-value'>
+                      <pre className='router-detail-value router-monospace-value'>
                         {renderText(log?.trace_id)}
                       </pre>
                     </div>
